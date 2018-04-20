@@ -1307,7 +1307,7 @@ namespace Game.Entities
                 }
 
                 if (addToCollection)
-                    GetSession().GetCollectionMgr().OnItemAdded(item);
+                    GetSession().GetCollectionMgr().OnItemAdded(item, this);
 
                 ItemChildEquipmentRecord childItemEntry = Global.DB2Mgr.GetItemChildEquipment(itemId);
                 if (childItemEntry != null)
