@@ -239,16 +239,9 @@ namespace Game.Entities
         {
             Player playerOwner = owner ? owner : _owner.GetPlayer();
             if (UpdateAccountHeirlooms(itemId, flags))
-<<<<<<< HEAD
-            {
-                playerOwner.AddDynamicValue(PlayerDynamicFields.Heirlooms, itemId);
-                playerOwner.AddDynamicValue(PlayerDynamicFields.HeirloomsFlags, (uint)flags);
-            }
-=======
                 _owner.GetPlayer().AddHeirloom(itemId, (uint)flags);
->>>>>>> master
         }
-
+        
         public void UpgradeHeirloom(uint itemId, uint castItem)
         {
             Player player = _owner.GetPlayer();

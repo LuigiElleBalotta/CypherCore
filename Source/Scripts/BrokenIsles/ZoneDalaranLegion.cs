@@ -54,7 +54,7 @@ namespace Scripts.BrokenIsles
         {
             base.OnLevelChanged(player, oldLevel);
 
-            if (oldLevel < 100 && player.getLevel() >= 100)
+            if (oldLevel < 100 && player.GetLevel() >= 100)
             {
                 if (player.GetClass() == Class.Mage)
                     player.CastSpell( player, (uint)Contents.SPELL_MAGE_LEARN_GUARDIAN_HALL_TP );
@@ -86,7 +86,7 @@ namespace Scripts.BrokenIsles
 
             if (player != null)
             {
-                if (player.getLevel() < 100 || player.GetQuestStatus((uint) Quests.BLINK_OF_AN_EYE) != QuestStatus.Incomplete)
+                if (player.GetLevel() < 100 || player.GetQuestStatus((uint) Quests.BLINK_OF_AN_EYE) != QuestStatus.Incomplete)
                     PreventHitEffect(effIndex);
                 else
                 {
@@ -106,7 +106,7 @@ namespace Scripts.BrokenIsles
             Player player = GetCaster().ToPlayer();
             if (player != null)
             {
-                if (player.getLevel() < 100 || player.GetQuestStatus((uint)Quests.BLINK_OF_AN_EYE) == QuestStatus.Incomplete)
+                if (player.GetLevel() < 100 || player.GetQuestStatus((uint)Quests.BLINK_OF_AN_EYE) == QuestStatus.Incomplete)
                     PreventHitEffect(effIndex);
             }
         }
@@ -128,8 +128,8 @@ namespace Scripts.BrokenIsles
         {
             base.OnGameObjectStateChanged(go, state);
 
-            if( !go.isActiveObject())
-                go.setActive(true);
+            if( !go.IsActiveObject())
+                go.SetActive(true);
         }
     }
 

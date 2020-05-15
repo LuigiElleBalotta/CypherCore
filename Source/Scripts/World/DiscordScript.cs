@@ -32,7 +32,7 @@ namespace Scripts.World
                     DiscordMessage newMessage = new DiscordMessage
                                                 {
                                                     Channel = channel_discordMessage,
-                                                    IsGm = player.isGMChat(),
+                                                    IsGm = player.IsGMChat(),
                                                     CharacterName = player.GetName(),
                                                     Message = msg
                                                 };
