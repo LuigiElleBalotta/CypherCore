@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -182,10 +182,10 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Nadronox
 
         bool IsInCombatWithPlayer()
         {
-            List<HostileReference> refs = me.GetThreatManager().getThreatList();
+            List<HostileReference> refs = me.GetThreatManager().GetThreatList();
             foreach (HostileReference hostileRef in refs)
             {
-                Unit target = hostileRef.getTarget();
+                Unit target = hostileRef.GetTarget();
                 if (target)
                     if (target.IsControlledByPlayer())
                         return true;
@@ -305,7 +305,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Nadronox
                 task.Repeat(TimeSpan.FromSeconds(1));
             });
 
-            me.setActive(true);
+            me.SetActive(true);
         }
 
         public override void DoAction(int action)
@@ -356,8 +356,8 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Nadronox
 
         public void Initialize()
         {
-            me.SetFloatValue(UnitFields.BoundingRadius, 9.0f);
-            me.SetFloatValue(UnitFields.CombatReach, 9.0f);
+            me.SetBoundingRadius(9.0f);
+            me.SetCombatReach(9.0f);
             _enteredCombat = false;
             _doorsWebbed = false;
             _lastPlayerCombatState = false;
@@ -823,7 +823,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Nadronox
     [Script("spell_hadronox_periodic_summon_necromancer", SpellIds.SummonNecromancerTop, SpellIds.SummonNecromancerBottom)]
     class spell_hadronox_periodic_summon_template : AuraScript
     {
-        public spell_hadronox_periodic_summon_template(uint topSpellId, uint bottomSpellId) : base()
+        public spell_hadronox_periodic_summon_template(uint topSpellId, uint bottomSpellId)
         {
             _topSpellId = topSpellId;
             _bottomSpellId = bottomSpellId;
@@ -880,7 +880,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Nadronox
 
         void HandleEffectRemove(AuraEffect aurEff, AuraEffectHandleModes mode)
         {
-            if (GetTargetApplication().GetRemoveMode() != AuraRemoveMode.ByDeath)
+            if (GetTargetApplication().GetRemoveMode() != AuraRemoveMode.Death)
                 return;
 
             if (GetTarget().IsGuardian())

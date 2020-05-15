@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -170,8 +170,8 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                 uiTimer = 0;
 
                 me.SetReactState(ReactStates.Passive);
-                me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
-                me.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                me.AddUnitFlag(UnitFlags.NonAttackable);
+                me.AddNpcFlag(NPCFlags.Gossip);
 
                 SetGrandChampionsForEncounter();
                 SetArgentChampion();
@@ -409,7 +409,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
             public void StartEncounter()
             {
-                me.RemoveFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                me.RemoveNpcFlag(NPCFlags.Gossip);
 
                 if (instance.GetData((uint)Data.BOSS_BLACK_KNIGHT) == (uint)EncounterState.NotStarted)
                 {
@@ -444,7 +444,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                     if (player.IsAlive())
                     {
                         temp.SetHomePosition(me.GetPositionX(), me.GetPositionY(), me.GetPositionZ(), me.GetOrientation());
-                        temp.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                        temp.RemoveUnitFlag(UnitFlags.NonAttackable);
                         temp.SetReactState(ReactStates.Aggressive);
                         temp.SetInCombatWith(player);
                         player.SetInCombatWith(temp);
@@ -494,7 +494,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
             {
                 if (instance.GetData((uint)Data.BOSS_GRAND_CHAMPIONS) == (uint)EncounterState.NotStarted)
                 {
-                    summon.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                    summon.AddUnitFlag(UnitFlags.NonAttackable);
                     summon.SetReactState(ReactStates.Passive);
                 }
             }
@@ -582,7 +582,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
         public override CreatureAI GetAI(Creature creature)
         {
-            return instance_trial_of_the_champion.GetTrialOfTheChampionAI<npc_announcer_toc5AI>(creature);
+            return GetInstanceAI<npc_announcer_toc5AI>(creature);
         }
     }
 }

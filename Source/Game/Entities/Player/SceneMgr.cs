@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,11 @@ namespace Game.Entities
 {
     public class SceneMgr
     {
+        Player _player;
+        Dictionary<uint, SceneTemplate> _scenesByInstance = new Dictionary<uint, SceneTemplate>();
+        uint _standaloneSceneInstanceID;
+        bool _isDebuggingScenes;
+
         public SceneMgr(Player player)
         {
             _player = player;
@@ -38,7 +43,7 @@ namespace Game.Entities
             return PlaySceneByTemplate(sceneTemplate, position);
         }
 
-        uint PlaySceneByTemplate(SceneTemplate sceneTemplate, Position position = null)
+        public uint PlaySceneByTemplate(SceneTemplate sceneTemplate, Position position = null)
         {
             if (sceneTemplate == null)
                 return 0;
@@ -237,10 +242,5 @@ namespace Game.Entities
 
         public void ToggleDebugSceneMode() { _isDebuggingScenes = !_isDebuggingScenes; }
         public bool IsInDebugSceneMode() { return _isDebuggingScenes; }
-
-        Player _player;
-        Dictionary<uint, SceneTemplate> _scenesByInstance = new Dictionary<uint, SceneTemplate>();
-        uint _standaloneSceneInstanceID;
-        bool _isDebuggingScenes;
     }
 }

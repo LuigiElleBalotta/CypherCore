@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,15 +29,15 @@ namespace Game
             switch (collectionItemSetFavorite.Type)
             {
                 case CollectionType.Toybox:
-                    GetCollectionMgr().ToySetFavorite(collectionItemSetFavorite.ID, collectionItemSetFavorite.IsFavorite);
+                    GetCollectionMgr().ToySetFavorite(collectionItemSetFavorite.Id, collectionItemSetFavorite.IsFavorite);
                     break;
                 case CollectionType.Appearance:
                     {
-                        var pair = GetCollectionMgr().HasItemAppearance(collectionItemSetFavorite.ID);
+                        var pair = GetCollectionMgr().HasItemAppearance(collectionItemSetFavorite.Id);
                         if (!pair.Item1 || pair.Item2)
                             return;
 
-                        GetCollectionMgr().SetAppearanceIsFavorite(collectionItemSetFavorite.ID, collectionItemSetFavorite.IsFavorite);
+                        GetCollectionMgr().SetAppearanceIsFavorite(collectionItemSetFavorite.Id, collectionItemSetFavorite.IsFavorite);
                         break;
                     }
                 case CollectionType.TransmogSet:

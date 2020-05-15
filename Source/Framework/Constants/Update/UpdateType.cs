@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,5 +23,14 @@ namespace Framework.Constants
         CreateObject      = 1,
         CreateObject2     = 2,
         OutOfRangeObjects    = 3,
+    }
+
+    public enum UpdateFieldFlag
+    {
+        None = 0,
+        Owner = 0x01,
+        PartyMember = 0x02,
+        UnitAll = 0x04,
+        Empath = 0x08
     }
 }

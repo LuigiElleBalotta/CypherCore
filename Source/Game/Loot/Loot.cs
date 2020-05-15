@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,9 +40,7 @@ namespace Game.Loots
 
             needs_quest = li.needs_quest;
 
-            randomSuffix = ItemEnchantment.GenerateEnchSuffixFactor(itemid);
-            randomPropertyId = ItemEnchantment.GenerateItemRandomPropertyId(itemid);
-            upgradeId = Global.DB2Mgr.GetRulesetItemUpgrade(itemid);
+            randomBonusListId = ItemEnchantmentManager.GenerateItemRandomBonusListId(itemid);
             canSave = true;
         }
 
@@ -88,13 +86,12 @@ namespace Game.Loots
         public List<ObjectGuid> GetAllowedLooters() { return allowedGUIDs; }
 
         public uint itemid;
-        public uint randomSuffix;
-        public ItemRandomEnchantmentId randomPropertyId;
-        public uint upgradeId;
+        public uint randomBonusListId;
         public List<uint> BonusListIDs = new List<uint>();
-        public byte context;
+        public ItemContext context;
         public List<Condition> conditions = new List<Condition>();                               // additional loot condition
         public List<ObjectGuid> allowedGUIDs = new List<ObjectGuid>();
+        public ObjectGuid rollWinnerGUID;                                   // Stores the guid of person who won loot, if his bags are full only he can see the item in loot list!
         public byte count;
         public bool is_looted;
         public bool is_blocked;
@@ -126,17 +123,12 @@ namespace Game.Loots
 
     public class LootValidatorRef : Reference<Loot, LootValidatorRef>
     {
-        public LootValidatorRef()
+        public override void TargetObjectDestroyLink()
         {
 
         }
 
-        public override void targetObjectDestroyLink()
-        {
-
-        }
-
-        public override void sourceObjectDestroyLink()
+        public override void SourceObjectDestroyLink()
         {
 
         }
@@ -144,8 +136,8 @@ namespace Game.Loots
 
     public class LootValidatorRefManager : RefManager<Loot, LootValidatorRef>
     {
-        public new LootValidatorRef getFirst() { return (LootValidatorRef)base.getFirst(); }
-        public new LootValidatorRef getLast() { return (LootValidatorRef)base.getLast(); }
+        public new LootValidatorRef GetFirst() { return (LootValidatorRef)base.GetFirst(); }
+        public new LootValidatorRef GetLast() { return (LootValidatorRef)base.GetLast(); }
     }
 
     public class Loot
@@ -206,7 +198,7 @@ namespace Game.Loots
         }
 
         // Calls processor of corresponding LootTemplate (which handles everything including references)
-        public bool FillLoot(uint lootId, LootStore store, Player lootOwner, bool personal, bool noEmptyError = false, LootModes lootMode = LootModes.Default)
+        public bool FillLoot(uint lootId, LootStore store, Player lootOwner, bool personal, bool noEmptyError = false, LootModes lootMode = LootModes.Default, ItemContext context = 0)
         {
             // Must be provided
             if (lootOwner == null)
@@ -220,7 +212,7 @@ namespace Game.Loots
                 return false;
             }
 
-            _itemContext = lootOwner.GetMap().GetDifficultyLootItemContext();
+            _itemContext = context;
 
             tab.Process(this, store.IsRatesAllowed(), (byte)lootMode);          // Processing is done there, callback via Loot.AddItem()
 
@@ -230,11 +222,12 @@ namespace Game.Loots
             {
                 roundRobinPlayer = lootOwner.GetGUID();
 
-                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                 {
                     Player player = refe.GetSource();
                     if (player)   // should actually be looted object instead of lootOwner but looter has to be really close so doesnt really matter
-                        FillNotNormalLootFor(player, player.IsAtGroupRewardDistance(lootOwner));
+                        if (player.IsInMap(lootOwner))
+                            FillNotNormalLootFor(player, player.IsAtGroupRewardDistance(lootOwner));
                 }
 
                 for (byte i = 0; i < items.Count; ++i)
@@ -434,7 +427,7 @@ namespace Game.Loots
             }
         }
 
-        public void generateMoneyLoot(uint minAmount, uint maxAmount)
+        public void GenerateMoneyLoot(uint minAmount, uint maxAmount)
         {
             if (maxAmount > 0)
             {
@@ -555,7 +548,7 @@ namespace Game.Loots
         }
 
         // return true if there is any item that is lootable for any player (not quest item, FFA or conditional)
-        public bool hasItemForAll()
+        public bool HasItemForAll()
         {
             // Gold is always lootable
             if (gold != 0)
@@ -569,7 +562,7 @@ namespace Game.Loots
         }
 
         // return true if there is any FFA, quest or conditional item for the player.
-        public bool hasItemFor(Player player)
+        public bool HasItemFor(Player player)
         {
             var lootPlayerQuestItems = GetPlayerQuestItems();
             var q_list = lootPlayerQuestItems.LookupByKey(player.GetGUID());
@@ -611,7 +604,7 @@ namespace Game.Loots
         }
 
         // return true if there is any item over the group threshold (i.e. not underthreshold).
-        public bool hasOverThresholdItem()
+        public bool HasOverThresholdItem()
         {
             for (byte i = 0; i < items.Count; ++i)
             {
@@ -671,6 +664,13 @@ namespace Game.Loots
                                     // or it IS the round robin group owner
                                     // => item is lootable
                                     slot_type = LootSlotType.AllowLoot;
+                                }
+                                else if (!items[i].rollWinnerGUID.IsEmpty())
+                                {
+                                    if (items[i].rollWinnerGUID == viewer.GetGUID())
+                                        slot_type = LootSlotType.Owner;
+                                    else
+                                        continue;
                                 }
                                 else
                                     // item shall not be displayed.
@@ -810,12 +810,12 @@ namespace Game.Loots
             }
         }
 
-        public void addLootValidatorRef(LootValidatorRef pLootValidatorRef)
+        public void AddLootValidatorRef(LootValidatorRef pLootValidatorRef)
         {
-            i_LootValidatorRefManager.insertFirst(pLootValidatorRef);
+            i_LootValidatorRefManager.InsertFirst(pLootValidatorRef);
         }
 
-        public void clear()
+        public void Clear()
         {
             PlayerQuestItems.Clear();
 
@@ -829,12 +829,12 @@ namespace Game.Loots
             gold = 0;
             unlootedCount = 0;
             roundRobinPlayer = ObjectGuid.Empty;
-            i_LootValidatorRefManager.clearReferences();
+            i_LootValidatorRefManager.ClearReferences();
             _itemContext = 0;
         }
 
-        public bool empty() { return items.Empty() && gold == 0; }
-        public bool isLooted() { return gold == 0 && unlootedCount == 0; }
+        public bool Empty() { return items.Empty() && gold == 0; }
+        public bool IsLooted() { return gold == 0 && unlootedCount == 0; }
 
         public void AddLooter(ObjectGuid guid) { PlayersLooting.Add(guid); }
         public void RemoveLooter(ObjectGuid guid) { PlayersLooting.Remove(guid); }
@@ -866,7 +866,7 @@ namespace Game.Loots
 
         // Loot GUID
         ObjectGuid _GUID;
-        byte _itemContext;
+        ItemContext _itemContext;
     }
 
     public class AELootResult

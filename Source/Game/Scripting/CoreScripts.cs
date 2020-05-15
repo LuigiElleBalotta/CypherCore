@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,24 +45,34 @@ namespace Game.Scripting
         // whether or not this script type must be assigned in the database.
         public virtual bool IsDatabaseBound() { return false; }
 
-        public static T GetInstanceAI<T>(WorldObject obj, string scriptName) where T : class
-        {
-            InstanceMap instance = obj.GetMap().ToInstanceMap();
-            if (instance != null && instance.GetInstanceScript() != null)
-                if (instance.GetScriptName() == scriptName)
-                    return (T)Activator.CreateInstance(typeof(T), obj);
-
-            return null;
-        }
-
         public static T GetInstanceAI<T>(WorldObject obj) where T : class
         {
             InstanceMap instance = obj.GetMap().ToInstanceMap();
             if (instance != null && instance.GetInstanceScript() != null)
-                return (T)Activator.CreateInstance(typeof(T), obj);
+                return (T)Activator.CreateInstance(typeof(T), new object[] { obj });
 
             return null;
         }
+
+        public void ClearGossipMenuFor(Player player) { player.PlayerTalkClass.ClearMenus(); }
+        // Using provided text, not from DB
+        public void AddGossipItemFor(Player player, GossipOptionIcon icon, string text, uint sender, uint action)
+        {
+            player.PlayerTalkClass.GetGossipMenu().AddMenuItem(-1, icon, text, sender, action, "", 0);
+        }
+        // Using provided texts, not from DB
+        public void AddGossipItemFor(Player player, GossipOptionIcon icon, string text, uint sender, uint action, string popupText, uint popupMoney, bool coded)
+        {
+            player.PlayerTalkClass.GetGossipMenu().AddMenuItem(-1, icon, text, sender, action, popupText, popupMoney, coded);
+        }
+        // Uses gossip item info from DB
+        public void AddGossipItemFor(Player player, uint gossipMenuID, uint gossipMenuItemID, uint sender, uint action)
+        {
+            player.PlayerTalkClass.GetGossipMenu().AddMenuItem(gossipMenuID, gossipMenuItemID, sender, action);
+        }
+        public void SendGossipMenuFor(Player player, uint npcTextID, ObjectGuid guid) { player.PlayerTalkClass.SendGossipMenu(npcTextID, guid); }
+        public void SendGossipMenuFor(Player player, uint npcTextID, Creature creature) { if (creature) SendGossipMenuFor(player, npcTextID, creature.GetGUID()); }
+        public void CloseGossipMenuFor(Player player) { player.PlayerTalkClass.SendCloseGossip(); }
 
         string _name;
     }
@@ -269,6 +279,12 @@ namespace Game.Scripting
 
         // Called when the item expires (is destroyed).
         public virtual bool OnExpire(Player player, ItemTemplate proto) { return false; }
+
+        // Called when the item is destroyed.
+        public virtual bool OnRemove(Player player, Item item) { return false; }
+
+        // Called before casting a combat spell from this item (chance on hit spells of item template, can be used to prevent cast if returning false)
+        public virtual bool OnCastItemCombatSpell(Player player, Unit victim, SpellInfo spellInfo, Item item) { return true; }
     }
 
     public class UnitScript : ScriptObject
@@ -636,7 +652,10 @@ namespace Game.Scripting
         public virtual void OnCreate(Player player) { }
 
         // Called when a player is deleted.
-        public virtual void OnDelete(ObjectGuid guid) { }
+        public virtual void OnDelete(ObjectGuid guid, uint accountId) { }
+
+        // Called when a player delete failed
+        public virtual void OnFailedDelete(ObjectGuid guid, uint accountId) { }
 
         // Called when a player is about to be saved.
         public virtual void OnSave(Player player) { }
@@ -652,6 +671,9 @@ namespace Game.Scripting
 
         // Called after a player's quest status has been changed
         public virtual void OnQuestStatusChange(Player player, uint questId) { }
+
+        // Called when a player presses release when he died
+        public virtual void OnPlayerRepop(Player player) { }
 
         // Called when a player completes a movie
         public virtual void OnMovieComplete(Player player, uint movieId) { }

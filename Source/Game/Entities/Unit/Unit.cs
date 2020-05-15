@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 using Framework.Constants;
 using Framework.Dynamic;
 using Framework.GameMath;
-using Framework.IO;
 using Game.AI;
 using Game.BattleGrounds;
 using Game.Chat;
@@ -30,8 +29,8 @@ using Game.Network.Packets;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
+using Game.Network;
 
 namespace Game.Entities
 {
@@ -39,17 +38,17 @@ namespace Game.Entities
     {
         public Unit(bool isWorldObject) : base(isWorldObject)
         {
-            moveSpline = new MoveSpline();
+            MoveSpline = new MoveSpline();
             i_motionMaster = new MotionMaster(this);
             threatManager = new ThreatManager(this);
-            m_unitTypeMask = UnitTypeMask.None;
-            m_HostileRefManager = new HostileRefManager(this);
+            UnitTypeMask = UnitTypeMask.None;
+            hostileRefManager = new HostileRefManager(this);
             _spellHistory = new SpellHistory(this);
-            m_FollowingRefManager = new RefManager<Unit, TargetedMovementGeneratorBase>();
+            m_FollowingRefManager = new RefManager<Unit, ITargetedMovementGeneratorBase>();
 
-            objectTypeId = TypeId.Unit;
-            objectTypeMask |= TypeMask.Unit;
-            m_updateFlag = UpdateFlag.Living;
+            ObjectTypeId = TypeId.Unit;
+            ObjectTypeMask |= TypeMask.Unit;
+            m_updateFlag.MovementUpdate = true;
 
             m_modAttackSpeedPct = new float[] { 1.0f, 1.0f, 1.0f };
             m_deathState = DeathState.Alive;
@@ -70,11 +69,11 @@ namespace Game.Entities
 
             if (IsTypeId(TypeId.Player))
             {
-                m_modMeleeHitChance = 7.5f;
-                m_modRangedHitChance = 7.5f;
-                m_modSpellHitChance = 15.0f;
+                ModMeleeHitChance = 7.5f;
+                ModRangedHitChance = 7.5f;
+                ModSpellHitChance = 15.0f;
             }
-            m_baseSpellCritChance = 5;
+            BaseSpellCritChance = 5;
 
             for (byte i = 0; i < (int)SpellSchools.Max; ++i)
                 m_threatModifier[i] = 1.0f;
@@ -86,6 +85,8 @@ namespace Game.Entities
             m_serverSideVisibility.SetValue(ServerSideVisibilityType.Ghost, GhostVisibilityType.Alive);
 
             movesplineTimer = new TimeTrackerSmall();
+
+            m_unitData = new UnitData();
         }
 
         public override void Dispose()
@@ -109,7 +110,7 @@ namespace Game.Entities
 
             //i_motionMaster = null;
             m_charmInfo = null;
-            moveSpline = null;
+            MoveSpline = null;
             _spellHistory = null;
 
             /*ASSERT(!m_duringRemoveFromWorld);
@@ -139,9 +140,9 @@ namespace Game.Entities
 
             // If this is set during update SetCantProc(false) call is missing somewhere in the code
             // Having this would prevent spells from being proced, so let's crash
-            Contract.Assert(m_procDeep == 0);
+            Cypher.Assert(m_procDeep == 0);
 
-            if (CanHaveThreatList() && GetThreatManager().isNeedUpdateToClient(diff))
+            if (CanHaveThreatList() && GetThreatManager().IsNeedUpdateToClient(diff))
                 SendThreatListUpdate();
 
             // update combat timer only for players and pets (only pets with PetAI)
@@ -150,24 +151,24 @@ namespace Game.Entities
                 // Check UNIT_STATE_MELEE_ATTACKING or UNIT_STATE_CHASE (without UNIT_STATE_FOLLOW in this case) so pets can reach far away
                 // targets without stopping half way there and running off.
                 // These flags are reset after target dies or another command is given.
-                if (m_HostileRefManager.isEmpty())
+                if (hostileRefManager.IsEmpty())
                 {
                     // m_CombatTimer set at aura start and it will be freeze until aura removing
-                    if (m_CombatTimer <= diff)
+                    if (combatTimer <= diff)
                         ClearInCombat();
                     else
-                        m_CombatTimer -= diff;
+                        combatTimer -= diff;
                 }
             }
 
             uint att;
             // not implemented before 3.0.2
-            if ((att = getAttackTimer(WeaponAttackType.BaseAttack)) != 0)
-                setAttackTimer(WeaponAttackType.BaseAttack, (diff >= att ? 0 : att - diff));
-            if ((att = getAttackTimer(WeaponAttackType.RangedAttack)) != 0)
-                setAttackTimer(WeaponAttackType.RangedAttack, (diff >= att ? 0 : att - diff));
-            if ((att = getAttackTimer(WeaponAttackType.OffAttack)) != 0)
-                setAttackTimer(WeaponAttackType.OffAttack, (diff >= att ? 0 : att - diff));
+            if ((att = GetAttackTimer(WeaponAttackType.BaseAttack)) != 0)
+                SetAttackTimer(WeaponAttackType.BaseAttack, (diff >= att ? 0 : att - diff));
+            if ((att = GetAttackTimer(WeaponAttackType.RangedAttack)) != 0)
+                SetAttackTimer(WeaponAttackType.RangedAttack, (diff >= att ? 0 : att - diff));
+            if ((att = GetAttackTimer(WeaponAttackType.OffAttack)) != 0)
+                SetAttackTimer(WeaponAttackType.OffAttack, (diff >= att ? 0 : att - diff));
 
             // update abilities available only for fraction of time
             UpdateReactives(diff);
@@ -190,7 +191,7 @@ namespace Game.Entities
 
             for (CurrentSpellTypes i = 0; i < CurrentSpellTypes.Max; ++i)
             {
-                if (GetCurrentSpell(i) != null && m_currentSpells[i].getState() == SpellState.Finished)
+                if (GetCurrentSpell(i) != null && m_currentSpells[i].GetState() == SpellState.Finished)
                 {
                     m_currentSpells[i].SetReferencedFromCurrent(false);
                     m_currentSpells[i] = null;
@@ -202,14 +203,15 @@ namespace Game.Entities
                 Aura i_aura = app.Value;
                 if (i_aura == null)
                     continue;
+
                 i_aura.UpdateOwner(diff, this);
             }
 
             // remove expired auras - do that after updates(used in scripts?)
-            foreach (var aura in GetOwnedAuras())
+            foreach (var pair in GetOwnedAuras())
             {
-                if (aura.Value != null && aura.Value.IsExpired())
-                    RemoveOwnedAura(aura, AuraRemoveMode.Expire);
+                if (pair.Value != null && pair.Value.IsExpired())
+                    RemoveOwnedAura(pair, AuraRemoveMode.Expire);
             }
 
             foreach (var aura in m_visibleAurasToUpdate)
@@ -221,9 +223,10 @@ namespace Game.Entities
 
             if (!m_gameObj.Empty())
             {
-                foreach (var go in m_gameObj.ToList())
+                for (var i = 0; i < m_gameObj.Count; ++i)
                 {
-                    if (!go.isSpawned())
+                    GameObject go = m_gameObj[i];
+                    if (!go.IsSpawned())
                     {
                         go.SetOwnerGUID(ObjectGuid.Empty);
                         go.SetRespawnTime(0);
@@ -252,12 +255,16 @@ namespace Game.Entities
 
         public bool IsInDisallowedMountForm()
         {
-            SpellInfo transformSpellInfo = Global.SpellMgr.GetSpellInfo(getTransForm());
+            return IsDisallowedMountForm(GetTransForm(), GetShapeshiftForm(), GetDisplayId());
+        }
+
+        public bool IsDisallowedMountForm(uint spellId, ShapeShiftForm form, uint displayId)
+        {
+            SpellInfo transformSpellInfo = Global.SpellMgr.GetSpellInfo(GetTransForm());
             if (transformSpellInfo != null)
                 if (transformSpellInfo.HasAttribute(SpellAttr0.CastableWhileMounted))
                     return false;
 
-            ShapeShiftForm form = GetShapeshiftForm();
             if (form != 0)
             {
                 SpellShapeshiftFormRecord shapeshift = CliDB.SpellShapeshiftFormStorage.LookupByKey(form);
@@ -267,10 +274,10 @@ namespace Game.Entities
                 if (!shapeshift.Flags.HasAnyFlag(SpellShapeshiftFormFlags.IsNotAShapeshift))
                     return true;
             }
-            if (GetDisplayId() == GetNativeDisplayId())
+            if (displayId == GetNativeDisplayId())
                 return false;
 
-            CreatureDisplayInfoRecord display = CliDB.CreatureDisplayInfoStorage.LookupByKey(GetDisplayId());
+            CreatureDisplayInfoRecord display = CliDB.CreatureDisplayInfoStorage.LookupByKey(displayId);
             if (display == null)
                 return true;
 
@@ -305,7 +312,7 @@ namespace Game.Entities
         {
             if (m_sharedVision.Empty())
             {
-                setActive(true);
+                SetActive(true);
                 SetWorldObject(true);
             }
             m_sharedVision.Add(player);
@@ -317,7 +324,7 @@ namespace Game.Entities
             m_sharedVision.Remove(player);
             if (m_sharedVision.Empty())
             {
-                setActive(false);
+                SetActive(false);
                 SetWorldObject(false);
             }
         }
@@ -477,7 +484,7 @@ namespace Game.Entities
             m_Events.KillAllEvents(false);                      // non-delatable (currently casted spells) will not deleted now but it will deleted at call in Map.RemoveAllObjectsInRemoveList
             CombatStop();
             DeleteThreatList();
-            getHostileRefManager().setOnlineOfflineState(false);
+            GetHostileRefManager().DeleteReferences();
             GetMotionMaster().Clear(false);                    // remove different non-standard movement generators.
         }
         public override void CleanupsBeforeDelete(bool finalCleanup = true)
@@ -487,10 +494,10 @@ namespace Game.Entities
             base.CleanupsBeforeDelete(finalCleanup);
         }
 
-        public void setTransForm(uint spellid) { m_transform = spellid; }
+        public void SetTransForm(uint spellid) { m_transform = spellid; }
         public uint GetTransForm() { return m_transform; }
 
-        public Vehicle GetVehicleKit() { return m_vehicleKit; }
+        public Vehicle GetVehicleKit() { return VehicleKit; }
         public Vehicle GetVehicle() { return m_vehicle; }
         public void SetVehicle(Vehicle vehicle) { m_vehicle = vehicle; }
         public Unit GetVehicleBase()
@@ -547,8 +554,9 @@ namespace Game.Entities
 
         public void RemoveDynObject(uint spellId)
         {
-            foreach (var dynObj in m_dynObj.ToList())
+            for (var i = 0; i < m_dynObj.Count; ++i)
             {
+                var dynObj = m_dynObj[i];
                 if (dynObj.GetSpellId() == spellId)
                     dynObj.Remove();
             }
@@ -699,8 +707,9 @@ namespace Game.Entities
             if (m_areaTrigger.Empty())
                 return;
 
-            foreach (var areaTrigger in m_areaTrigger.ToList())
+            for (var i = 0; i < m_areaTrigger.Count; ++i)
             {
+                AreaTrigger areaTrigger = m_areaTrigger[i];
                 if (areaTrigger.GetSpellId() == spellId)
                     areaTrigger.Remove();
             }
@@ -710,6 +719,7 @@ namespace Game.Entities
         {
             if (m_areaTrigger.Empty())
                 return;
+
             foreach (AreaTrigger areaTrigger in m_areaTrigger)
             {
                 if (areaTrigger.GetAuraEffect() == aurEff)
@@ -726,31 +736,41 @@ namespace Game.Entities
                 m_areaTrigger[0].Remove();
         }
 
-        public bool IsVendor() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Vendor); }
-        public bool IsTrainer() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Trainer); }
-        public bool IsQuestGiver() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.QuestGiver); }
-        public bool IsGossip() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Gossip); }
-        public bool IsTaxi() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.FlightMaster); }
-        public bool IsGuildMaster() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Petitioner); }
-        public bool IsBattleMaster() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.BattleMaster); }
-        public bool IsBanker() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Banker); }
-        public bool IsInnkeeper() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Innkeeper); }
-        public bool IsSpiritHealer() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.SpiritHealer); }
-        public bool IsSpiritGuide() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.SpiritGuide); }
-        public bool IsTabardDesigner() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.TabardDesigner); }
-        public bool IsAuctioner() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Auctioneer); }
-        public bool IsArmorer() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.Repair); }
+        public bool HasNpcFlag(NPCFlags flags) { return (m_unitData.NpcFlags[0] & (uint)flags) != 0; }
+        public void AddNpcFlag(NPCFlags flags) { SetUpdateFieldFlagValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 0), (uint)flags); }
+        public void RemoveNpcFlag(NPCFlags flags) { RemoveUpdateFieldFlagValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 0), (uint)flags); }
+        public void SetNpcFlags(NPCFlags flags) { SetUpdateFieldValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 0), (uint)flags); }
+        public bool HasNpcFlag2(NPCFlags2 flags) { return (m_unitData.NpcFlags[1] & (uint)flags) != 0; }
+        public void AddNpcFlag2(NPCFlags2 flags) { SetUpdateFieldFlagValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 1), (uint)flags); }
+        public void RemoveNpcFlag2(NPCFlags2 flags) { RemoveUpdateFieldFlagValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 1), (uint)flags); }
+        public void SetNpcFlags2(NPCFlags2 flags) { SetUpdateFieldValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NpcFlags, 1), (uint)flags); }
+
+        public bool IsVendor() { return HasNpcFlag(NPCFlags.Vendor); }
+        public bool IsTrainer() { return HasNpcFlag(NPCFlags.Trainer); }
+        public bool IsQuestGiver() { return HasNpcFlag(NPCFlags.QuestGiver); }
+        public bool IsGossip() { return HasNpcFlag(NPCFlags.Gossip); }
+        public bool IsTaxi() { return HasNpcFlag(NPCFlags.FlightMaster); }
+        public bool IsGuildMaster() { return HasNpcFlag(NPCFlags.Petitioner); }
+        public bool IsBattleMaster() { return HasNpcFlag(NPCFlags.BattleMaster); }
+        public bool IsBanker() { return HasNpcFlag(NPCFlags.Banker); }
+        public bool IsInnkeeper() { return HasNpcFlag(NPCFlags.Innkeeper); }
+        public bool IsSpiritHealer() { return HasNpcFlag(NPCFlags.SpiritHealer); }
+        public bool IsSpiritGuide() { return HasNpcFlag(NPCFlags.SpiritGuide); }
+        public bool IsTabardDesigner() { return HasNpcFlag(NPCFlags.TabardDesigner); }
+        public bool IsAuctioner() { return HasNpcFlag(NPCFlags.Auctioneer); }
+        public bool IsArmorer() { return HasNpcFlag(NPCFlags.Repair); }
         public bool IsServiceProvider()
         {
-            return HasFlag64(UnitFields.NpcFlags,
-                NPCFlags.Vendor | NPCFlags.Trainer | NPCFlags.FlightMaster |
+            return HasNpcFlag(NPCFlags.Vendor | NPCFlags.Trainer | NPCFlags.FlightMaster |
                 NPCFlags.Petitioner | NPCFlags.BattleMaster | NPCFlags.Banker |
                 NPCFlags.Innkeeper | NPCFlags.SpiritHealer |
                 NPCFlags.SpiritGuide | NPCFlags.TabardDesigner | NPCFlags.Auctioneer);
         }
-        public bool IsSpiritService() { return HasFlag64(UnitFields.NpcFlags, NPCFlags.SpiritHealer | NPCFlags.SpiritGuide); }
+        public bool IsSpiritService() { return HasNpcFlag(NPCFlags.SpiritHealer | NPCFlags.SpiritGuide); }
         public bool IsCritter() { return GetCreatureType() == CreatureType.Critter; }
         public bool IsInFlight() { return HasUnitState(UnitState.InFlight); }
+
+        public void SetHoverHeight(float hoverHeight) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.HoverHeight), hoverHeight); }
 
         public Guardian GetGuardianPet()
         {
@@ -806,7 +826,7 @@ namespace Game.Entities
         public void _EnterVehicle(Vehicle vehicle, sbyte seatId, AuraApplication aurApp)
         {
             // Must be called only from aura handler
-            Contract.Assert(aurApp != null);
+            Cypher.Assert(aurApp != null);
 
             if (!IsAlive() || GetVehicleKit() == vehicle || vehicle.GetBase().IsOnVehicle(this))
                 return;
@@ -835,7 +855,7 @@ namespace Game.Entities
                 }
             }
 
-            Contract.Assert(!m_vehicle);
+            Cypher.Assert(!m_vehicle);
             vehicle.AddPassenger(this, seatId);
         }
 
@@ -861,12 +881,12 @@ namespace Game.Entities
                     continue;
 
                 // Make sure there is only one ride vehicle aura on target cast by the unit changing seat
-                Contract.Assert(rideVehicleEffect == null);
+                Cypher.Assert(rideVehicleEffect == null);
                 rideVehicleEffect = eff;
             }
 
             // Unit riding a vehicle must always have control vehicle aura on target
-            Contract.Assert(rideVehicleEffect != null);
+            Cypher.Assert(rideVehicleEffect != null);
 
             rideVehicleEffect.ChangeAmount((seatId < 0 ? GetTransSeat() : seatId) + 1);
         }
@@ -944,8 +964,8 @@ namespace Game.Entities
             if (HasUnitTypeMask(UnitTypeMask.Accessory))
             {
                 // Vehicle just died, we die too
-                if (vehicle.GetBase().getDeathState() == DeathState.JustDied)
-                    setDeathState(DeathState.JustDied);
+                if (vehicle.GetBase().GetDeathState() == DeathState.JustDied)
+                    SetDeathState(DeathState.JustDied);
                 // If for other reason we as minion are exiting the vehicle (ejected, master dismounted) - unsummon
                 else
                     ToTempSummon().UnSummon(2000); // Approximation
@@ -969,7 +989,7 @@ namespace Game.Entities
             playOrphanSpellVisual.SpellVisualID = spellVisualId;
             playOrphanSpellVisual.TravelSpeed = travelSpeed;
             playOrphanSpellVisual.SpeedAsTime = speedAsTime;
-            playOrphanSpellVisual.UnkZero = 0.0f;
+            playOrphanSpellVisual.LaunchDelay = 0.0f;
             SendMessageToSet(playOrphanSpellVisual, true);
         }
 
@@ -983,7 +1003,7 @@ namespace Game.Entities
             playOrphanSpellVisual.SpellVisualID = spellVisualId;
             playOrphanSpellVisual.TravelSpeed = travelSpeed;
             playOrphanSpellVisual.SpeedAsTime = speedAsTime;
-            playOrphanSpellVisual.UnkZero = 0.0f;
+            playOrphanSpellVisual.LaunchDelay = 0.0f;
             SendMessageToSet(playOrphanSpellVisual, true);
         }
 
@@ -1008,12 +1028,12 @@ namespace Game.Entities
             SendMessageToSet(playSpellVisual, true);
         }
 
-        public void SendPlaySpellVisual(Vector3 targetPosition, float o, uint spellVisualId, uint missReason, uint reflectStatus, float travelSpeed, bool speedAsTime = false)
+        public void SendPlaySpellVisual(Vector3 targetPosition, float launchDelay, uint spellVisualId, uint missReason, uint reflectStatus, float travelSpeed, bool speedAsTime = false)
         {
             PlaySpellVisual playSpellVisual = new PlaySpellVisual();
             playSpellVisual.Source = GetGUID();
             playSpellVisual.TargetPosition = targetPosition; // exclusive with Target
-            playSpellVisual.Orientation = o;
+            playSpellVisual.LaunchDelay = launchDelay;
             playSpellVisual.SpellVisualID = spellVisualId;
             playSpellVisual.TravelSpeed = travelSpeed;
             playSpellVisual.MissReason = (ushort)missReason;
@@ -1062,11 +1082,11 @@ namespace Game.Entities
         public UnitAI GetAI() { return i_AI; }
         void SetAI(UnitAI newAI) { i_AI = newAI; }
 
-        public bool isPossessing()
+        public bool IsPossessing()
         {
             Unit u = GetCharm();
             if (u != null)
-                return u.isPossessed();
+                return u.IsPossessed();
             else
                 return false;
         }
@@ -1080,15 +1100,15 @@ namespace Game.Entities
                     return pet;
 
                 Log.outError(LogFilter.Unit, "Unit.GetCharm: Charmed creature {0} not exist.", charm_guid);
-                SetGuidValue(UnitFields.Charm, ObjectGuid.Empty);
+                SetCharmGUID(ObjectGuid.Empty);
             }
 
             return null;
         }
         public bool IsCharmed() { return !GetCharmerGUID().IsEmpty(); }
-        public bool isPossessed() { return HasUnitState(UnitState.Possessed); }
+        public bool IsPossessed() { return HasUnitState(UnitState.Possessed); }
 
-        public HostileRefManager getHostileRefManager() { return m_HostileRefManager; }
+        public HostileRefManager GetHostileRefManager() { return hostileRefManager; }
 
         public void OnPhaseChange()
         {
@@ -1097,8 +1117,8 @@ namespace Game.Entities
 
             if (IsTypeId(TypeId.Unit) || !ToPlayer().GetSession().PlayerLogout())
             {
-                HostileRefManager refManager = getHostileRefManager();
-                HostileReference refe = refManager.getFirst();
+                HostileRefManager refManager = GetHostileRefManager();
+                HostileReference refe = refManager.GetFirst();
 
                 while (refe != null)
                 {
@@ -1107,17 +1127,17 @@ namespace Game.Entities
                     {
                         Creature creature = unit.ToCreature();
                         if (creature != null)
-                            refManager.setOnlineOfflineState(creature, creature.IsInPhase(this));
+                            refManager.SetOnlineOfflineState(creature, creature.IsInPhase(this));
                     }
 
-                    refe = refe.next();
+                    refe = refe.Next();
                 }
 
                 // modify threat lists for new phasemask
                 if (!IsTypeId(TypeId.Player))
                 {
-                    List<HostileReference> threatList = GetThreatManager().getThreatList();
-                    List<HostileReference> offlineThreatList = GetThreatManager().getOfflineThreatList();
+                    List<HostileReference> threatList = GetThreatManager().GetThreatList();
+                    List<HostileReference> offlineThreatList = GetThreatManager().GetOfflineThreatList();
 
                     // merge expects sorted lists
                     threatList.Sort();
@@ -1126,17 +1146,29 @@ namespace Game.Entities
 
                     foreach (var host in threatList)
                     {
-                        Unit unit = host.getTarget();
+                        Unit unit = host.GetTarget();
                         if (unit != null)
-                            unit.getHostileRefManager().setOnlineOfflineState(ToCreature(), unit.IsInPhase(this));
+                            unit.GetHostileRefManager().SetOnlineOfflineState(ToCreature(), unit.IsInPhase(this));
                     }
                 }
             }
         }
 
-        public uint GetModelForForm(ShapeShiftForm form)
+        public uint GetModelForForm(ShapeShiftForm form, uint spellId)
         {
-            if (IsTypeId(TypeId.Player))
+            // Hardcoded cases
+            switch (spellId)
+            {
+                case 7090: // Bear Form
+                    return 29414;
+                case 35200: // Roc Form
+                    return 4877;
+                default:
+                    break;
+            }
+
+            Player thisPlayer = ToPlayer();
+            if (thisPlayer != null)
             {
                 Aura artifactAura = GetAura(PlayerConst.ArtifactsAllWeaponsGeneralWeaponEquippedPassive);
                 if (artifactAura != null)
@@ -1151,8 +1183,8 @@ namespace Game.Entities
                     }
                 }
 
-                byte hairColor = GetByteValue(PlayerFields.Bytes, PlayerFieldOffsets.BytesOffsetHairColorId);
-                byte skinColor = GetByteValue(PlayerFields.Bytes, PlayerFieldOffsets.BytesOffsetSkinId);
+                byte hairColor = thisPlayer.m_playerData.HairColorID;
+                byte skinColor = thisPlayer.m_playerData.SkinID;
 
                 switch (form)
                 {
@@ -1560,24 +1592,9 @@ namespace Game.Entities
             return modelid;
         }
 
-        public virtual bool CanUseAttackType(WeaponAttackType attacktype)
-        {
-            switch (attacktype)
-            {
-                case WeaponAttackType.BaseAttack:
-                    return !HasFlag(UnitFields.Flags, UnitFlags.Disarmed);
-                case WeaponAttackType.OffAttack:
-                    return !HasFlag(UnitFields.Flags2, UnitFlags2.DisarmOffhand);
-                case WeaponAttackType.RangedAttack:
-                    return !HasFlag(UnitFields.Flags2, UnitFlags2.DisarmRanged);
-                default:
-                    return true;
-            }
-        }
-
         public Totem ToTotem() { return IsTotem() ? (this as Totem) : null; }
         public TempSummon ToTempSummon() { return IsSummon() ? (this as TempSummon) : null; }
-        public virtual void setDeathState(DeathState s)
+        public virtual void SetDeathState(DeathState s)
         {
             // Death state needs to be updated before RemoveAllAurasOnDeath() is called, to prevent entering combat
             m_deathState = s;
@@ -1586,7 +1603,7 @@ namespace Game.Entities
             {
                 CombatStop();
                 DeleteThreatList();
-                getHostileRefManager().deleteReferences();
+                GetHostileRefManager().DeleteReferences();
 
                 if (IsNonMeleeSpellCast(false))
                     InterruptNonMeleeSpells(false);
@@ -1622,7 +1639,7 @@ namespace Game.Entities
                 // do not why since in IncreaseMaxHealth currenthealth is checked
                 SetHealth(0);
                 SetPower(GetPowerType(), 0);
-                SetUInt32Value(UnitFields.NpcEmotestate, 0);
+                SetEmoteState(Emote.OneshotNone);
 
                 // players in instance don't have ZoneScript, but they have InstanceScript
                 ZoneScript zoneScript = GetZoneScript() != null ? GetZoneScript() : GetInstanceScript();
@@ -1630,7 +1647,7 @@ namespace Game.Entities
                     zoneScript.OnUnitDeath(this);
             }
             else if (s == DeathState.JustRespawned)
-                RemoveFlag(UnitFields.Flags, UnitFlags.Skinnable); // clear skinnable for creature and player (at Battleground)
+                RemoveUnitFlag(UnitFlags.Skinnable); // clear skinnable for creature and player (at Battleground)
         }
 
         public bool IsVisible()
@@ -1647,12 +1664,19 @@ namespace Game.Entities
 
             UpdateObjectVisibility();
         }
-        public bool IsMounted() { return HasFlag(UnitFields.Flags, UnitFlags.Mount); }
-        public uint GetMountID() { return GetUInt32Value(UnitFields.MountDisplayId); }
+
+        public bool IsMagnet()
+        {
+            // Grounding Totem
+            if (m_unitData.CreatedBySpell == 8177) /// @todo: find a more generic solution
+                return true;
+
+            return false;
+        }
 
         public void SetShapeshiftForm(ShapeShiftForm form)
         {
-            SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.ShapeshiftForm, (byte)form);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ShapeshiftForm), (byte)form);
         }
 
         public void SetModifierValue(UnitMods unitMod, UnitModifierType modifierType, float value)
@@ -1759,12 +1783,12 @@ namespace Game.Entities
         public AuraApplication _CreateAuraApplication(Aura aura, uint effMask)
         {
             // can't apply aura on unit which is going to be deleted - to not create a memory leak
-            Contract.Assert(!m_cleanupDone);
+            Cypher.Assert(!m_cleanupDone);
             // aura musn't be removed
-            Contract.Assert(!aura.IsRemoved());
+            Cypher.Assert(!aura.IsRemoved());
 
             // aura mustn't be already applied on target
-            Contract.Assert(!aura.IsAppliedOnTarget(GetGUID()), "Unit._CreateAuraApplication: aura musn't be applied on target");
+            Cypher.Assert(!aura.IsAppliedOnTarget(GetGUID()), "Unit._CreateAuraApplication: aura musn't be applied on target");
 
             SpellInfo aurSpellInfo = aura.GetSpellInfo();
             uint aurId = aurSpellInfo.Id;
@@ -1800,39 +1824,46 @@ namespace Game.Entities
 
         void _UpdateAutoRepeatSpell()
         {
+            SpellInfo autoRepeatSpellInfo = m_currentSpells[CurrentSpellTypes.AutoRepeat].m_spellInfo;
+
             // check "realtime" interrupts
             // don't cancel spells which are affected by a SPELL_AURA_CAST_WHILE_WALKING effect
-            if (((IsTypeId(TypeId.Player) && ToPlayer().isMoving()) || IsNonMeleeSpellCast(false, false, true, GetCurrentSpell(CurrentSpellTypes.AutoRepeat).m_spellInfo.Id == 75)) &&
-                !HasAuraTypeWithAffectMask(AuraType.CastWhileWalking, m_currentSpells[CurrentSpellTypes.AutoRepeat].m_spellInfo))
+            if (((IsTypeId(TypeId.Player) && ToPlayer().IsMoving()) || IsNonMeleeSpellCast(false, false, true, autoRepeatSpellInfo.Id == 75)) &&
+                !HasAuraTypeWithAffectMask(AuraType.CastWhileWalking, autoRepeatSpellInfo))
             {
                 // cancel wand shoot
-                if (m_currentSpells[CurrentSpellTypes.AutoRepeat].m_spellInfo.Id != 75)
+                if (autoRepeatSpellInfo.Id != 75)
                     InterruptSpell(CurrentSpellTypes.AutoRepeat);
                 m_AutoRepeatFirstCast = true;
                 return;
             }
 
             // apply delay (Auto Shot (spellID 75) not affected)
-            if (m_AutoRepeatFirstCast && getAttackTimer(WeaponAttackType.RangedAttack) < 500 && m_currentSpells[CurrentSpellTypes.AutoRepeat].m_spellInfo.Id != 75)
-                setAttackTimer(WeaponAttackType.RangedAttack, 500);
+            if (m_AutoRepeatFirstCast && GetAttackTimer(WeaponAttackType.RangedAttack) < 500 && autoRepeatSpellInfo.Id != 75)
+                SetAttackTimer(WeaponAttackType.RangedAttack, 500);
             m_AutoRepeatFirstCast = false;
 
             // castroutine
-            if (isAttackReady(WeaponAttackType.RangedAttack))
+            if (IsAttackReady(WeaponAttackType.RangedAttack))
             {
                 // Check if able to cast
-                if (m_currentSpells[CurrentSpellTypes.AutoRepeat].CheckCast(true) != SpellCastResult.SpellCastOk)
+                SpellCastResult result = m_currentSpells[CurrentSpellTypes.AutoRepeat].CheckCast(true);
+                if (result != SpellCastResult.SpellCastOk)
                 {
-                    InterruptSpell(CurrentSpellTypes.AutoRepeat);
+                    if (autoRepeatSpellInfo.Id != 75)
+                        InterruptSpell(CurrentSpellTypes.AutoRepeat);
+                    else if (GetTypeId() == TypeId.Player)
+                        Spell.SendCastResult(ToPlayer(), autoRepeatSpellInfo, m_currentSpells[CurrentSpellTypes.AutoRepeat].m_SpellVisual, m_currentSpells[CurrentSpellTypes.AutoRepeat].m_castId, result);
+
                     return;
                 }
 
                 // we want to shoot
-                Spell spell = new Spell(this, m_currentSpells[CurrentSpellTypes.AutoRepeat].m_spellInfo, TriggerCastFlags.FullMask);
-                spell.prepare(m_currentSpells[CurrentSpellTypes.AutoRepeat].m_targets);
+                Spell spell = new Spell(this, autoRepeatSpellInfo, TriggerCastFlags.FullMask);
+                spell.Prepare(m_currentSpells[CurrentSpellTypes.AutoRepeat].m_targets);
 
                 // all went good, reset attack
-                resetAttackTimer(WeaponAttackType.RangedAttack);
+                ResetAttackTimer(WeaponAttackType.RangedAttack);
             }
         }
 
@@ -1882,7 +1913,7 @@ namespace Game.Entities
                                 Pet pet = ToPet();
                                 if (pet)
                                 {
-                                    if (pet.getPetType() == PetType.Hunter) // Hunter pets have focus
+                                    if (pet.GetPetType() == PetType.Hunter) // Hunter pets have focus
                                         displayPower = PowerType.Focus;
                                     else if (pet.IsPetGhoul() || pet.IsPetAbomination()) // DK pets have energy
                                         displayPower = PowerType.Energy;
@@ -1898,7 +1929,7 @@ namespace Game.Entities
 
         public FactionTemplateRecord GetFactionTemplateEntry()
         {
-            FactionTemplateRecord entry = CliDB.FactionTemplateStorage.LookupByKey(getFaction());
+            FactionTemplateRecord entry = CliDB.FactionTemplateStorage.LookupByKey(GetFaction());
             if (entry == null)
             {
                 ObjectGuid guid = ObjectGuid.Empty;                             // prevent repeating spam same faction problem
@@ -1908,11 +1939,11 @@ namespace Game.Entities
                     Player player = ToPlayer();
                     Creature creature = ToCreature();
                     if (player != null)
-                        Log.outError(LogFilter.Unit, "Player {0} has invalid faction (faction template id) #{1}", player.GetName(), getFaction());
+                        Log.outError(LogFilter.Unit, "Player {0} has invalid faction (faction template id) #{1}", player.GetName(), GetFaction());
                     else if (creature != null)
-                        Log.outError(LogFilter.Unit, "Creature (template id: {0}) has invalid faction (faction template id) #{1}", creature.GetCreatureTemplate().Entry, getFaction());
+                        Log.outError(LogFilter.Unit, "Creature (template id: {0}) has invalid faction (faction template id) #{1}", creature.GetCreatureTemplate().Entry, GetFaction());
                     else
-                        Log.outError(LogFilter.Unit, "Unit (name={0}, type={1}) has invalid faction (faction template id) #{2}", GetName(), GetTypeId(), getFaction());
+                        Log.outError(LogFilter.Unit, "Unit (name={0}, type={1}) has invalid faction (faction template id) #{2}", GetName(), GetTypeId(), GetFaction());
 
                     guid = GetGUID();
                 }
@@ -1929,11 +1960,11 @@ namespace Game.Entities
 
         public bool IsCharmedOwnedByPlayerOrPlayer() { return GetCharmerOrOwnerOrOwnGUID().IsPlayer(); }
 
-        public void addFollower(FollowerReference pRef)
+        public void AddFollower(FollowerReference pRef)
         {
-            m_FollowingRefManager.insertFirst(pRef);
+            m_FollowingRefManager.InsertFirst(pRef);
         }
-        public void removeFollower(FollowerReference pRef) { } //nothing to do yet
+        public void RemoveFollower(FollowerReference pRef) { } //nothing to do yet
 
         public uint GetCreatureTypeMask()
         {
@@ -2020,7 +2051,7 @@ namespace Game.Entities
             if (slot >= SharedConst.MaxEquipmentItems)
                 return 0;
 
-            return GetUInt32Value(UnitFields.VirtualItemSlotId + slot * 2);
+            return m_unitData.VirtualItems[slot].ItemID;
         }
 
         public ushort GetVirtualItemAppearanceMod(uint slot)
@@ -2028,79 +2059,128 @@ namespace Game.Entities
             if (slot >= SharedConst.MaxEquipmentItems)
                 return 0;
 
-            return GetUInt16Value(UnitFields.VirtualItemSlotId + (int)slot * 2 + 1, 0);
+            return m_unitData.VirtualItems[(int)slot].ItemAppearanceModID;
         }
 
-        public void SetVirtualItem(int slot, uint itemId, ushort appearanceModId = 0, ushort itemVisual = 0)
+        public void SetVirtualItem(uint slot, uint itemId, ushort appearanceModId = 0, ushort itemVisual = 0)
         {
             if (slot >= SharedConst.MaxEquipmentItems)
                 return;
 
-            SetUInt32Value(UnitFields.VirtualItemSlotId + slot * 2, itemId);
-            SetUInt16Value(UnitFields.VirtualItemSlotId + slot * 2 + 1, 0, appearanceModId);
-            SetUInt16Value(UnitFields.VirtualItemSlotId + slot * 2 + 1, 1, itemVisual);
+            var virtualItemField = m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.VirtualItems, (int)slot);
+            SetUpdateFieldValue(virtualItemField.ModifyValue((VisibleItem visibleItem) => visibleItem.ItemID), itemId);
+            SetUpdateFieldValue(virtualItemField.ModifyValue((VisibleItem visibleItem) => visibleItem.ItemAppearanceModID), appearanceModId);
+            SetUpdateFieldValue(virtualItemField.ModifyValue((VisibleItem visibleItem) => visibleItem.ItemVisual), itemVisual);
         }
 
         //Unit
         public void SetLevel(uint lvl)
         {
-            SetUInt32Value(UnitFields.Level, lvl);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Level), lvl);
 
-            if (IsTypeId(TypeId.Player))
+            Player player = ToPlayer();
+            if (player != null)
             {
-                Player player = ToPlayer();
                 if (player.GetGroup())
                     player.SetGroupUpdateFlag(GroupUpdateFlags.Level);
-                Global.WorldMgr.UpdateCharacterInfoLevel(ToPlayer().GetGUID(), (byte)lvl);
+
+                Global.CharacterCacheStorage.UpdateCharacterLevel(ToPlayer().GetGUID(), (byte)lvl);
             }
         }
-        public uint getLevel()
-        {
-            return GetUInt32Value(UnitFields.Level);
-        }
+        public uint GetLevel() { return m_unitData.Level; }
+        public override uint GetLevelForTarget(WorldObject target) { return GetLevel(); }
 
-        public override uint GetLevelForTarget(WorldObject target)
-        {
-            return getLevel();
-        }
+        public Race GetRace() { return (Race)(byte)m_unitData.Race; }
+        public void SetRace(Race race) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Race), (byte)race); }
+        public ulong GetRaceMask() { return 1ul << ((int)GetRace() - 1); }
+        public Class GetClass() { return (Class)(byte)m_unitData.ClassId; }
+        public void SetClass(Class classId) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ClassId), (byte)classId); }
+        public uint GetClassMask() { return (uint)(1 << ((int)GetClass() - 1)); }
+        public Gender GetGender() { return (Gender)(byte)m_unitData.Sex; }
+        public void SetGender(Gender sex) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Sex), (byte)sex); }
 
-        public Race GetRace()
+        public uint GetDisplayId() { return m_unitData.DisplayID; }
+        public virtual void SetDisplayId(uint modelId, float displayScale = 1f)
         {
-            return (Race)GetByteValue(UnitFields.Bytes0, 0);
-        }
-        public long getRaceMask()
-        {
-            return (1 << ((int)GetRace() - 1));
-        }
-        public Class GetClass()
-        {
-            return (Class)GetByteValue(UnitFields.Bytes0, 1);
-        }
-        public uint getClassMask()
-        {
-            return (uint)(1 << ((int)GetClass() - 1));
-        }
-        public Gender GetGender()
-        {
-            return (Gender)GetByteValue(UnitFields.Bytes0, 3);
-        }
-
-        public void SetNativeDisplayId(uint modelId)
-        {
-            SetUInt32Value(UnitFields.NativeDisplayId, modelId);
-        }
-        public virtual void SetDisplayId(uint modelId)
-        {
-            SetUInt32Value(UnitFields.DisplayId, modelId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.DisplayID), modelId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.DisplayScale), displayScale);
             // Set Gender by modelId
             CreatureModelInfo minfo = Global.ObjectMgr.GetCreatureModelInfo(modelId);
             if (minfo != null)
-                SetByteValue(UnitFields.Bytes0, 3, (byte)minfo.gender);
+                SetGender((Gender)minfo.gender);
         }
-        public uint GetNativeDisplayId()
+        public void RestoreDisplayId(bool ignorePositiveAurasPreventingMounting = false)
         {
-            return GetUInt32Value(UnitFields.NativeDisplayId);
+            AuraEffect handledAura = null;
+            // try to receive model from transform auras
+            var transforms = GetAuraEffectsByType(AuraType.Transform);
+            if (!transforms.Empty())
+            {
+                // iterate over already applied transform auras - from newest to oldest
+                foreach (var eff in transforms)
+                {
+                    AuraApplication aurApp = eff.GetBase().GetApplicationOfTarget(GetGUID());
+                    if (aurApp != null)
+                    {
+                        if (handledAura == null)
+                        {
+                            if (!ignorePositiveAurasPreventingMounting)
+                                handledAura = eff;
+                            else
+                            {
+                                CreatureTemplate ci = Global.ObjectMgr.GetCreatureTemplate((uint)eff.GetMiscValue());
+                                if (ci != null)
+                                    if (!IsDisallowedMountForm(eff.GetId(), ShapeShiftForm.None, ObjectManager.ChooseDisplayId(ci).CreatureDisplayID))
+                                        handledAura = eff;
+                            }
+                        }
+
+                        // prefer negative auras
+                        if (!aurApp.IsPositive())
+                        {
+                            handledAura = eff;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            var shapeshiftAura = GetAuraEffectsByType(AuraType.ModShapeshift);
+
+            // transform aura was found
+            if (handledAura != null)
+                handledAura.HandleEffect(this, AuraEffectHandleModes.SendForClient, true);
+            // we've found shapeshift
+            else if (!shapeshiftAura.Empty()) // we've found shapeshift
+            {
+                // only one such aura possible at a time
+                uint modelId = GetModelForForm(GetShapeshiftForm(), shapeshiftAura[0].GetId());
+                if (modelId != 0)
+                {
+                    if (!ignorePositiveAurasPreventingMounting || !IsDisallowedMountForm(0, GetShapeshiftForm(), modelId))
+                        SetDisplayId(modelId);
+                    else
+                        SetDisplayId(GetNativeDisplayId());
+                }
+            }
+            // no auras found - set modelid to default
+            else
+                SetDisplayId(GetNativeDisplayId());
         }
+        public uint GetNativeDisplayId() { return m_unitData.NativeDisplayID; }
+        public void SetNativeDisplayId(uint displayId, float displayScale = 1f)
+        {
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NativeDisplayID), displayId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.NativeXDisplayScale), displayScale);
+        }
+        public float GetNativeDisplayScale() { return m_unitData.NativeXDisplayScale; }
+
+        public bool IsMounted()
+        {
+            return HasUnitFlag(UnitFlags.Mount);
+        }
+        public uint GetMountDisplayId() { return m_unitData.MountDisplayID; }
+        public void SetMountDisplayId(uint mountDisplayId) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.MountDisplayID), mountDisplayId); }
 
         public virtual Unit GetOwner()
         {
@@ -2112,18 +2192,46 @@ namespace Game.Entities
         }
         public virtual float GetFollowAngle() { return MathFunctions.PiOver2; }
 
-        public ObjectGuid GetOwnerGUID() { return GetGuidValue(UnitFields.SummonedBy); }
-        public ObjectGuid GetCreatorGUID() { return GetGuidValue(UnitFields.CreatedBy); }
-        public ObjectGuid GetMinionGUID() { return GetGuidValue(UnitFields.Summon); }
-        public ObjectGuid GetCharmerGUID() { return GetGuidValue(UnitFields.CharmedBy); }
-        public ObjectGuid GetCharmGUID() { return GetGuidValue(UnitFields.Charm); }
+        public ObjectGuid GetOwnerGUID() { return m_unitData.SummonedBy; }
+        public void SetOwnerGUID(ObjectGuid owner)
+        {
+            if (GetOwnerGUID() == owner)
+                return;
+
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.SummonedBy), owner);
+            if (owner.IsEmpty())
+                return;
+
+            // Update owner dependent fields
+            Player player = Global.ObjAccessor.GetPlayer(this, owner);
+            if (player == null || !player.HaveAtClient(this)) // if player cannot see this unit yet, he will receive needed data with create object
+                return;
+
+            UpdateData udata = new UpdateData(GetMapId());
+            UpdateObject packet;
+            BuildValuesUpdateBlockForPlayerWithFlag(udata, UpdateFieldFlag.Owner, player);
+            udata.BuildPacket(out packet);
+            player.SendPacket(packet);
+        }
+        public ObjectGuid GetCreatorGUID() { return m_unitData.CreatedBy; }
+        public void SetCreatorGUID(ObjectGuid creator) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.CreatedBy), creator); }
+        public ObjectGuid GetMinionGUID() { return m_unitData.Summon; }
+        public void SetMinionGUID(ObjectGuid guid) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Summon), guid); }
+        public ObjectGuid GetCharmerGUID() { return m_unitData.CharmedBy; }
+        public void SetCharmerGUID(ObjectGuid owner) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.CharmedBy), owner); }
+        public ObjectGuid GetCharmGUID() { return m_unitData.Charm; }
+        public void SetCharmGUID(ObjectGuid charm) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Charm), charm); }
         public ObjectGuid GetPetGUID() { return m_SummonSlot[0]; }
-        public ObjectGuid GetCritterGUID() { return GetGuidValue(UnitFields.Critter); }
+        public void SetPetGUID(ObjectGuid guid) { m_SummonSlot[0] = guid; }
+        public ObjectGuid GetCritterGUID() { return m_unitData.Critter; }
+        public void SetCritterGUID(ObjectGuid guid) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Critter), guid); }
+        public ObjectGuid GetBattlePetCompanionGUID() { return m_unitData.BattlePetCompanionGUID; }
+        public void SetBattlePetCompanionGUID(ObjectGuid guid) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.BattlePetCompanionGUID), guid); }
         public ObjectGuid GetCharmerOrOwnerGUID()
         {
             return !GetCharmerGUID().IsEmpty() ? GetCharmerGUID() : GetOwnerGUID();
         }
-        ObjectGuid GetCharmerOrOwnerOrOwnGUID()
+        public ObjectGuid GetCharmerOrOwnerOrOwnGUID()
         {
             ObjectGuid guid = GetCharmerOrOwnerGUID();
             if (!guid.IsEmpty())
@@ -2159,52 +2267,50 @@ namespace Game.Entities
             return !GetCharmerGUID().IsEmpty() ? GetCharmer() : GetOwner();
         }
 
-        public uint GetChannelSpellId() { return GetUInt32Value(UnitFields.ChannelData);    }
-        public void SetChannelSpellId(uint channelSpellId) { SetUInt32Value(UnitFields.ChannelData, channelSpellId); }
-        public uint GetChannelSpellXSpellVisualId() { return GetUInt32Value(UnitFields.ChannelData + 1);}
-        public void SetChannelSpellXSpellVisualId(uint channelSpellXSpellVisualId) { SetUInt32Value(UnitFields.ChannelData + 1, channelSpellXSpellVisualId); }
+        public bool HasUnitFlag(UnitFlags flags) { return (m_unitData.Flags & (uint)flags) != 0; }
+        public void AddUnitFlag(UnitFlags flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags), (uint)flags); }
+        public void RemoveUnitFlag(UnitFlags flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags), (uint)flags); }
+        public void SetUnitFlags(UnitFlags flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags), (uint)flags); }
+        public bool HasUnitFlag2(UnitFlags2 flags) { return (m_unitData.Flags2 & (uint)flags) != 0; }
+        public void AddUnitFlag2(UnitFlags2 flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags2), (uint)flags); }
+        public void RemoveUnitFlag2(UnitFlags2 flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags2), (uint)flags); }
+        public void SetUnitFlags2(UnitFlags2 flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags2), (uint)flags); }
+        public bool HasUnitFlag3(UnitFlags3 flags) { return (m_unitData.Flags3 & (uint)flags) != 0; }
+        public void AddUnitFlag3(UnitFlags3 flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags3), (uint)flags); }
+        public void RemoveUnitFlag3(UnitFlags3 flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags3), (uint)flags); }
+        public void SetUnitFlags3(UnitFlags3 flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.Flags3), (uint)flags); }
 
-        public List<ObjectGuid> GetChannelObjects() { return GetDynamicStructuredValues<ObjectGuid>(UnitDynamicFields.ChannelObjects); }
-        public void AddChannelObject(ObjectGuid guid) { AddDynamicStructuredValue(UnitDynamicFields.ChannelObjects, guid); }
+        public void SetCreatedBySpell(uint spellId) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.CreatedBySpell), spellId); }
 
-        public void SetOwnerGUID(ObjectGuid owner)
+        public Emote GetEmoteState() { return (Emote)(int)m_unitData.EmoteState; }
+        public void SetEmoteState(Emote emote) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.EmoteState), (int)emote); }
+
+        public SheathState GetSheath() { return (SheathState)(byte)m_unitData.SheatheState; }
+        public void SetSheath(SheathState sheathed) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.SheatheState), (byte)sheathed); }
+
+        public uint GetCombatTimer() { return combatTimer; }
+        public UnitPVPStateFlags GetPvpFlags() { return (UnitPVPStateFlags)(byte)m_unitData.PvpFlags; }
+        public bool HasPvpFlag(UnitPVPStateFlags flags) { return (m_unitData.PvpFlags & (uint)flags) != 0; }
+        public void AddPvpFlag(UnitPVPStateFlags flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PvpFlags), (byte)flags); }
+        public void RemovePvpFlag(UnitPVPStateFlags flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PvpFlags), (byte)flags); }
+        public void SetPvpFlags(UnitPVPStateFlags flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PvpFlags), (byte)flags); }
+        public bool IsInSanctuary() { return HasPvpFlag(UnitPVPStateFlags.Sanctuary); }
+        public bool IsPvP() { return HasPvpFlag(UnitPVPStateFlags.PvP); }
+        public bool IsFFAPvP() { return HasPvpFlag(UnitPVPStateFlags.FFAPvp); }
+
+        public UnitPetFlags GetPetFlags()
         {
-            if (GetOwnerGUID() == owner)
-                return;
-
-            SetGuidValue(UnitFields.SummonedBy, owner);
-            if (owner.IsEmpty())
-                return;
-
-            // Update owner dependent fields
-            Player player = Global.ObjAccessor.GetPlayer(this, owner);
-            if (player == null || !player.HaveAtClient(this)) // if player cannot see this unit yet, he will receive needed data with create object
-                return;
-
-            SetFieldNotifyFlag(UpdateFieldFlags.Owner);
-
-            UpdateData udata = new UpdateData(GetMapId());
-            UpdateObject packet;
-            BuildValuesUpdateBlockForPlayer(udata, player);
-            udata.BuildPacket(out packet);
-            player.SendPacket(packet);
-
-            RemoveFieldNotifyFlag(UpdateFieldFlags.Owner);
+            return (UnitPetFlags)(byte)m_unitData.PetFlags;
         }
-        public void SetCreatorGUID(ObjectGuid creator) { SetGuidValue(UnitFields.CreatedBy, creator); }
-        void SetMinionGUID(ObjectGuid guid) { SetGuidValue(UnitFields.Summon, guid); }
-        void SetCharmerGUID(ObjectGuid owner) { SetGuidValue(UnitFields.CharmedBy, owner); }
-        public void SetPetGUID(ObjectGuid guid) { m_SummonSlot[0] = guid; }
-        void SetCritterGUID(ObjectGuid guid) { SetGuidValue(UnitFields.Critter, guid); }
+        public bool HasPetFlag(UnitPetFlags flags) { return (m_unitData.PetFlags & (byte)flags) != 0; }
+        public void AddPetFlag(UnitPetFlags flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PetFlags), (byte)flags); }
+        public void RemovePetFlag(UnitPetFlags flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PetFlags), (byte)flags); }
+        public void SetPetFlags(UnitPetFlags flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PetFlags), (byte)flags); }
 
-        public uint GetCombatTimer() { return m_CombatTimer; }
-        public bool IsPvP() { return HasByteFlag(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, UnitBytes2Flags.PvP); }
-        public bool IsFFAPvP() { return HasByteFlag(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, UnitBytes2Flags.FFAPvp); }
+        public void SetPetNumberForClient(uint petNumber) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PetNumber), petNumber); }
+        public void SetPetNameTimestamp(uint timestamp) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.PetNameTimestamp), timestamp); }
 
-        public ShapeShiftForm GetShapeshiftForm()
-        {
-            return (ShapeShiftForm)GetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.ShapeshiftForm);
-        }
+        public ShapeShiftForm GetShapeshiftForm() { return (ShapeShiftForm)(byte)m_unitData.ShapeshiftForm; }
         public CreatureType GetCreatureType()
         {
             if (IsTypeId(TypeId.Player))
@@ -2235,118 +2341,18 @@ namespace Game.Entities
             SetDisplayId(GetNativeDisplayId());
         }
 
-        public uint GetModelForTotem(PlayerTotemType totemType)
-        {
-            switch (GetRace())
-            {
-                case Race.Orc:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 30758;
-                            case PlayerTotemType.Earth:   // earth
-                                return 30757;
-                            case PlayerTotemType.Water:   // water
-                                return 30759;
-                            case PlayerTotemType.Air:     // air
-                                return 30756;
-                        }
-                        break;
-                    }
-                case Race.Dwarf:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 30754;
-                            case PlayerTotemType.Earth:   // earth
-                                return 30753;
-                            case PlayerTotemType.Water:   // water
-                                return 30755;
-                            case PlayerTotemType.Air:     // air
-                                return 30736;
-                        }
-                        break;
-                    }
-                case Race.Troll:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 30762;
-                            case PlayerTotemType.Earth:   // earth
-                                return 30761;
-                            case PlayerTotemType.Water:   // water
-                                return 30763;
-                            case PlayerTotemType.Air:     // air
-                                return 30760;
-                        }
-                        break;
-                    }
-                case Race.Tauren:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 4589;
-                            case PlayerTotemType.Earth:   // earth
-                                return 4588;
-                            case PlayerTotemType.Water:   // water
-                                return 4587;
-                            case PlayerTotemType.Air:     // air
-                                return 4590;
-                        }
-                        break;
-                    }
-                case Race.Draenei:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 19074;
-                            case PlayerTotemType.Earth:   // earth
-                                return 19073;
-                            case PlayerTotemType.Water:   // water
-                                return 19075;
-                            case PlayerTotemType.Air:     // air
-                                return 19071;
-                        }
-                        break;
-                    }
-                case Race.Goblin:
-                    {
-                        switch (totemType)
-                        {
-                            case PlayerTotemType.Fire:    // fire
-                                return 30783;
-                            case PlayerTotemType.Earth:   // earth
-                                return 30782;
-                            case PlayerTotemType.Water:   // water
-                                return 30784;
-                            case PlayerTotemType.Air:     // air
-                                return 30781;
-                        }
-                        break;
-                    }
-            }
-            return 0;
-        }
-
-        public bool IsStopped() { return !HasUnitState(UnitState.Moving); }
-
-        public bool HasUnitTypeMask(UnitTypeMask mask) { return Convert.ToBoolean(mask & m_unitTypeMask); }
-        public void AddUnitTypeMask(UnitTypeMask mask) { m_unitTypeMask |= mask; }
+        public bool HasUnitTypeMask(UnitTypeMask mask) { return Convert.ToBoolean(mask & UnitTypeMask); }
+        public void AddUnitTypeMask(UnitTypeMask mask) { UnitTypeMask |= mask; }
 
         public bool IsAlive() { return m_deathState == DeathState.Alive; }
         public bool IsDying() { return m_deathState == DeathState.JustDied; }
         public bool IsDead() { return (m_deathState == DeathState.Dead || m_deathState == DeathState.Corpse); }
-        public bool IsSummon() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.Summon); }
-        public bool IsGuardian() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.Guardian); }
-        public bool IsPet() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.Pet); }
-        public bool IsHunterPet() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.HunterPet); }
-        public bool IsTotem() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.Totem); }
-        public bool IsVehicle() { return m_unitTypeMask.HasAnyFlag(UnitTypeMask.Vehicle); }
+        public bool IsSummon() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.Summon); }
+        public bool IsGuardian() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.Guardian); }
+        public bool IsPet() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.Pet); }
+        public bool IsHunterPet() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.HunterPet); }
+        public bool IsTotem() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.Totem); }
+        public bool IsVehicle() { return UnitTypeMask.HasAnyFlag(UnitTypeMask.Vehicle); }
 
         public void AddUnitState(UnitState f)
         {
@@ -2359,14 +2365,6 @@ namespace Game.Entities
         public void ClearUnitState(UnitState f)
         {
             m_state &= ~f;
-        }
-        public void SetStandFlags(object flags)
-        {
-            SetByteFlag(UnitFields.Bytes1, UnitBytes1Offsets.VisFlag, flags);
-        }
-        public void RemoveStandFlags(object flags)
-        {
-            RemoveByteFlag(UnitFields.Bytes1, UnitBytes1Offsets.VisFlag, flags);
         }
 
         public override bool IsAlwaysVisibleFor(WorldObject seer)
@@ -2427,9 +2425,9 @@ namespace Game.Entities
             if (GetCharmerOrOwnerOrSelf() == target.GetCharmerOrOwnerOrSelf())
                 return ReputationRank.Friendly;
 
-            if (HasFlag(UnitFields.Flags, UnitFlags.PvpAttackable))
+            if (HasUnitFlag(UnitFlags.PvpAttackable))
             {
-                if (target.HasFlag(UnitFields.Flags, UnitFlags.PvpAttackable))
+                if (target.HasUnitFlag(UnitFlags.PvpAttackable))
                 {
                     Player selfPlayerOwner = GetAffectingPlayer();
                     Player targetPlayerOwner = target.GetAffectingPlayer();
@@ -2458,7 +2456,7 @@ namespace Game.Entities
                         var targetFactionTemplateEntry = target.GetFactionTemplateEntry();
                         if (targetFactionTemplateEntry != null)
                         {
-                            if (!selfPlayerOwner.HasFlag(UnitFields.Flags2, UnitFlags2.IgnoreReputation))
+                            if (!selfPlayerOwner.HasUnitFlag2(UnitFlags2.IgnoreReputation))
                             {
                                 var targetFactionEntry = CliDB.FactionStorage.LookupByKey(targetFactionTemplateEntry.Faction);
                                 if (targetFactionEntry != null)
@@ -2467,7 +2465,7 @@ namespace Game.Entities
                                     {
                                         // check contested flags
                                         if (Convert.ToBoolean(targetFactionTemplateEntry.Flags & (uint)FactionTemplateFlags.ContestedGuard)
-                                            && selfPlayerOwner.HasFlag(PlayerFields.Flags, PlayerFlags.ContestedPVP))
+                                            && selfPlayerOwner.HasPlayerFlag(PlayerFlags.ContestedPVP))
                                             return ReputationRank.Hostile;
 
                                         // if faction has reputation, hostile state depends only from AtWar state
@@ -2499,12 +2497,12 @@ namespace Game.Entities
             {
                 // check contested flags
                 if (Convert.ToBoolean(factionTemplateEntry.Flags & (uint)FactionTemplateFlags.ContestedGuard)
-                    && targetPlayerOwner.HasFlag(PlayerFields.Flags, PlayerFlags.ContestedPVP))
+                    && targetPlayerOwner.HasPlayerFlag(PlayerFlags.ContestedPVP))
                     return ReputationRank.Hostile;
                 ReputationRank repRank = targetPlayerOwner.GetReputationMgr().GetForcedRankIfAny(factionTemplateEntry);
                 if (repRank != ReputationRank.None)
                     return repRank;
-                if (!target.HasFlag(UnitFields.Flags2, UnitFlags2.IgnoreReputation))
+                if (!target.HasUnitFlag2(UnitFlags2.IgnoreReputation))
                 {
                     var factionEntry = CliDB.FactionStorage.LookupByKey(factionTemplateEntry.Faction);
                     if (factionEntry != null)
@@ -2534,18 +2532,13 @@ namespace Game.Entities
             return ReputationRank.Neutral;
         }
 
-        public uint getFaction()
-        {
-            return GetUInt32Value(UnitFields.FactionTemplate);
-        }
-        public void SetFaction(uint faction)
-        {
-            SetUInt32Value(UnitFields.FactionTemplate, faction);
-        }
+        public uint GetFaction() { return m_unitData.FactionTemplate; }
+        public void SetFaction(uint faction) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.FactionTemplate), faction); }
+
         public void RestoreFaction()
         {
             if (IsTypeId(TypeId.Player))
-                ToPlayer().setFactionForRace(GetRace());
+                ToPlayer().SetFactionForRace(GetRace());
             else
             {
                 if (HasUnitTypeMask(UnitTypeMask.Minion))
@@ -2553,7 +2546,7 @@ namespace Game.Entities
                     Unit owner = GetOwner();
                     if (owner)
                     {
-                        SetFaction(owner.getFaction());
+                        SetFaction(owner.GetFaction());
                         return;
                     }
                 }
@@ -2579,8 +2572,8 @@ namespace Game.Entities
                 (u1.IsTypeId(TypeId.Player) && u2.IsTypeId(TypeId.Unit) && u2.ToCreature().GetCreatureTemplate().TypeFlags.HasAnyFlag(CreatureTypeFlags.TreatAsRaidUnit)))
                 return true;
 
-            // else u1->GetTypeId() == u2->GetTypeId() == TYPEID_UNIT
-            return u1.getFaction() == u2.getFaction();
+            // else u1.GetTypeId() == u2.GetTypeId() == TYPEID_UNIT
+            return u1.GetFaction() == u2.GetFaction();
         }
 
         public bool IsInRaidWith(Unit unit)
@@ -2599,14 +2592,14 @@ namespace Game.Entities
                     (u1.IsTypeId(TypeId.Player) && u2.IsTypeId(TypeId.Unit) && u2.ToCreature().GetCreatureTemplate().TypeFlags.HasAnyFlag(CreatureTypeFlags.TreatAsRaidUnit)))
                 return true;
 
-            // else u1->GetTypeId() == u2->GetTypeId() == TYPEID_UNIT
-            return u1.getFaction() == u2.getFaction();
+            // else u1.GetTypeId() == u2.GetTypeId() == TYPEID_UNIT
+            return u1.GetFaction() == u2.GetFaction();
         }
 
-        public SheathState GetSheath() { return (SheathState)GetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.SheathState); }
-        public void SetSheath(SheathState sheathed) { SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.SheathState, (byte)sheathed); }
-
-        public UnitStandStateType GetStandState() { return (UnitStandStateType)GetByteValue(UnitFields.Bytes1, UnitBytes1Offsets.StandState); }
+        public UnitStandStateType GetStandState() { return (UnitStandStateType)(byte)m_unitData.StandState; }
+        public void AddVisFlags(UnitVisFlags flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.VisFlags), (byte)flags); }
+        public void RemoveVisFlags(UnitVisFlags flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.VisFlags), (byte)flags); }
+        public void SetVisFlags(UnitVisFlags flags) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.VisFlags), (byte)flags); }
 
         public bool IsSitState()
         {
@@ -2625,7 +2618,7 @@ namespace Game.Entities
 
         public void SetStandState(UnitStandStateType state, uint animKitId = 0)
         {
-            SetByteValue(UnitFields.Bytes1, UnitBytes1Offsets.StandState, (byte)state);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.StandState), (byte)state);
 
             if (IsStandState())
                 RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags.NotSeated);
@@ -2637,43 +2630,33 @@ namespace Game.Entities
             }
         }
 
-        public uint GetDisplayId() { return GetUInt32Value(UnitFields.DisplayId); }
-
-        public void RestoreDisplayId()
+        public void SetAnimTier(UnitBytes1Flags animTier, bool notifyClient)
         {
-            AuraEffect handledAura = null;
-            // try to receive model from transform auras
-            var transforms = GetAuraEffectsByType(AuraType.Transform);
-            if (!transforms.Empty())
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.AnimTier), (byte)animTier);
+
+            if (notifyClient)
             {
-                // iterate over already applied transform auras - from newest to oldest
-                foreach (var eff in transforms)
-                {
-                    AuraApplication aurApp = eff.GetBase().GetApplicationOfTarget(GetGUID());
-                    if (aurApp != null)
-                    {
-                        if (handledAura == null)
-                            handledAura = eff;
-                        // prefer negative auras
-                        if (!aurApp.IsPositive())
-                        {
-                            handledAura = eff;
-                            break;
-                        }
-                    }
-                }
+                SetAnimTier setAnimTier = new SetAnimTier();
+                setAnimTier.Unit = GetGUID();
+                setAnimTier.Tier = (int)animTier;
+                SendMessageToSet(setAnimTier, true);
             }
-            uint modelId;
-            // transform aura was found
-            if (handledAura != null)
-                handledAura.HandleEffect(this, AuraEffectHandleModes.SendForClient, true);
-            // we've found shapeshift
-            else if ((modelId = GetModelForForm(GetShapeshiftForm())) != 0)
-                SetDisplayId(modelId);
-            // no auras found - set modelid to default
-            else
-                SetDisplayId(GetNativeDisplayId());
         }
+
+        public uint GetChannelSpellId() { return ((UnitChannel)m_unitData.ChannelData).SpellID; }
+        public void SetChannelSpellId(uint channelSpellId)
+        {
+            SetUpdateFieldValue(ref m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ChannelData)._value.SpellID, channelSpellId);
+        }
+        public uint GetChannelSpellXSpellVisualId() { return ((UnitChannel)m_unitData.ChannelData).SpellXSpellVisualID; }
+        public void SetChannelSpellXSpellVisualId(uint channelSpellXSpellVisualId)
+        {
+            UnitChannel unitChannel = m_unitData.ModifyValue(m_unitData.ChannelData);
+            SetUpdateFieldValue(ref unitChannel.SpellXSpellVisualID, channelSpellXSpellVisualId);
+        }
+        public void AddChannelObject(ObjectGuid guid) { AddDynamicUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ChannelObjects), guid); }
+        public void SetChannelObject(int slot, ObjectGuid guid) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ChannelObjects, slot), guid); }
+        public void ClearChannelObjects() { ClearDynamicUpdateFieldValues(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ChannelObjects)); }
 
         public bool IsDamageReducedByArmor(SpellSchoolMask schoolMask, SpellInfo spellInfo = null, sbyte effIndex = -1)
         {
@@ -2701,164 +2684,68 @@ namespace Game.Entities
             return true;
         }
 
-        public override void BuildValuesUpdate(UpdateType updatetype, ByteBuffer data, Player target)
+        public override UpdateFieldFlag GetUpdateFieldFlagsFor(Player target)
         {
-            if (target == null)
-                return;
+            UpdateFieldFlag flags = UpdateFieldFlag.None;
+            if (target == this || GetOwnerGUID() == target.GetGUID())
+                flags |= UpdateFieldFlag.Owner;
 
-            ByteBuffer fieldBuffer = new ByteBuffer();
-
-            uint valCount = valuesCount;
-
-            uint[] flags = UpdateFieldFlags.UnitUpdateFieldFlags;
-            uint visibleFlag = UpdateFieldFlags.Public;
-
-            if (target == this)
-                visibleFlag |= UpdateFieldFlags.Private;
-            else if (IsTypeId(TypeId.Player))
-                valCount = (int)PlayerFields.EndNotSelf;
-
-            UpdateMask updateMask = new UpdateMask(valCount);
-
-            Player plr = GetCharmerOrOwnerPlayerOrPlayerItself();
-            if (GetOwnerGUID() == target.GetGUID())
-                visibleFlag |= UpdateFieldFlags.Owner;
-
-            if (HasFlag(ObjectFields.DynamicFlags, UnitDynFlags.SpecialInfo))
+            if (HasDynamicFlag(UnitDynFlags.SpecialInfo))
                 if (HasAuraTypeWithCaster(AuraType.Empathy, target.GetGUID()))
-                    visibleFlag |= UpdateFieldFlags.SpecialInfo;
+                    flags |= UpdateFieldFlag.Empath;
 
-            if (plr != null && plr.IsInSameRaidWith(target))
-                visibleFlag |= UpdateFieldFlags.PartyMember;
+            return flags;
+        }
 
-            Creature creature = ToCreature();
-            for (var index = 0; index < valCount; ++index)
-            {
-                if (Convert.ToBoolean(_fieldNotifyFlags & flags[index]) ||
-                    Convert.ToBoolean((flags[index] & visibleFlag) & UpdateFieldFlags.SpecialInfo) ||
-                    ((updatetype == UpdateType.Values ? _changesMask.Get(index) : HasUpdateValue(index)) && flags[index].HasAnyFlag(visibleFlag)) ||
-                    (index == (int)UnitFields.AuraState && HasFlag(UnitFields.AuraState, AuraStateType.PerCasterAuraStateMask)))
-                {
-                    updateMask.SetBit(index);
+        public override void BuildValuesCreate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
 
-                    if (index == (int)UnitFields.NpcFlags)
-                    {
-                        uint appendValue = GetUInt32Value(UnitFields.NpcFlags);
+            buffer.WriteUInt8((byte)flags);
+            m_objectData.WriteCreate(buffer, flags, this, target);
+            m_unitData.WriteCreate(buffer, flags, this, target);
 
-                        if (creature != null)
-                            if (!target.CanSeeSpellClickOn(creature))
-                                appendValue &= ~(uint)NPCFlags.SpellClick;
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
 
-                        fieldBuffer.WriteUInt32(appendValue);
-                    }
-                    else if (index == (int)UnitFields.AuraState)
-                    {
-                        // Check per caster aura states to not enable using a spell in client if specified aura is not by target
-                        fieldBuffer.WriteUInt32(BuildAuraStateUpdateForTarget(target));
-                    }
-                    // FIXME: Some values at server stored in float format but must be sent to client in public uint format
-                    else if ((index >= (int)UnitFields.NegStat && index < (int)UnitFields.NegStat + (int)Stats.Max) ||
-                        (index >= (int)UnitFields.ResistanceBuffModsPositive && index < ((int)UnitFields.ResistanceBuffModsPositive + (int)SpellSchools.Max)) ||
-                        (index >= (int)UnitFields.ResistanceBuffModsNegative && index < ((int)UnitFields.ResistanceBuffModsNegative + (int)SpellSchools.Max)) ||
-                        (index >= (int)UnitFields.PosStat && index < (int)UnitFields.PosStat + (int)Stats.Max))
-                    {
-                        fieldBuffer.WriteUInt32((uint)GetFloatValue(index));
-                    }
-                    // Gamemasters should be always able to select units - remove not selectable flag
-                    else if (index == (int)UnitFields.Flags)
-                    {
-                        UnitFlags appendValue = (UnitFlags)GetUInt32Value(index);
-                        if (target.IsGameMaster())
-                            appendValue &= ~UnitFlags.NotSelectable;
+        public override void BuildValuesUpdate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
 
-                        fieldBuffer.WriteUInt32((uint)appendValue);
-                    }
-                    // use modelid_a if not gm, _h if gm for CREATURE_FLAG_EXTRA_TRIGGER creatures
-                    else if (index == (int)UnitFields.DisplayId)
-                    {
-                        uint displayId = GetUInt32Value(index);
-                        if (creature != null)
-                        {
-                            CreatureTemplate cinfo = creature.GetCreatureTemplate();
+            buffer.WriteUInt32(m_values.GetChangedObjectTypeMask());
+            if (m_values.HasChanged(TypeId.Object))
+                m_objectData.WriteUpdate(buffer, flags, this, target);
 
-                            // this also applies for transform auras
-                            SpellInfo transform = Global.SpellMgr.GetSpellInfo(getTransForm());
-                            if (transform != null)
-                            {
-                                foreach (SpellEffectInfo effect in transform.GetEffectsForDifficulty(GetMap().GetDifficultyID()))
-                                {
-                                    if (effect != null && effect.IsAura(AuraType.Transform))
-                                    {
-                                        CreatureTemplate transformInfo = Global.ObjectMgr.GetCreatureTemplate((uint)effect.MiscValue);
-                                        if (transformInfo != null)
-                                        {
-                                            cinfo = transformInfo;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+            if (m_values.HasChanged(TypeId.Unit))
+                m_unitData.WriteUpdate(buffer, flags, this, target);
 
-                            if (cinfo.FlagsExtra.HasAnyFlag(CreatureFlagsExtra.Trigger))
-                                if (target.IsGameMaster())
-                                    displayId = cinfo.GetFirstVisibleModel();
-                        }
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
 
-                        fieldBuffer.WriteUInt32(displayId);
-                    }
-                    // hide lootable animation for unallowed players
-                    else if (index == (int)ObjectFields.DynamicFlags)
-                    {
-                        UnitDynFlags dynamicFlags = (UnitDynFlags)GetUInt32Value(index) & ~UnitDynFlags.Tapped;
+        public override void BuildValuesUpdateWithFlag(WorldPacket data, UpdateFieldFlag flags, Player target)
+        {
+            UpdateMask valuesMask = new UpdateMask(14);
+            valuesMask.Set((int)TypeId.Unit);
 
-                        if (creature != null)
-                        {
-                            if (creature.hasLootRecipient() && !creature.isTappedBy(target))
-                                dynamicFlags |= UnitDynFlags.Tapped;
+            WorldPacket buffer = new WorldPacket();
 
-                            if (!target.isAllowedToLoot(creature))
-                                dynamicFlags &= ~UnitDynFlags.Lootable;
-                        }
+            UpdateMask mask = new UpdateMask(191);
+            m_unitData.AppendAllowedFieldsMaskForFlag(mask, flags);
+            m_unitData.WriteUpdate(buffer, mask, flags, this, target);
 
-                        // unit UNIT_DYNFLAG_TRACK_UNIT should only be sent to caster of SPELL_AURA_MOD_STALKED auras
-                        if (dynamicFlags.HasAnyFlag(UnitDynFlags.TrackUnit))
-                            if (!HasAuraTypeWithCaster(AuraType.ModStalked, target.GetGUID()))
-                                dynamicFlags &= ~UnitDynFlags.TrackUnit;
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteUInt32(valuesMask.GetBlock(0));
+            data.WriteBytes(buffer);
+        }
 
-                        fieldBuffer.WriteUInt32((uint)dynamicFlags);
-                    }
-                    // FG: pretend that OTHER players in own group are friendly ("blue")
-                    else if (index == (int)UnitFields.Bytes2 || index == (int)UnitFields.FactionTemplate)
-                    {
-                        if (IsControlledByPlayer() && target != this && WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideInteractionGroup) && IsInRaidWith(target))
-                        {
-                            FactionTemplateRecord ft1 = GetFactionTemplateEntry();
-                            FactionTemplateRecord ft2 = target.GetFactionTemplateEntry();
-                            if (ft1 != null && ft2 != null && !ft1.IsFriendlyTo(ft2))
-                            {
-                                if (index == (int)UnitFields.Bytes2)
-                                    // Allow targetting opposite faction in party when enabled in config
-                                    fieldBuffer.WriteUInt32(GetUInt32Value(index) & ((int)UnitBytes2Flags.Sanctuary << 8)); // this flag is at public byte offset 1 !!
-                                else
-                                    // pretend that all other HOSTILE players have own faction, to allow follow, heal, rezz (trade wont work)
-                                    fieldBuffer.WriteUInt32(target.getFaction());
-                            }
-                            else
-                                fieldBuffer.WriteUInt32(GetUInt32Value(index));
-                        }
-                        else
-                            fieldBuffer.WriteUInt32(GetUInt32Value(index));
-                    }
-                    else
-                    {
-                        // send in current format (float as float, public uint as uint32)
-                        WriteValue(fieldBuffer, index);
-                    }
-                }
-            }
-
-            updateMask.AppendToPacket(data);
-            data.WriteBytes(fieldBuffer);
+        public override void ClearUpdateMask(bool remove)
+        {
+            m_values.ClearChangesMask(m_unitData);
+            base.ClearUpdateMask(remove);
         }
 
         public override void DestroyForPlayer(Player target)
@@ -2866,7 +2753,7 @@ namespace Game.Entities
             Battleground bg = target.GetBattleground();
             if (bg != null)
             {
-                if (bg.isArena())
+                if (bg.IsArena())
                 {
                     DestroyArenaUnit destroyArenaUnit = new DestroyArenaUnit();
                     destroyArenaUnit.Guid = GetGUID();

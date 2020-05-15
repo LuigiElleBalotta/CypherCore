@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,6 @@ namespace Framework.Configuration
             int lineCounter = 0;
             try
             {
-                string name = string.Empty;
                 foreach (var line in ConfigContent)
                 {
                     lineCounter++;
@@ -75,9 +74,9 @@ namespace Framework.Configuration
             return (T)Convert.ChangeType(temp, type);
         }
 
-        public static List<string> GetKeysByString(string name)
+        public static IEnumerable<string> GetKeysByString(string name)
         {
-            return _configList.Where(p => p.Key.Contains(name)).Select(p => p.Key).ToList();
+            return _configList.Where(p => p.Key.Contains(name)).Select(p => p.Key);
         }
 
         static Dictionary<string, string> _configList = new Dictionary<string, string>();

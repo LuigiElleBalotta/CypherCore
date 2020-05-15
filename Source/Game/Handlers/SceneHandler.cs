@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ namespace Game
             GetPlayer().GetSceneMgr().OnSceneTrigger(sceneTriggerEvent.SceneInstanceID, sceneTriggerEvent._Event);
         }
 
+        [WorldPacketHandler(ClientOpcodes.ScenePlaybackComplete)]
         void HandleScenePlaybackComplete(ScenePlaybackComplete scenePlaybackComplete)
         {
             Log.outDebug(LogFilter.Scenes, "HandleScenePlaybackComplete: SceneInstanceID: {0}", scenePlaybackComplete.SceneInstanceID);
@@ -38,6 +39,7 @@ namespace Game
             GetPlayer().GetSceneMgr().OnSceneComplete(scenePlaybackComplete.SceneInstanceID);
         }
 
+        [WorldPacketHandler(ClientOpcodes.ScenePlaybackCanceled)]
         void HandleScenePlaybackCanceled(ScenePlaybackCanceled scenePlaybackCanceled)
         {
             Log.outDebug(LogFilter.Scenes, "HandleScenePlaybackCanceled: SceneInstanceID: {0}", scenePlaybackCanceled.SceneInstanceID);

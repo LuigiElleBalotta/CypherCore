@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,13 +57,13 @@ namespace Game.Network.Packets
             _worldPacket.WriteBit(WindowInfo.HasValue);
             _worldPacket.FlushBits();
 
-            _worldPacket.WriteUInt32(CanLandNodes.Length);
-            _worldPacket.WriteUInt32(CanUseNodes.Length);
+            _worldPacket.WriteInt32(CanLandNodes.Length);
+            _worldPacket.WriteInt32(CanUseNodes.Length);
 
             if (WindowInfo.HasValue)
             {
                 _worldPacket.WritePackedGuid(WindowInfo.Value.UnitGUID);
-                _worldPacket.WriteUInt32(WindowInfo.Value.CurrentNode);
+                _worldPacket.WriteInt32(WindowInfo.Value.CurrentNode);
             }
 
             foreach (var node in CanLandNodes)
@@ -116,8 +116,8 @@ namespace Game.Network.Packets
 
         public ObjectGuid Vendor;
         public uint Node;
-        public uint GroundMountID = 0;
-        public uint FlyingMountID = 0;
+        public uint GroundMountID;
+        public uint FlyingMountID;
     }
 
     class NewTaxiPath : ServerPacket

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,17 +71,17 @@ namespace Scripts.Pets
                         continue;
                     }
                     // else compare best fit unit with current unit
-                    var triggers = unit.GetThreatManager().getThreatList();
+                    var triggers = unit.GetThreatManager().GetThreatList();
                     foreach (var reference in triggers)
                     {
                         // Try to find threat referenced to owner
-                        if (reference.getTarget() == owner)
+                        if (reference.GetTarget() == owner)
                         {
                             // Check if best fit hostile unit hs lower threat than this current unit
-                            if (highestThreat < reference.getThreat())
+                            if (highestThreat < reference.GetThreat())
                             {
                                 // If so, update best fit unit
-                                highestThreat = reference.getThreat();
+                                highestThreat = reference.GetThreat();
                                 highestThreatUnit = unit;
                                 break;
                             }
@@ -120,11 +120,11 @@ namespace Scripts.Pets
                     // Consider only units without CC
                     if (!unit.HasBreakableByDamageCrowdControlAura(unit))
                     {
-                        var triggers = unit.GetThreatManager().getThreatList();
+                        var triggers = unit.GetThreatManager().GetThreatList();
                         foreach (var reference in triggers)
                         {
                             // Try to find threat referenced to owner
-                            if (reference.getTarget() == owner)
+                            if (reference.GetTarget() == owner)
                                 return true;
                         }
                     }
@@ -169,7 +169,7 @@ namespace Scripts.Pets
             if (!owner)
                 return;
 
-            Unit target = owner.getAttackerForHelper();
+            Unit target = owner.GetAttackerForHelper();
 
             _events.Update(diff);
 

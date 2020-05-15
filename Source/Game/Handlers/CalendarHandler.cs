@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,14 @@
 
 using Framework.Constants;
 using Framework.Database;
+using Game.Cache;
 using Game.Entities;
 using Game.Guilds;
 using Game.Maps;
 using Game.Network;
 using Game.Network.Packets;
 using System;
+using Game.DataStorage;
 
 namespace Game
 {
@@ -60,8 +62,7 @@ namespace Game
                 CalendarSendCalendarEventInfo eventInfo;
                 eventInfo.EventID = calendarEvent.EventId;
                 eventInfo.Date = calendarEvent.Date;
-                Guild guild = Global.GuildMgr.GetGuildById(calendarEvent.GuildId);
-                eventInfo.EventGuildID = guild ? guild.GetGUID() : ObjectGuid.Empty;
+                eventInfo.EventClubID = calendarEvent.GuildId;
                 eventInfo.EventName = calendarEvent.Title;
                 eventInfo.EventType = calendarEvent.EventType;
                 eventInfo.Flags = calendarEvent.Flags;
@@ -71,22 +72,25 @@ namespace Game
                 packet.Events.Add(eventInfo);
             }
 
-            for (byte i = 0; i < (int)Difficulty.Max; ++i)
+            foreach (var difficulty in CliDB.DifficultyStorage.Values)
             {
-                var boundInstances = GetPlayer().GetBoundInstances((Difficulty)i);
-                foreach (var pair in boundInstances)
+                var boundInstances = _player.GetBoundInstances((Difficulty)difficulty.Id);
+                if (boundInstances != null)
                 {
-                    if (pair.Value.perm)
+                    foreach (var boundInstance in boundInstances.Values)
                     {
-                        CalendarSendCalendarRaidLockoutInfo lockoutInfo;
+                        if (boundInstance.perm)
+                        {
+                            CalendarSendCalendarRaidLockoutInfo lockoutInfo;
 
-                        InstanceSave save = pair.Value.save;
-                        lockoutInfo.MapID = (int)save.GetMapId();
-                        lockoutInfo.DifficultyID = (uint)save.GetDifficultyID();
-                        lockoutInfo.ExpireTime = save.GetResetTime() - currTime;
-                        lockoutInfo.InstanceID = save.GetInstanceId(); // instance save id as unique instance copy id
+                            InstanceSave save = boundInstance.save;
+                            lockoutInfo.MapID = (int)save.GetMapId();
+                            lockoutInfo.DifficultyID = (uint)save.GetDifficultyID();
+                            lockoutInfo.ExpireTime = save.GetResetTime() - currTime;
+                            lockoutInfo.InstanceID = save.GetInstanceId(); // instance save id as unique instance copy id
 
-                        packet.RaidLockouts.Add(lockoutInfo);
+                            packet.RaidLockouts.Add(lockoutInfo);
+                        }
                     }
                 }
             }
@@ -104,12 +108,12 @@ namespace Game
                 Global.CalendarMgr.SendCalendarCommandResult(GetPlayer().GetGUID(), CalendarError.EventInvalid);
         }
 
-        [WorldPacketHandler(ClientOpcodes.CalendarGuildFilter)]
-        void HandleCalendarGuildFilter(CalendarGuildFilter calendarGuildFilter)
+        [WorldPacketHandler(ClientOpcodes.CalendarCommunityFilter)]
+        void HandleCalendarCommunityFilter(CalendarCommunityFilter calendarCommunityFilter)
         {
             Guild guild = Global.GuildMgr.GetGuildById(GetPlayer().GetGuildId());
             if (guild)
-                guild.MassInviteToEvent(this, calendarGuildFilter.MinLevel, calendarGuildFilter.MaxLevel, calendarGuildFilter.MaxRankOrder);
+                guild.MassInviteToEvent(this, calendarCommunityFilter.MinLevel, calendarCommunityFilter.MaxLevel, calendarCommunityFilter.MaxRankOrder);
         }
 
         [WorldPacketHandler(ClientOpcodes.CalendarAddEvent)]
@@ -208,7 +212,7 @@ namespace Game
                 return;
 
             CalendarEvent oldEvent = Global.CalendarMgr.GetEvent(calendarCopyEvent.EventID);
-            if (oldEvent == null)
+            if (oldEvent != null)
             {
                 CalendarEvent newEvent = new CalendarEvent(oldEvent, Global.CalendarMgr.GetFreeEventId());
                 newEvent.Date = calendarCopyEvent.Date;
@@ -239,6 +243,9 @@ namespace Game
             Team inviteeTeam = 0;
             ulong inviteeGuildId = 0;
 
+            if (!ObjectManager.NormalizePlayerName(ref calendarEventInvite.Name))
+                return;
+
             Player player = Global.ObjAccessor.FindPlayerByName(calendarEventInvite.Name);
             if (player)
             {
@@ -250,14 +257,16 @@ namespace Game
             else
             {
                 // Invitee offline, get data from database
-                PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_GUID_RACE_ACC_BY_NAME);
-                stmt.AddValue(0, calendarEventInvite.Name);
-                SQLResult result = DB.Characters.Query(stmt);
-                if (!result.IsEmpty())
+                ObjectGuid guid = Global.CharacterCacheStorage.GetCharacterGuidByName(calendarEventInvite.Name);
+                if (!guid.IsEmpty())
                 {
-                    inviteeGuid = ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0));
-                    inviteeTeam = Player.TeamForRace((Race)result.Read<byte>(1));
-                    inviteeGuildId = Player.GetGuildIdFromDB(inviteeGuid);
+                    CharacterCacheEntry characterInfo = Global.CharacterCacheStorage.GetCharacterCacheByGuid(guid);
+                    if (characterInfo != null)
+                    {
+                        inviteeGuid = guid;
+                        inviteeTeam = Player.TeamForRace(characterInfo.RaceId);
+                        inviteeGuildId = characterInfo.GuildId;
+                    }
                 }
             }
 
@@ -509,7 +518,6 @@ namespace Game
             if (save == null)
                 return;
 
-            ObjectGuid guid = GetPlayer().GetGUID();
             long currTime = Time.UnixTime;
 
             CalendarRaidLockoutUpdated packet = new CalendarRaidLockoutUpdated();

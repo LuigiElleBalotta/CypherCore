@@ -34,9 +34,12 @@ namespace Game
 
         public static void ForAllControlled(Unit unit, Action<Unit> func)
         {
-            foreach (Unit controlled in unit.m_Controlled)
+            for (var i = 0; i < unit.m_Controlled.Count; ++i)
+            {
+                Unit controlled = unit.m_Controlled[i];
                 if (controlled.GetTypeId() != TypeId.Player)
                     func(controlled);
+            }
 
             for (byte i = 0; i < SharedConst.MaxSummonSlot; ++i)
             {
@@ -138,8 +141,8 @@ namespace Game
             TerrainSwapInfo terrainSwapInfo = Global.ObjectMgr.GetTerrainSwapInfo(visibleMapId);
             bool changed = obj.GetPhaseShift().AddVisibleMapId(visibleMapId, terrainSwapInfo);
 
-            foreach (uint uiWorldMapAreaIDSwap in terrainSwapInfo.UiWorldMapAreaIDSwaps)
-                changed = obj.GetPhaseShift().AddUiWorldMapAreaIdSwap(uiWorldMapAreaIDSwap) || changed;
+            foreach (uint uiMapPhaseId  in terrainSwapInfo.UiMapPhaseIDs)
+                changed = obj.GetPhaseShift().AddUiMapPhaseId(uiMapPhaseId ) || changed;
 
             Unit unit = obj.ToUnit();
             if (unit)
@@ -158,8 +161,8 @@ namespace Game
             TerrainSwapInfo terrainSwapInfo = Global.ObjectMgr.GetTerrainSwapInfo(visibleMapId);
             bool changed = obj.GetPhaseShift().RemoveVisibleMapId(visibleMapId);
 
-            foreach (uint uiWorldMapAreaIDSwap in terrainSwapInfo.UiWorldMapAreaIDSwaps)
-                changed = obj.GetPhaseShift().RemoveUiWorldMapAreaIdSwap(uiWorldMapAreaIDSwap) || changed;
+            foreach (uint uiWorldMapAreaIDSwap in terrainSwapInfo.UiMapPhaseIDs)
+                changed = obj.GetPhaseShift().RemoveUiMapPhaseId(uiWorldMapAreaIDSwap) || changed;
 
             Unit unit = obj.ToUnit();
             if (unit)
@@ -192,23 +195,22 @@ namespace Game
             ConditionSourceInfo srcInfo = new ConditionSourceInfo(obj);
 
             obj.GetPhaseShift().VisibleMapIds.Clear();
-            obj.GetPhaseShift().UiWorldMapAreaIdSwaps.Clear();
+            obj.GetPhaseShift().UiMapPhaseIds.Clear();
             obj.GetSuppressedPhaseShift().VisibleMapIds.Clear();
 
-            var visibleMapIds = Global.ObjectMgr.GetTerrainSwapsForMap(obj.GetMapId());
-            if (!visibleMapIds.Empty())
+            foreach (var pair in Global.ObjectMgr.GetTerrainSwaps())
             {
-                foreach (TerrainSwapInfo visibleMapInfo in visibleMapIds)
+                if (Global.ConditionMgr.IsObjectMeetingNotGroupedConditions(ConditionSourceType.TerrainSwap, pair.Value.Id, srcInfo))
                 {
-                    if (Global.ConditionMgr.IsObjectMeetingNotGroupedConditions(ConditionSourceType.TerrainSwap, visibleMapInfo.Id, srcInfo))
-                    {
-                        phaseShift.AddVisibleMapId(visibleMapInfo.Id, visibleMapInfo);
-                        foreach (uint uiWorldMapAreaIdSwap in visibleMapInfo.UiWorldMapAreaIDSwaps)
-                            phaseShift.AddUiWorldMapAreaIdSwap(uiWorldMapAreaIdSwap);
-                    }
-                    else
-                        suppressedPhaseShift.AddVisibleMapId(visibleMapInfo.Id, visibleMapInfo);
+                    if (pair.Key == obj.GetMapId())
+                        phaseShift.AddVisibleMapId(pair.Value.Id, pair.Value);
+
+                    // ui map is visible on all maps
+                    foreach (uint uiMapPhaseId in pair.Value.UiMapPhaseIDs)
+                        phaseShift.AddUiMapPhaseId(uiMapPhaseId);
                 }
+                else
+                    suppressedPhaseShift.AddVisibleMapId(pair.Value.Id, pair.Value);
             }
 
             UpdateVisibilityIfNeeded(obj, false, true);
@@ -287,23 +289,23 @@ namespace Game
             ConditionSourceInfo srcInfo = new ConditionSourceInfo(obj);
             bool changed = false;
 
-            foreach (var phaseRef in phaseShift.Phases.ToArray())
+            foreach (var pair in phaseShift.Phases.ToList())
             {
-                if (!phaseRef.AreaConditions.Empty() && !Global.ConditionMgr.IsObjectMeetToConditions(srcInfo, phaseRef.AreaConditions))
+                if (pair.Value.AreaConditions != null && !Global.ConditionMgr.IsObjectMeetToConditions(srcInfo, pair.Value.AreaConditions))
                 {
-                    newSuppressions.AddPhase(phaseRef.Id, phaseRef.Flags, phaseRef.AreaConditions, phaseRef.References);
-                    phaseShift.ModifyPhasesReferences(phaseRef, -phaseRef.References);
-                    phaseShift.Phases.Remove(phaseRef);
+                    newSuppressions.AddPhase(pair.Key, pair.Value.Flags, pair.Value.AreaConditions, pair.Value.References);
+                    phaseShift.ModifyPhasesReferences(pair.Key, pair.Value, -pair.Value.References);
+                    phaseShift.Phases.Remove(pair.Key);
                 }
             }
 
-            foreach (var phaseRef in suppressedPhaseShift.Phases.ToArray())
+            foreach (var pair in suppressedPhaseShift.Phases.ToList())
             {
-                if (Global.ConditionMgr.IsObjectMeetToConditions(srcInfo, phaseRef.AreaConditions))
+                if (Global.ConditionMgr.IsObjectMeetToConditions(srcInfo, pair.Value.AreaConditions))
                 {
-                    changed = phaseShift.AddPhase(phaseRef.Id, phaseRef.Flags, phaseRef.AreaConditions, phaseRef.References) || changed;
-                    suppressedPhaseShift.ModifyPhasesReferences(phaseRef, -phaseRef.References);
-                    suppressedPhaseShift.Phases.Remove(phaseRef);
+                    changed = phaseShift.AddPhase(pair.Key, pair.Value.Flags, pair.Value.AreaConditions, pair.Value.References) || changed;
+                    suppressedPhaseShift.ModifyPhasesReferences(pair.Key, pair.Value, -pair.Value.References);
+                    suppressedPhaseShift.Phases.Remove(pair.Key);
                 }
             }
 
@@ -312,8 +314,8 @@ namespace Game
                 if (!Global.ConditionMgr.IsObjectMeetingNotGroupedConditions(ConditionSourceType.TerrainSwap, pair.Key, srcInfo))
                 {
                     newSuppressions.AddVisibleMapId(pair.Key, pair.Value.VisibleMapInfo, pair.Value.References);
-                    foreach (uint uiWorldMapAreaIdSwap in pair.Value.VisibleMapInfo.UiWorldMapAreaIDSwaps)
-                        changed = phaseShift.RemoveUiWorldMapAreaIdSwap(uiWorldMapAreaIdSwap) || changed;
+                    foreach (uint uiMapPhaseId in pair.Value.VisibleMapInfo.UiMapPhaseIDs)
+                        changed = phaseShift.RemoveUiMapPhaseId(uiMapPhaseId) || changed;
 
                     phaseShift.VisibleMapIds.Remove(pair.Key);
                 }
@@ -324,8 +326,8 @@ namespace Game
                 if (Global.ConditionMgr.IsObjectMeetingNotGroupedConditions(ConditionSourceType.TerrainSwap, pair.Key, srcInfo))
                 {
                     changed = phaseShift.AddVisibleMapId(pair.Key, pair.Value.VisibleMapInfo, pair.Value.References) || changed;
-                    foreach (uint uiWorldMapAreaIdSwap in pair.Value.VisibleMapInfo.UiWorldMapAreaIDSwaps)
-                        changed = phaseShift.AddUiWorldMapAreaIdSwap(uiWorldMapAreaIdSwap) || changed;
+                    foreach (uint uiMapPhaseId in pair.Value.VisibleMapInfo.UiMapPhaseIDs)
+                        changed = phaseShift.AddUiMapPhaseId(uiMapPhaseId) || changed;
 
                     suppressedPhaseShift.VisibleMapIds.Remove(pair.Key);
                 }
@@ -337,7 +339,6 @@ namespace Game
                 foreach (AuraEffect aurEff in unit.GetAuraEffectsByType(AuraType.Phase))
                 {
                     uint phaseId = (uint)aurEff.GetMiscValueB();
-                    var eraseResult = newSuppressions.RemovePhase(phaseId);
                     // if condition was met previously there is nothing to erase
                     if (newSuppressions.RemovePhase(phaseId))
                         phaseShift.AddPhase(phaseId, GetPhaseFlags(phaseId), null);//todo needs checked
@@ -360,8 +361,8 @@ namespace Game
             }
 
             changed = changed || !newSuppressions.Phases.Empty() || !newSuppressions.VisibleMapIds.Empty();
-            foreach (var phaseRef in newSuppressions.Phases)
-                suppressedPhaseShift.AddPhase(phaseRef.Id, phaseRef.Flags, phaseRef.AreaConditions, phaseRef.References);
+            foreach (var pair in newSuppressions.Phases)
+                suppressedPhaseShift.AddPhase(pair.Key, pair.Value.Flags, pair.Value.AreaConditions, pair.Value.References);
 
             foreach (var pair in newSuppressions.VisibleMapIds)
                 suppressedPhaseShift.AddVisibleMapId(pair.Key, pair.Value.VisibleMapInfo, pair.Value.References);
@@ -390,14 +391,14 @@ namespace Game
             phaseShiftChange.Phaseshift.PhaseShiftFlags = (uint)phaseShift.Flags;
             phaseShiftChange.Phaseshift.PersonalGUID = phaseShift.PersonalGuid;
 
-            foreach (var phaseRef in phaseShift.Phases)
-                phaseShiftChange.Phaseshift.Phases.Add(new PhaseShiftDataPhase((uint)phaseRef.Flags, phaseRef.Id));
+            foreach (var pair in phaseShift.Phases)
+                phaseShiftChange.Phaseshift.Phases.Add(new PhaseShiftDataPhase((uint)pair.Value.Flags, pair.Key));
 
             foreach (var visibleMapId in phaseShift.VisibleMapIds)
                 phaseShiftChange.VisibleMapIDs.Add((ushort)visibleMapId.Key);
 
-            foreach (var uiWorldMapAreaIdSwap in phaseShift.UiWorldMapAreaIdSwaps)
-                phaseShiftChange.UiWorldMapAreaIDSwaps.Add((ushort)uiWorldMapAreaIdSwap.Key);
+            foreach (var uiWorldMapAreaIdSwap in phaseShift.UiMapPhaseIds)
+                phaseShiftChange.UiMapPhaseIDs.Add((ushort)uiWorldMapAreaIdSwap.Key);
 
             player.SendPacket(phaseShiftChange);
         }
@@ -412,8 +413,8 @@ namespace Game
             partyMemberPhases.PhaseShiftFlags = (int)phaseShift.Flags;
             partyMemberPhases.PersonalGUID = phaseShift.PersonalGuid;
 
-            foreach (var phase in phaseShift.Phases)
-                partyMemberPhases.List.Add(new PartyMemberPhase((uint)phase.Flags, phase.Id));
+            foreach (var pair in phaseShift.Phases)
+                partyMemberPhases.List.Add(new PartyMemberPhase((uint)pair.Value.Flags, pair.Key));
         }
 
         public static void InitDbPhaseShift(PhaseShift phaseShift, PhaseUseFlagsValues phaseUseFlags, uint phaseId, uint phaseGroupId)
@@ -470,8 +471,8 @@ namespace Game
                 return phaseShift.VisibleMapIds.First().Key;
 
             GridCoord gridCoord = GridDefines.ComputeGridCoord(x, y);
-            uint gx = (uint)((MapConst.MaxGrids - 1) - gridCoord.x_coord);
-            uint gy = (uint)((MapConst.MaxGrids - 1) - gridCoord.y_coord);
+            uint gx = (uint)((MapConst.MaxGrids - 1) - gridCoord.X_coord);
+            uint gy = (uint)((MapConst.MaxGrids - 1) - gridCoord.Y_coord);
 
             uint gxbegin = Math.Max(gx - 1, 0);
             uint gxend = Math.Min(gx + 1, MapConst.MaxGrids);
@@ -513,12 +514,12 @@ namespace Game
                 StringBuilder phases = new StringBuilder();
                 string cosmetic = Global.ObjectMgr.GetCypherString(CypherStrings.PhaseFlagCosmetic, chat.GetSessionDbcLocale());
                 string personal = Global.ObjectMgr.GetCypherString(CypherStrings.PhaseFlagPersonal, chat.GetSessionDbcLocale());
-                foreach (PhaseRef phase in phaseShift.Phases)
+                foreach (var pair in phaseShift.Phases)
                 {
-                    phases.Append(phase.Id);
-                    if (phase.Flags.HasFlag(PhaseFlags.Cosmetic))
+                    phases.Append(pair.Key);
+                    if (pair.Value.Flags.HasFlag(PhaseFlags.Cosmetic))
                         phases.Append(' ' + '(' + cosmetic + ')');
-                    if (phase.Flags.HasFlag(PhaseFlags.Personal))
+                    if (pair.Value.Flags.HasFlag(PhaseFlags.Personal))
                         phases.Append(' ' + '(' + personal + ')');
                     phases.Append(", ");
                 }
@@ -535,10 +536,10 @@ namespace Game
                 chat.SendSysMessage(CypherStrings.PhaseshiftVisibleMapIds, visibleMapIds.ToString());
             }
 
-            if (!phaseShift.UiWorldMapAreaIdSwaps.Empty())
+            if (!phaseShift.UiMapPhaseIds.Empty())
             {
                 StringBuilder uiWorldMapAreaIdSwaps = new StringBuilder();
-                foreach (var uiWorldMapAreaIdSwap in phaseShift.UiWorldMapAreaIdSwaps)
+                foreach (var uiWorldMapAreaIdSwap in phaseShift.UiMapPhaseIds)
                     uiWorldMapAreaIdSwaps.Append(uiWorldMapAreaIdSwap.Key + ',' + ' ');
 
                 chat.SendSysMessage(CypherStrings.PhaseshiftUiWorldMapAreaSwaps, uiWorldMapAreaIdSwaps.ToString());
@@ -548,8 +549,8 @@ namespace Game
         public static string FormatPhases(PhaseShift phaseShift)
         {
             StringBuilder phases = new StringBuilder();
-            foreach (var phase in phaseShift.Phases)
-                phases.Append(phase.Id + ',');
+            foreach (var phaseId in phaseShift.Phases.Keys)
+                phases.Append(phaseId + ',');
 
             return phases.ToString();
         }

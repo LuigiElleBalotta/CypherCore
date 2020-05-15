@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ namespace Game.Network.Packets
 {
     public class InitializeFactions : ServerPacket
     {
-        const ushort FactionCount = 300;
+        const ushort FactionCount = 350;
 
         public InitializeFactions() : base(ServerOpcodes.InitializeFactions, ConnectionType.Instance) { }
 
@@ -30,7 +30,7 @@ namespace Game.Network.Packets
         {
             for (ushort i = 0; i < FactionCount; ++i)
             {
-                _worldPacket.WriteUInt8(FactionFlags[i]);
+                _worldPacket.WriteUInt8((byte)FactionFlags[i]);
                 _worldPacket.WriteInt32(FactionStandings[i]);
             }
 
@@ -41,7 +41,7 @@ namespace Game.Network.Packets
         }
 
         public int[] FactionStandings = new int[FactionCount];
-        public bool[] FactionHasBonus = new bool[FactionCount]; ///< @todo: implement faction bonus
+        public bool[] FactionHasBonus = new bool[FactionCount]; //@todo: implement faction bonus
         public FactionFlags[] FactionFlags = new FactionFlags[FactionCount];
     }
 
@@ -58,11 +58,9 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Reactions.Count);
+            _worldPacket.WriteInt32(Reactions.Count);
             foreach (ForcedReaction reaction in Reactions)
                 reaction.Write(_worldPacket);
-
-            _worldPacket.FlushBits();
         }
 
         public List<ForcedReaction> Reactions = new List<ForcedReaction>();
@@ -77,7 +75,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteFloat(ReferAFriendBonus);
             _worldPacket.WriteFloat(BonusFromAchievementSystem);
 
-            _worldPacket.WriteUInt32(Faction.Count);
+            _worldPacket.WriteInt32(Faction.Count);
             foreach (FactionStandingData factionStanding in Faction)
                 factionStanding.Write(_worldPacket);
 

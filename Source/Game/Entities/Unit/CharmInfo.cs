@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -96,6 +96,7 @@ namespace Game.Entities
                     case 24783: // Trained Rock Falcon
                     case 27664: // Crashin' Thrashin' Racer
                     case 40281: // Crashin' Thrashin' Racer
+                    case 28511: // Eye of Acherus
                         break;
                     default:
                         InitEmptyActionBar();
@@ -235,9 +236,9 @@ namespace Game.Entities
         {
             _petnumber = petnumber;
             if (statwindow)
-                _unit.SetUInt32Value(UnitFields.PetNumber, _petnumber);
+                _unit.SetPetNumberForClient(_petnumber);
             else
-                _unit.SetUInt32Value(UnitFields.PetNumber, 0);
+                _unit.SetPetNumberForClient(0);
         }
 
         public void LoadPetActionBar(string data)
@@ -309,9 +310,9 @@ namespace Game.Entities
         public void SaveStayPosition()
         {
             //! At this point a new spline destination is enabled because of Unit.StopMoving()
-            Vector3 stayPos = _unit.moveSpline.FinalDestination();
+            Vector3 stayPos = _unit.MoveSpline.FinalDestination();
 
-            if (_unit.moveSpline.onTransport)
+            if (_unit.MoveSpline.onTransport)
             {
                 float o = 0;
                 ITransport transport = _unit.GetDirectTransport();

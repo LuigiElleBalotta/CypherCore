@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ namespace Game.Movement
             _getPoint(owner, out x, out y, out z);
 
             Position mypos = owner.GetPosition();
-            bool isInLOS = Global.VMapMgr.isInLineOfSight(PhasingHandler.GetTerrainMapId(owner.GetPhaseShift(), owner.GetMap(), mypos.posX, mypos.posY), mypos.posX, mypos.posY, mypos.posZ + 2.0f, x, y, z + 2.0f);
+            bool isInLOS = Global.VMapMgr.IsInLineOfSight(PhasingHandler.GetTerrainMapId(owner.GetPhaseShift(), owner.GetMap(), mypos.posX, mypos.posY), mypos.posX, mypos.posY, mypos.posZ + 2.0f, x, y, z + 2.0f, ModelIgnoreFlags.Nothing);
 
             if (!isInLOS)
             {
@@ -122,7 +122,7 @@ namespace Game.Movement
             if (owner == null)
                 return;
 
-            owner.SetFlag(UnitFields.Flags, UnitFlags.Fleeing);
+            owner.AddUnitFlag(UnitFlags.Fleeing);
             owner.AddUnitState(UnitState.Fleeing | UnitState.FleeingMove);
             _setTargetLocation(owner);
         }
@@ -131,13 +131,13 @@ namespace Game.Movement
         {
             if (owner.IsTypeId(TypeId.Player))
             {
-                owner.RemoveFlag(UnitFields.Flags, UnitFlags.Fleeing);
+                owner.RemoveUnitFlag(UnitFlags.Fleeing);
                 owner.ClearUnitState(UnitState.Fleeing | UnitState.FleeingMove);
                 owner.StopMoving();
             }
             else
             {
-                owner.RemoveFlag(UnitFields.Flags, UnitFlags.Fleeing);
+                owner.RemoveUnitFlag(UnitFlags.Fleeing);
                 owner.ClearUnitState(UnitState.Fleeing | UnitState.FleeingMove);
                 if (owner.GetVictim() != null)
                     owner.SetTarget(owner.GetVictim().GetGUID());
@@ -161,7 +161,7 @@ namespace Game.Movement
             }
 
             i_nextCheckTime.Update(time_diff);
-            if (i_nextCheckTime.Passed() && owner.moveSpline.Finalized())
+            if (i_nextCheckTime.Passed() && owner.MoveSpline.Finalized())
                 _setTargetLocation(owner);
 
             return true;
@@ -185,7 +185,7 @@ namespace Game.Movement
 
         public override void Finalize(Unit owner)
         {
-            owner.RemoveFlag(UnitFields.Flags, UnitFlags.Fleeing);
+            owner.RemoveUnitFlag(UnitFlags.Fleeing);
             owner.ClearUnitState(UnitState.Fleeing | UnitState.FleeingMove);
             Unit victim = owner.GetVictim();
             if (victim != null)

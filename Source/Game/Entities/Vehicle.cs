@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@ using Game.DataStorage;
 using Game.Movement;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Entities
@@ -54,19 +53,19 @@ namespace Game.Entities
 
             // Set or remove correct flags based on available seats. Will overwrite db data (if wrong).
             if (UsableSeatNum != 0)
-                _me.SetFlag64(UnitFields.NpcFlags, (_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick));
+                _me.AddNpcFlag(_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick);
             else
-                _me.RemoveFlag64(UnitFields.NpcFlags, (_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick));
+                _me.RemoveNpcFlag(_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick);
 
             InitMovementInfoForBase();
         }
 
-        public virtual void Dispose()
+        public void Dispose()
         {
-            /// @Uninstall must be called before this.
-            Contract.Assert(_status == Status.UnInstalling);
+            // @Uninstall must be called before this.
+            Cypher.Assert(_status == Status.UnInstalling);
             foreach (var pair in Seats)
-                Contract.Assert(pair.Value.IsEmpty());
+                Cypher.Assert(pair.Value.IsEmpty());
         }
 
         public void Install()
@@ -139,7 +138,7 @@ namespace Game.Entities
             _me.ApplySpellImmune(0, SpellImmunity.Effect, SpellEffectName.KnockBackDest, true);
 
             // Mechanical units & vehicles ( which are not Bosses, they have own immunities in DB ) should be also immune on healing ( exceptions in switch below )
-            if (_me.IsTypeId(TypeId.Unit) && _me.ToCreature().GetCreatureTemplate().CreatureType == CreatureType.Mechanical && !_me.ToCreature().isWorldBoss())
+            if (_me.IsTypeId(TypeId.Unit) && _me.ToCreature().GetCreatureTemplate().CreatureType == CreatureType.Mechanical && !_me.ToCreature().IsWorldBoss())
             {
                 // Heal & dispel ...
                 _me.ApplySpellImmune(0, SpellImmunity.Effect, SpellEffectName.Heal, true);
@@ -175,6 +174,11 @@ namespace Game.Entities
                     _me.SetControlled(true, UnitState.Root);
                     // why we need to apply this? we can simple add immunities to slow mechanic in DB
                     _me.ApplySpellImmune(0, SpellImmunity.State, AuraType.ModDecreaseSpeed, true);
+                    break;
+                case 335: // Salvaged Chopper
+                case 336: // Salvaged Siege Engine
+                case 338: // Salvaged Demolisher
+                    _me.ApplySpellImmune(0, SpellImmunity.State, AuraType.ModDamagePercentTaken, false); // Battering Ram
                     break;
                 default:
                     break;
@@ -227,7 +231,7 @@ namespace Game.Entities
         {
             var seat = Seats.LookupByKey(seatId);
             if (seat == null)
-                return seat;
+                return null;
 
             foreach (var sea in Seats)
             {
@@ -254,7 +258,7 @@ namespace Game.Entities
             Log.outDebug(LogFilter.Vehicle, "Vehicle ({0}, Entry {1}): installing accessory (Entry: {2}) on seat: {3}", _me.GetGUID().ToString(), GetCreatureEntry(), entry, seatId);
 
             TempSummon accessory = _me.SummonCreature(entry, _me, (TempSummonType)type, summonTime);
-            Contract.Assert(accessory);
+            Cypher.Assert(accessory);
 
             if (minion)
                 accessory.AddUnitTypeMask(UnitTypeMask.Accessory);
@@ -319,11 +323,11 @@ namespace Game.Entities
                 if (!seat.Value.IsEmpty())
                 {
                     Unit passenger = Global.ObjAccessor.GetUnit(GetBase(), seat.Value.Passenger.Guid);
-                    Contract.Assert(passenger != null);
+                    Cypher.Assert(passenger != null);
                     passenger.ExitVehicle();
                 }
 
-                Contract.Assert(seat.Value.IsEmpty());
+                Cypher.Assert(seat.Value.IsEmpty());
             }
 
             return true;
@@ -335,17 +339,21 @@ namespace Game.Entities
                 return null;
 
             var seat = GetSeatKeyValuePairForPassenger(unit);
-            Contract.Assert(seat.Value != null);
+            Cypher.Assert(seat.Value != null);
 
             Log.outDebug( LogFilter.Vehicle, "Unit {0} exit vehicle entry {1} id {2} dbguid {3} seat {4}",
                 unit.GetName(), _me.GetEntry(), _vehicleInfo.Id, _me.GetGUID().ToString(), seat.Key);
 
             if (seat.Value.SeatInfo.CanEnterOrExit() && ++UsableSeatNum != 0)
-                _me.SetFlag64(UnitFields.NpcFlags, (_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick));
+                _me.AddNpcFlag(_me.IsTypeId(TypeId.Player) ? NPCFlags.PlayerVehicle : NPCFlags.SpellClick);
+
+            // Enable gravity for passenger when he did not have it active before entering the vehicle
+            if (seat.Value.SeatInfo.Flags.HasAnyFlag(VehicleSeatFlags.DisableGravity) && !seat.Value.Passenger.IsGravityDisabled)
+                unit.SetDisableGravity(false);
 
             // Remove UNIT_FLAG_NOT_SELECTABLE if passenger did not have it before entering vehicle
             if (seat.Value.SeatInfo.Flags.HasAnyFlag(VehicleSeatFlags.PassengerNotSelectable) && !seat.Value.Passenger.IsUnselectable)
-                unit.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                unit.RemoveUnitFlag(UnitFlags.NotSelectable);
 
             seat.Value.Passenger.Reset();
 
@@ -371,7 +379,7 @@ namespace Game.Entities
 
         public void RelocatePassengers()
         {
-            Contract.Assert(_me.GetMap() != null);
+            Cypher.Assert(_me.GetMap() != null);
 
             List<Tuple<Unit, Position>> seatRelocation = new List<Tuple<Unit, Position>>();
 
@@ -381,7 +389,7 @@ namespace Game.Entities
                 Unit passenger = Global.ObjAccessor.GetUnit(GetBase(), pair.Value.Passenger.Guid);
                 if (passenger != null)
                 {
-                    Contract.Assert(passenger.IsInWorld);
+                    Cypher.Assert(passenger.IsInWorld);
 
                     float px, py, pz, po;
                     passenger.m_movementInfo.transport.pos.GetPosition(out px, out py, out pz, out po);
@@ -476,24 +484,26 @@ namespace Game.Entities
 
         public void RemovePendingEventsForSeat(sbyte seatId)
         {
-            foreach (var Event in _pendingJoinEvents.ToList())
+            for (var i = 0; i < _pendingJoinEvents.Count; ++i)
             {
-                if (Event.Seat.Key == seatId)
+                var joinEvent = _pendingJoinEvents[i];
+                if (joinEvent.Seat.Key == seatId)
                 {
-                    Event.ScheduleAbort();
-                    _pendingJoinEvents.Remove(Event);
+                    joinEvent.ScheduleAbort();
+                    _pendingJoinEvents.Remove(joinEvent);
                 }
             }
         }
 
         public void RemovePendingEventsForPassenger(Unit passenger)
         {
-            foreach (var Event in _pendingJoinEvents.ToList())
+            for (var i = 0; i< _pendingJoinEvents.Count; ++i)
             {
-                if (Event.Passenger == passenger)
+                var joinEvent = _pendingJoinEvents[i];
+                if (joinEvent.Passenger == passenger)
                 {
-                    Event.ScheduleAbort();
-                    _pendingJoinEvents.Remove(Event);
+                    joinEvent.ScheduleAbort();
+                    _pendingJoinEvents.Remove(joinEvent);
                 }
             }
         }
@@ -541,26 +551,27 @@ namespace Game.Entities
 
         public override bool Execute(ulong e_time, uint p_time)
         {
-            Contract.Assert(Passenger.IsInWorld);
-            Contract.Assert(Target != null && Target.GetBase().IsInWorld);
-            Contract.Assert(Target.GetBase().HasAuraTypeWithCaster(AuraType.ControlVehicle, Passenger.GetGUID()));
+            Cypher.Assert(Passenger.IsInWorld);
+            Cypher.Assert(Target != null && Target.GetBase().IsInWorld);
+            Cypher.Assert(Target.GetBase().HasAuraTypeWithCaster(AuraType.ControlVehicle, Passenger.GetGUID()));
 
             Target.RemovePendingEventsForSeat(Seat.Key);
             Target.RemovePendingEventsForPassenger(Passenger);
 
             Passenger.SetVehicle(Target);
             Seat.Value.Passenger.Guid = Passenger.GetGUID();
-            Seat.Value.Passenger.IsUnselectable = Passenger.HasFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            Seat.Value.Passenger.IsUnselectable = Passenger.HasUnitFlag(UnitFlags.NotSelectable);
+            Seat.Value.Passenger.IsGravityDisabled = Passenger.HasUnitMovementFlag(MovementFlag.DisableGravity);
             if (Seat.Value.SeatInfo.CanEnterOrExit())
             {
-                Contract.Assert(Target.UsableSeatNum != 0);
+                Cypher.Assert(Target.UsableSeatNum != 0);
                 --Target.UsableSeatNum;
                 if (Target.UsableSeatNum == 0)
                 {
                     if (Target.GetBase().IsTypeId(TypeId.Player))
-                        Target.GetBase().RemoveFlag64(UnitFields.NpcFlags, NPCFlags.PlayerVehicle);
+                        Target.GetBase().RemoveNpcFlag(NPCFlags.PlayerVehicle);
                     else
-                        Target.GetBase().RemoveFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick);
+                        Target.GetBase().RemoveNpcFlag(NPCFlags.SpellClick);
                 }
             }
 
@@ -584,8 +595,11 @@ namespace Game.Entities
                     player.UnsummonPetTemporaryIfAny();
             }
 
+            if (veSeat.Flags.HasAnyFlag(VehicleSeatFlags.DisableGravity))
+                Passenger.SetDisableGravity(true);
+
             if (Seat.Value.SeatInfo.Flags.HasAnyFlag(VehicleSeatFlags.PassengerNotSelectable))
-                Passenger.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                Passenger.AddUnitFlag(UnitFlags.NotSelectable);
 
             Passenger.m_movementInfo.transport.pos.Relocate(veSeat.AttachmentOffset.X, veSeat.AttachmentOffset.Y, veSeat.AttachmentOffset.Z);
             Passenger.m_movementInfo.transport.time = 0;
@@ -594,7 +608,7 @@ namespace Game.Entities
 
             if (Target.GetBase().IsTypeId(TypeId.Unit) && Passenger.IsTypeId(TypeId.Player) &&
                 Seat.Value.SeatInfo.Flags.HasAnyFlag(VehicleSeatFlags.CanControl))
-                Contract.Assert(Target.GetBase().SetCharmedBy(Passenger, CharmType.Vehicle));  // SMSG_CLIENT_CONTROL
+                Cypher.Assert(Target.GetBase().SetCharmedBy(Passenger, CharmType.Vehicle));  // SMSG_CLIENT_CONTROL
 
             Passenger.SendClearTarget();                            // SMSG_BREAK_TARGET
             Passenger.SetControlled(true, UnitState.Root);         // SMSG_FORCE_ROOT - In some cases we send SMSG_SPLINE_MOVE_ROOT here (for creatures)
@@ -631,7 +645,7 @@ namespace Game.Entities
                 Log.outDebug(LogFilter.Vehicle, "Passenger GuidLow: {0}, Entry: {1}, board on vehicle GuidLow: {2}, Entry: {3} SeatId: {4} cancelled",
                     Passenger.GetGUID().ToString(), Passenger.GetEntry(), Target.GetBase().GetGUID().ToString(), Target.GetBase().GetEntry(), Seat.Key);
 
-                /// Remove the pending event when Abort was called on the event directly
+                // Remove the pending event when Abort was called on the event directly
                 Target.RemovePendingEvent(this);
 
                 // @SPELL_AURA_CONTROL_VEHICLE auras can be applied even when the passenger is not (yet) on the vehicle.
@@ -656,11 +670,13 @@ namespace Game.Entities
     {
         public ObjectGuid Guid;
         public bool IsUnselectable;
+        public bool IsGravityDisabled;
 
         public void Reset()
         {
             Guid = ObjectGuid.Empty;
             IsUnselectable = false;
+            IsGravityDisabled = false;
         }
     }
 

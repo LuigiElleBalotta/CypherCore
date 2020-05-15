@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,11 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 using System;
-using System.Diagnostics.Contracts;
 
 public class RandomHelper
 {
-    private readonly static Random rand;
+    private static readonly Random rand;
 
     static RandomHelper()
     {
@@ -70,7 +69,7 @@ public class RandomHelper
     }
     public static float FRand(float min, float max)
     {
-        Contract.Assert(max >= min);
+        Cypher.Assert(max >= min);
         return (float)(rand.NextDouble() * (max - min) + min);
     }
 
@@ -100,9 +99,9 @@ public class RandomHelper
 
     public static T RAND<T>(params T[] args)
     {
-        int rand = IRand(0, args.Length - 1);
+        int randIndex = IRand(0, args.Length - 1);
 
-        return args[rand];
+        return args[randIndex];
     }
 }
 

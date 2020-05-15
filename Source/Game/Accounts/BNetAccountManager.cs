@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 using Framework.Database;
 using System;
-using System.Diagnostics.Contracts;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -43,10 +42,10 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.INS_BNET_ACCOUNT);
             stmt.AddValue(0, email);
             stmt.AddValue(1, CalculateShaPassHash(email, password));
-            DB.Login.Execute(stmt);
+            DB.Login.DirectExecute(stmt);
 
             uint newAccountId = GetId(email);
-            Contract.Assert(newAccountId != 0);
+            Cypher.Assert(newAccountId != 0);
 
             if (withGameAccount)
             {
@@ -173,7 +172,7 @@ namespace Game
             return 0;
         }
 
-        string CalculateShaPassHash(string name, string password)
+        public string CalculateShaPassHash(string name, string password)
         {
             SHA256 sha256 = SHA256.Create();
             var i = sha256.ComputeHash(Encoding.UTF8.GetBytes(name));

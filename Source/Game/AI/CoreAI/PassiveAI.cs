@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace Game.AI
 
         public override void UpdateAI(uint diff)
         {
-            if (me.IsInCombat() && me.getAttackers().Empty())
+            if (me.IsInCombat() && me.GetAttackers().Empty())
                 EnterEvadeMode(EvadeReason.NoHostiles);
         }
 
@@ -65,14 +65,14 @@ namespace Game.AI
         public override void JustDied(Unit unit)
         {
             // We died while possessed, disable our loot
-            me.RemoveFlag(ObjectFields.DynamicFlags, UnitDynFlags.Lootable);
+            me.RemoveDynamicFlag(UnitDynFlags.Lootable);
         }
 
         public override void KilledUnit(Unit victim)
         {
             // We killed a creature, disable victim's loot
             if (victim.IsTypeId(TypeId.Unit))
-                victim.RemoveFlag(ObjectFields.DynamicFlags, UnitDynFlags.Lootable);
+                me.RemoveDynamicFlag(UnitDynFlags.Lootable);
         }
 
         public override void OnCharmed(bool apply)

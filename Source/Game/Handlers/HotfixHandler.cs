@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ namespace Game
                 if (store.HasRecord(record.RecordID))
                 {
                     dbReply.Allow = true;
-                    dbReply.Timestamp = (uint)Global.WorldMgr.GetGameTime();
+                    dbReply.Timestamp = (uint)GameTime.GetGameTime();
                     store.WriteRecord(record.RecordID, GetSessionDbcLocale(), dbReply.Data);
                 }
                 else
@@ -59,32 +59,44 @@ namespace Game
 
         void SendAvailableHotfixes(int version)
         {
-            SendPacket(new AvailableHotfixes(version, Global.DB2Mgr.GetHotfixData()));
+            SendPacket(new AvailableHotfixes(version, Global.DB2Mgr.GetHotfixCount(), Global.DB2Mgr.GetHotfixData()));
         }
 
         [WorldPacketHandler(ClientOpcodes.HotfixRequest, Status = SessionStatus.Authed)]
         void HandleHotfixRequest(HotfixRequest hotfixQuery)
         {
-            Dictionary<ulong, int> hotfixes = Global.DB2Mgr.GetHotfixData();
+            var hotfixes = Global.DB2Mgr.GetHotfixData();
 
             HotfixResponse hotfixQueryResponse = new HotfixResponse();
-            foreach (ulong hotfixId in hotfixQuery.Hotfixes)
+            foreach (HotfixRecord hotfixRecord in hotfixQuery.Hotfixes)
             {
-                int hotfix = hotfixes.LookupByKey(hotfixId);
-                if (hotfix != 0)
+                var hotfixedRecords = hotfixes.LookupByKey(hotfixRecord.HotfixID);
+                if (!hotfixedRecords.Empty())
                 {
-                    var storage = Global.DB2Mgr.GetStorage(MathFunctions.Pair64_HiPart(hotfixId));
-
-                    HotfixResponse.HotfixData hotfixData = new HotfixResponse.HotfixData();
-                    hotfixData.ID = hotfixId;
-                    hotfixData.RecordID = hotfix;
-                    if (storage.HasRecord((uint)hotfixData.RecordID))
+                    foreach (var tableRecord in hotfixedRecords)
                     {
-                        hotfixData.Data.HasValue = true;
-                        storage.WriteRecord((uint)hotfixData.RecordID, GetSessionDbcLocale(), hotfixData.Data.Value);
-                    }
+                        var storage = Global.DB2Mgr.GetStorage(hotfixRecord.TableHash);
 
-                    hotfixQueryResponse.Hotfixes.Add(hotfixData);
+                        HotfixResponse.HotfixData hotfixData = new HotfixResponse.HotfixData();
+                        hotfixData.Record = hotfixRecord;
+                        if (storage != null && storage.HasRecord((uint)hotfixData.Record.RecordID))
+                        {
+                            uint pos = hotfixQueryResponse.HotfixContent.GetSize();
+                            storage.WriteRecord((uint)hotfixData.Record.RecordID, GetSessionDbcLocale(), hotfixQueryResponse.HotfixContent);
+                            hotfixData.Size.Set(hotfixQueryResponse.HotfixContent.GetSize() - pos);
+                        }
+                        else
+                        {
+                            byte[] blobData = Global.DB2Mgr.GetHotfixBlobData(hotfixData.Record.TableHash, hotfixData.Record.RecordID);
+                            if (blobData != null)
+                            {
+                                hotfixData.Size.Set((uint)blobData.Length);
+                                hotfixQueryResponse.HotfixContent.WriteBytes(blobData);
+                            }
+                        }
+
+                        hotfixQueryResponse.Hotfixes.Add(hotfixData);
+                    }
                 }
             }
 

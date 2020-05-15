@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -94,8 +94,8 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedTime(ServerTime);
             _worldPacket.WritePackedTime(GameTime);
             _worldPacket.WriteFloat(NewSpeed);
-            _worldPacket.WriteUInt32(ServerTimeHolidayOffset);
-            _worldPacket.WriteUInt32(GameTimeHolidayOffset);
+            _worldPacket.WriteInt32(ServerTimeHolidayOffset);
+            _worldPacket.WriteInt32(GameTimeHolidayOffset);
         }
 
         public float NewSpeed;
@@ -118,6 +118,9 @@ namespace Game.Network.Packets
             _worldPacket.WriteBit(TrackedQuantity.HasValue);
             _worldPacket.WriteBit(MaxQuantity.HasValue);
             _worldPacket.WriteBit(SuppressChatLog);
+            _worldPacket.WriteBit(QuantityChange.HasValue);
+            _worldPacket.WriteBit(QuantityGainSource.HasValue);
+            _worldPacket.WriteBit(QuantityLostSource.HasValue);
             _worldPacket.FlushBits();
 
             if (WeeklyQuantity.HasValue)
@@ -128,6 +131,15 @@ namespace Game.Network.Packets
 
             if (MaxQuantity.HasValue)
                 _worldPacket.WriteInt32(MaxQuantity.Value);
+
+            if (QuantityChange.HasValue)
+                _worldPacket.WriteInt32(QuantityChange.Value);
+
+            if (QuantityGainSource.HasValue)
+                _worldPacket.WriteInt32(QuantityGainSource.Value);
+
+            if (QuantityLostSource.HasValue)
+                _worldPacket.WriteInt32(QuantityLostSource.Value);
         }
 
         public uint Type;
@@ -136,6 +148,9 @@ namespace Game.Network.Packets
         public Optional<int> WeeklyQuantity;
         public Optional<int> TrackedQuantity;
         public Optional<int> MaxQuantity;
+        public Optional<int> QuantityChange;
+        public Optional<int> QuantityGainSource;
+        public Optional<int> QuantityLostSource;
         public bool SuppressChatLog;
     }
 
@@ -145,8 +160,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32("Type");
-            _worldPacket.WriteUInt32("MaxWeeklyQuantity");
+            _worldPacket.WriteUInt32(Type);
+            _worldPacket.WriteUInt32(MaxWeeklyQuantity);
         }
 
         public uint MaxWeeklyQuantity;
@@ -178,7 +193,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Data.Count);
+            _worldPacket.WriteInt32(Data.Count);
 
             foreach (Record data in Data)
             {
@@ -199,7 +214,7 @@ namespace Game.Network.Packets
                 if (data.TrackedQuantity.HasValue)
                     _worldPacket.WriteUInt32(data.TrackedQuantity.Value);
                 if (data.MaxQuantity.HasValue)
-                    _worldPacket.WriteUInt32(data.MaxQuantity.Value);
+                    _worldPacket.WriteInt32(data.MaxQuantity.Value);
             }
         }
 
@@ -370,10 +385,10 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            DifficultyID = _worldPacket.ReadInt32();
+            DifficultyID = _worldPacket.ReadUInt32();
         }
 
-        public int DifficultyID;
+        public uint DifficultyID;
     }
 
     public class SetRaidDifficulty : ClientPacket
@@ -409,7 +424,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(DifficultyID);
-            _worldPacket.WriteUInt8(Legacy);
+            _worldPacket.WriteUInt8((byte)(Legacy ? 1 : 0));
         }
 
         public int DifficultyID;
@@ -435,11 +450,11 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(MapID);
-            _worldPacket.WriteVector3(Loc);
+            _worldPacket.WriteXYZ(Loc);
         }
 
         public int MapID;
-        public Vector3 Loc;
+        public WorldLocation Loc;
     }
 
     public class PortGraveyard : ClientPacket
@@ -501,7 +516,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteBit(IsGossipTriggered);
             _worldPacket.FlushBits();
 
-            _worldPacket.WriteUInt32(CemeteryID.Count);
+            _worldPacket.WriteInt32(CemeteryID.Count);
             foreach (uint cemetery in CemeteryID)
                 _worldPacket.WriteUInt32(cemetery);
         }
@@ -535,7 +550,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(WeatherID);
+            _worldPacket.WriteUInt32((uint)WeatherID);
             _worldPacket.WriteFloat(Intensity);
             _worldPacket.WriteBit(Abrupt);
 
@@ -570,11 +585,26 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteUInt32(AnimKitID);
-            _worldPacket.WriteUInt8(State);
+            _worldPacket.WriteUInt8((byte)State);
         }
 
         uint AnimKitID;
         UnitStandStateType State;
+    }
+
+    public class SetAnimTier : ServerPacket
+    {
+        public SetAnimTier() : base(ServerOpcodes.SetAnimTier, ConnectionType.Instance) { }
+
+        public override void Write()
+        {
+            _worldPacket.WritePackedGuid(Unit);
+            _worldPacket.WriteBits(Tier, 3);
+            _worldPacket.FlushBits();
+        }
+
+        public ObjectGuid Unit;
+        public int Tier;
     }
 
     public class StartMirrorTimer : ServerPacket
@@ -591,7 +621,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(Timer);
+            _worldPacket.WriteInt32((int)Timer);
             _worldPacket.WriteInt32(Value);
             _worldPacket.WriteInt32(MaxValue);
             _worldPacket.WriteInt32(Scale);
@@ -618,7 +648,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(Timer);
+            _worldPacket.WriteInt32((int)Timer);
             _worldPacket.WriteBit(Paused);
             _worldPacket.FlushBits();
         }
@@ -636,7 +666,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(Timer);
+            _worldPacket.WriteInt32((int)Timer);
         }
 
         public MirrorTimerType Timer;
@@ -675,14 +705,16 @@ namespace Game.Network.Packets
             foreach (int stat in StatDelta)
                 _worldPacket.WriteInt32(stat);
 
-            _worldPacket.WriteInt32(Cp);
+            _worldPacket.WriteInt32(NumNewTalents);
+            _worldPacket.WriteInt32(NumNewPvpTalentSlots);
         }
 
         public uint Level = 0;
         public uint HealthDelta = 0;
-        public uint[] PowerDelta = new uint[6];
-        public uint[] StatDelta = new uint[(int)Stats.Max];
-        public int Cp = 0;
+        public int[] PowerDelta = new int[6];
+        public int[] StatDelta = new int[(int)Stats.Max];
+        public int NumNewTalents;
+        public int NumNewPvpTalentSlots;
     }
 
     public class PlayMusic : ServerPacket
@@ -752,23 +784,23 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(Client);
             Phaseshift.Write(_worldPacket);
-            _worldPacket.WriteUInt32(VisibleMapIDs.Count * 2);           // size in bytes
+            _worldPacket.WriteInt32(VisibleMapIDs.Count * 2);           // size in bytes
             foreach (ushort visibleMapId in VisibleMapIDs)
                 _worldPacket.WriteUInt16(visibleMapId);                   // Active terrain swap map id
 
-            _worldPacket.WriteUInt32(PreloadMapIDs.Count * 2);           // size in bytes
+            _worldPacket.WriteInt32(PreloadMapIDs.Count * 2);           // size in bytes
             foreach (ushort preloadMapId in PreloadMapIDs)
                 _worldPacket.WriteUInt16(preloadMapId);                            // Inactive terrain swap map id
 
-            _worldPacket.WriteUInt32(UiWorldMapAreaIDSwaps.Count * 2);   // size in bytes
-            foreach (ushort uiWorldMapAreaIDSwap in UiWorldMapAreaIDSwaps)
-                _worldPacket.WriteUInt16(uiWorldMapAreaIDSwap);          // UI map id, WorldMapArea.db2, controls map display
+            _worldPacket.WriteInt32(UiMapPhaseIDs.Count * 2);   // size in bytes
+            foreach (ushort uiMapPhaseId in UiMapPhaseIDs)
+                _worldPacket.WriteUInt16(uiMapPhaseId);          // UI map id, WorldMapArea.db2, controls map display
         }
 
         public ObjectGuid Client;
         public PhaseShiftData Phaseshift = new PhaseShiftData();
         public List<ushort> PreloadMapIDs = new List<ushort>();
-        public List<ushort> UiWorldMapAreaIDSwaps = new List<ushort>();
+        public List<ushort> UiMapPhaseIDs = new List<ushort>();
         public List<ushort> VisibleMapIDs = new List<ushort>();
     }
 
@@ -976,7 +1008,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(CUFProfiles.Count);
+            _worldPacket.WriteInt32(CUFProfiles.Count);
 
             foreach (CUFProfile cufProfile in CUFProfiles)
             {
@@ -1117,7 +1149,7 @@ namespace Game.Network.Packets
                 _worldPacket.WriteUInt32(item.Key);
 
             foreach (var flags in Heirlooms)
-                _worldPacket.WriteUInt32(flags.Value.flags);
+                _worldPacket.WriteUInt32((uint)flags.Value.flags);
         }
 
         public bool IsFullUpdate;
@@ -1194,7 +1226,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Type);
+            _worldPacket.WriteUInt32((uint)Type);
             _worldPacket.WriteUInt32(TimeRemaining);
             _worldPacket.WriteUInt32(TotalTime);
         }
@@ -1223,7 +1255,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Error);
+            _worldPacket.WriteUInt32((uint)Error);
             _worldPacket.WriteBit(Arg.HasValue);
             _worldPacket.WriteBit(Arg2.HasValue);
             _worldPacket.FlushBits();
@@ -1247,7 +1279,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteBit(IsFullUpdate);
-            _worldPacket.WriteUInt32(Mounts.Count);
+            _worldPacket.WriteInt32(Mounts.Count);
 
             foreach (var spell in Mounts)
             {
@@ -1274,13 +1306,6 @@ namespace Game.Network.Packets
 
         public uint MountSpellID;
         public bool IsFavorite;
-    }
-
-    class PvpPrestigeRankUp : ClientPacket
-    {
-        public PvpPrestigeRankUp(WorldPacket packet) : base(packet) { }
-
-        public override void Read() { }
     }
 
     class CloseInteraction : ClientPacket
@@ -1319,7 +1344,7 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteUInt32(PhaseShiftFlags);
-            data.WriteUInt32(Phases.Count);
+            data.WriteInt32(Phases.Count);
             data.WritePackedGuid(PersonalGUID);
             foreach (PhaseShiftDataPhase phaseShiftDataPhase in Phases)
                 phaseShiftDataPhase.Write(data);

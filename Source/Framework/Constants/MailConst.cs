@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,17 +24,18 @@ namespace Framework.Constants
         Creature = 3,
         Gameobject = 4,
         Calendar = 5,
-        Blackmarket = 6
+        Blackmarket = 6,
+        CommerceAuction = 7
     }
 
     public enum MailCheckMask
     {
         None = 0x00,
         Read = 0x01,
-        Returned = 0x02,                     /// This Mail Was Returned. Do Not Allow Returning Mail Back Again.
-        Copied = 0x04,                     /// This Mail Was Copied. Do Not Allow Making A Copy Of Items In Mail.
+        Returned = 0x02,                     // This Mail Was Returned. Do Not Allow Returning Mail Back Again.
+        Copied = 0x04,                     // This Mail Was Copied. Do Not Allow Making A Copy Of Items In Mail.
         CodPayment = 0x08,
-        HasBody = 0x10                      /// This Mail Has Body Text.
+        HasBody = 0x10                      // This Mail Has Body Text.
     }
 
     public enum MailStationery

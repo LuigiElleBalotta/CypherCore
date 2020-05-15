@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -90,7 +90,7 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(VendorGUID);
             _worldPacket.WriteUInt32(Muid);
-            _worldPacket.WriteUInt8(Reason);
+            _worldPacket.WriteUInt8((byte)Reason);
         }
 
         public ObjectGuid VendorGUID;
@@ -237,7 +237,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt8(BagResult);
+            _worldPacket.WriteInt8((sbyte)BagResult);
             _worldPacket.WritePackedGuid(Item[0]);
             _worldPacket.WritePackedGuid(Item[1]);
             _worldPacket.WriteUInt8(ContainerBSlot); // bag type subclass, used with EQUIP_ERR_EVENT_AUTOEQUIP_BIND_CONFIRM and EQUIP_ERR_WRONG_BAG_TYPE_2
@@ -246,7 +246,7 @@ namespace Game.Network.Packets
             {
                 case InventoryResult.CantEquipLevelI:
                 case InventoryResult.PurchaseLevelTooLow:
-                    _worldPacket.WriteUInt32(Level);
+                    _worldPacket.WriteInt32(Level);
                     break;
                 case InventoryResult.EventAutoequipBindConfirm:
                     _worldPacket.WritePackedGuid(SrcContainer);
@@ -305,8 +305,8 @@ namespace Game.Network.Packets
         }
 
         public InvUpdate Inv;
-        public byte Slot1; /// Source Slot
-        public byte Slot2; /// Destination Slot
+        public byte Slot1; // Source Slot
+        public byte Slot2; // Destination Slot
     }
 
     public class SwapItem : ClientPacket
@@ -403,7 +403,7 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(VendorGUID);
             _worldPacket.WritePackedGuid(ItemGUID);
-            _worldPacket.WriteUInt8(Reason);
+            _worldPacket.WriteUInt8((byte)Reason);
         }
 
         public ObjectGuid VendorGUID;
@@ -423,7 +423,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteInt32(QuestLogItemID);
             _worldPacket.WriteUInt32(Quantity);
             _worldPacket.WriteUInt32(QuantityInInventory);
-            _worldPacket.WriteUInt32(DungeonEncounterID);
+            _worldPacket.WriteInt32(DungeonEncounterID);
             _worldPacket.WriteInt32(BattlePetSpeciesID);
             _worldPacket.WriteInt32(BattlePetBreedID);
             _worldPacket.WriteUInt32(BattlePetBreedQuality);
@@ -490,7 +490,7 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(Item);
             _worldPacket.WriteUInt32(Delay);
-            _worldPacket.WriteBits(Subcode, 3);
+            _worldPacket.WriteBits(Subcode, 2);
             _worldPacket.FlushBits();
         }
 
@@ -603,39 +603,6 @@ namespace Game.Network.Packets
         public ObjectGuid ItemGuid;
     }
 
-    class UpgradeItem : ClientPacket
-    {
-        public UpgradeItem(WorldPacket packet) : base(packet) { }
-
-        public override void Read()
-        {
-            ItemMaster = _worldPacket.ReadPackedGuid();
-            ItemGUID = _worldPacket.ReadPackedGuid();
-            UpgradeID = _worldPacket.ReadInt32();
-            ContainerSlot = _worldPacket.ReadInt32();
-            Slot = _worldPacket.ReadInt32();
-        }
-
-        public ObjectGuid ItemMaster;
-        public ObjectGuid ItemGUID;
-        public int ContainerSlot;
-        public int UpgradeID;
-        public int Slot;
-    }
-
-    class ItemUpgradeResult : ServerPacket
-    {
-        public ItemUpgradeResult() : base(ServerOpcodes.ItemUpgradeResult) { }
-
-        public override void Write()
-        {
-            _worldPacket.WriteBit(Success);
-            _worldPacket.FlushBits();
-        }
-
-        public bool Success;
-    }
-
     class SocketGems : ClientPacket
     {
         public SocketGems(WorldPacket packet) : base(packet) { }
@@ -715,16 +682,16 @@ namespace Game.Network.Packets
     {
         public void Write(WorldPacket data)
         {
-            data.WriteUInt8(Context);
-            data.WriteUInt32(BonusListIDs.Count);
+            data.WriteUInt8((byte)Context);
+            data.WriteInt32(BonusListIDs.Count);
             foreach (uint bonusID in BonusListIDs)
                 data.WriteUInt32(bonusID);
         }
 
         public void Read(WorldPacket data)
         {
-            Context = data.ReadUInt8();
-            uint bonusListIdSize = data.ReadUInt32(); ;
+            Context = (ItemContext)data.ReadUInt8();
+            uint bonusListIdSize = data.ReadUInt32();
 
             BonusListIDs = new List<uint>();
             for (uint i = 0u; i < bonusListIdSize; ++i)
@@ -763,7 +730,7 @@ namespace Game.Network.Packets
             return !(left == right);
         }
 
-        public byte Context;
+        public ItemContext Context;
         public List<uint> BonusListIDs = new List<uint>();
     }
 
@@ -774,17 +741,15 @@ namespace Game.Network.Packets
         public ItemInstance(Item item)
         {
             ItemID = item.GetEntry();
-            RandomPropertiesSeed = item.GetItemSuffixFactor();
-            RandomPropertiesID = (uint)item.GetItemRandomPropertyId();
-            var bonusListIds = item.GetDynamicValues(ItemDynamicFields.BonusListIds);
+            List<uint> bonusListIds = item.m_itemData.BonusListIDs;
             if (!bonusListIds.Empty())
             {
                 ItemBonus.HasValue = true;
                 ItemBonus.Value.BonusListIDs.AddRange(bonusListIds);
-                ItemBonus.Value.Context = (byte)item.GetUInt32Value(ItemFields.Context);
+                ItemBonus.Value.Context = item.GetContext();
             }
 
-            uint mask = item.GetUInt32Value(ItemFields.ModifiersMask);
+            uint mask = item.m_itemData.ModifiersMask;
             if (mask != 0)
             {
                 Modifications.HasValue = true;
@@ -800,38 +765,26 @@ namespace Game.Network.Packets
         public ItemInstance(Loots.LootItem lootItem)
         {
             ItemID = lootItem.itemid;
-            RandomPropertiesSeed = lootItem.randomSuffix;
-            if (lootItem.randomPropertyId.Type != ItemRandomEnchantmentType.BonusList)
-                RandomPropertiesID = lootItem.randomPropertyId.Id;
 
-            if (!lootItem.BonusListIDs.Empty())
+            if (!lootItem.BonusListIDs.Empty() || lootItem.randomBonusListId != 0)
             {
                 ItemBonus.HasValue = true;
                 ItemBonus.Value.BonusListIDs = lootItem.BonusListIDs;
                 ItemBonus.Value.Context = lootItem.context;
-            }
-
-            if (lootItem.upgradeId != 0)
-            {
-                Modifications.HasValue = true;
-                Modifications.Value.Insert((int)ItemModifier.UpgradeId, (int)lootItem.upgradeId);
+                if (lootItem.randomBonusListId != 0)
+                    ItemBonus.Value.BonusListIDs.Add(lootItem.randomBonusListId);
             }
         }
 
         public ItemInstance(VoidStorageItem voidItem)
         {
             ItemID = voidItem.ItemEntry;
-            RandomPropertiesSeed = voidItem.ItemSuffixFactor;
-            if (voidItem.ItemRandomPropertyId.Type != ItemRandomEnchantmentType.BonusList)
-                RandomPropertiesID = voidItem.ItemRandomPropertyId.Id;
 
-            if (voidItem.ItemUpgradeId != 0 || voidItem.FixedScalingLevel != 0 || voidItem.ArtifactKnowledgeLevel != 0)
+            if (voidItem.FixedScalingLevel != 0 || voidItem.ArtifactKnowledgeLevel != 0)
             {
                 Modifications.HasValue = true;
-                if (voidItem.ItemUpgradeId != 0)
-                    Modifications.Value.Insert((int)ItemModifier.UpgradeId, (int)voidItem.ItemUpgradeId);
                 if (voidItem.FixedScalingLevel != 0)
-                    Modifications.Value.Insert((int)ItemModifier.ScalingStatDistributionFixedLevel, (int)voidItem.FixedScalingLevel);
+                    Modifications.Value.Insert((int)ItemModifier.TimewalkerLevel, (int)voidItem.FixedScalingLevel);
                 if (voidItem.ArtifactKnowledgeLevel != 0)
                     Modifications.Value.Insert((int)ItemModifier.ArtifactKnowledgeLevel, (int)voidItem.ArtifactKnowledgeLevel);
             }
@@ -844,12 +797,12 @@ namespace Game.Network.Packets
             }
         }
 
-        public ItemInstance(ItemDynamicFieldGems gem)
+        public ItemInstance(SocketedGem gem)
         {
             ItemID = gem.ItemId;
 
             ItemBonusInstanceData bonus = new ItemBonusInstanceData();
-            bonus.Context = gem.Context;
+            bonus.Context = (ItemContext)(byte)gem.Context;
             foreach (ushort bonusListId in gem.BonusListIDs)
                 if (bonusListId != 0)
                     bonus.BonusListIDs.Add(bonusListId);
@@ -861,8 +814,6 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteUInt32(ItemID);
-            data.WriteUInt32(RandomPropertiesSeed);
-            data.WriteUInt32(RandomPropertiesID);
 
             data.WriteBit(ItemBonus.HasValue);
             data.WriteBit(Modifications.HasValue);
@@ -878,8 +829,6 @@ namespace Game.Network.Packets
         public void Read(WorldPacket data)
         {
             ItemID = data.ReadUInt32();
-            RandomPropertiesSeed = data.ReadUInt32();
-            RandomPropertiesID = data.ReadUInt32();
 
             ItemBonus.HasValue = data.HasBit();
             Modifications.HasValue = data.HasBit();
@@ -894,8 +843,7 @@ namespace Game.Network.Packets
 
         public override int GetHashCode()
         {
-            return ItemID.GetHashCode() ^ RandomPropertiesSeed.GetHashCode() ^
-                RandomPropertiesID.GetHashCode() ^ ItemBonus.GetHashCode() ^ Modifications.GetHashCode();
+            return ItemID.GetHashCode() ^ ItemBonus.GetHashCode() ^ Modifications.GetHashCode();
         }
 
         public override bool Equals(object obj)
@@ -908,7 +856,7 @@ namespace Game.Network.Packets
 
         public static bool operator ==(ItemInstance left, ItemInstance right)
         {
-            if (left.ItemID != right.ItemID || left.RandomPropertiesID != right.RandomPropertiesID || left.RandomPropertiesSeed != right.RandomPropertiesSeed)
+            if (left.ItemID != right.ItemID)
                 return false;
 
             if (left.ItemBonus.HasValue != right.ItemBonus.HasValue || left.Modifications.HasValue != right.Modifications.HasValue)
@@ -929,8 +877,6 @@ namespace Game.Network.Packets
         }
 
         public uint ItemID;
-        public uint RandomPropertiesSeed;
-        public uint RandomPropertiesID;
         public Optional<ItemBonusInstanceData> ItemBonus;
         public Optional<CompactArray> Modifications;
     }

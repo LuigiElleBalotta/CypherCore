@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -255,14 +255,14 @@ namespace Scripts.Spells.Priest
 
         void FilterTargets(List<WorldObject> targets)
         {
-            targets.RemoveAll(new Predicate<WorldObject>(obj =>
+            targets.RemoveAll(obj =>
             {
                 Unit target = obj.ToUnit();
                 if (target)
                     return !GetCaster().IsInRaidWith(target);
 
                 return true;
-            }));
+            });
 
             uint maxTargets = (uint)(GetCaster().HasAura(SpellIds.GlyphOfCircleOfHealing) ? 6 : 5); // Glyph of Circle of Healing
 
@@ -350,7 +350,7 @@ namespace Scripts.Spells.Priest
             if (aegis != null)
                 absorb += aegis.GetAmount();
 
-            absorb = (int)Math.Min(absorb, eventInfo.GetProcTarget().getLevel() * 125);
+            absorb = (int)Math.Min(absorb, eventInfo.GetProcTarget().GetLevel() * 125);
 
             GetTarget().CastCustomSpell(SpellIds.DivineAegis, SpellValueMod.BasePoint0, absorb, eventInfo.GetProcTarget(), true, null, aurEff);
         }
@@ -368,14 +368,14 @@ namespace Scripts.Spells.Priest
     {
         void FilterTargets(List<WorldObject> targets)
         {
-            targets.RemoveAll(new Predicate<WorldObject>(obj =>
+            targets.RemoveAll(obj =>
             {
                 Unit target = obj.ToUnit();
                 if (target)
                     return !GetCaster().IsInRaidWith(target);
 
                 return true;
-            }));
+            });
 
             uint maxTargets = 3;
 
@@ -492,23 +492,23 @@ namespace Scripts.Spells.Priest
     {
         void FilterTargets(List<WorldObject> targets)
         {
-            targets.RemoveAll(new Predicate<WorldObject>(obj =>
+            targets.RemoveAll(obj =>
             {
                 Unit target = obj.ToUnit();
                 if (target)
                     return target.GetPowerType() != PowerType.Mana;
 
                 return true;
-            }));
+            });
 
-            targets.RemoveAll(new Predicate<WorldObject>(obj =>
+            targets.RemoveAll(obj =>
             {
                 Unit target = obj.ToUnit();
                 if (target)
                     return !GetCaster().IsInRaidWith(target);
 
                 return true;
-            }));
+            });
 
             uint maxTargets = 3;
 
@@ -748,7 +748,7 @@ namespace Scripts.Spells.Priest
                     if (!caster.IsValidAttackTarget(target))
                         return SpellCastResult.BadTargets;
 
-                    if (!caster.isInFront(target))
+                    if (!caster.IsInFront(target))
                         return SpellCastResult.NotInfront;
                 }
                 else
@@ -757,7 +757,7 @@ namespace Scripts.Spells.Priest
                     if (!caster.HasAura(SpellIds.ThePenitentAura))
                         return SpellCastResult.BadTargets;
 
-                    if (!caster.isInFront(target))
+                    if (!caster.IsInFront(target))
                         return SpellCastResult.UnitNotInfront;
                 }
             }
@@ -783,7 +783,7 @@ namespace Scripts.Spells.Priest
         void HandleEffectProc(AuraEffect aurEff, ProcEventInfo eventInfo)
         {
             PreventDefaultAction();
-            GetTarget().RemoveMovementImpairingAuras();
+            GetTarget().RemoveMovementImpairingAuras(true);
         }
 
         public override void Register()

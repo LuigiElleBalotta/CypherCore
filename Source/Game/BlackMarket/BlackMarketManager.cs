@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Mails;
 using Game.Network.Packets;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Game.BlackMarket
 {
@@ -121,7 +120,7 @@ namespace Game.BlackMarket
         {
             SQLTransaction trans = new SQLTransaction();
             // Delete completed auctions
-            foreach (var pair in _auctions.ToList())
+            foreach (var pair in _auctions)
             {
                 if (!pair.Value.IsCompleted())
                     continue;
@@ -214,12 +213,12 @@ namespace Game.BlackMarket
             if (entry.GetMailSent())
                 return;
 
-            uint bidderAccId = 0;
+            uint bidderAccId;
             ObjectGuid bidderGuid = ObjectGuid.Create(HighGuid.Player, entry.GetBidder());
             Player bidder = Global.ObjAccessor.FindConnectedPlayer(bidderGuid);
             // data for gm.log
             string bidderName = "";
-            bool logGmTrade = false;
+            bool logGmTrade;
 
             if (bidder)
             {
@@ -229,19 +228,19 @@ namespace Game.BlackMarket
             }
             else
             {
-                bidderAccId = ObjectManager.GetPlayerAccountIdByGUID(bidderGuid);
+                bidderAccId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(bidderGuid);
                 if (bidderAccId == 0) // Account exists
                     return;
 
                 logGmTrade = Global.AccountMgr.HasPermission(bidderAccId, RBACPermissions.LogGmTrade, Global.WorldMgr.GetRealmId().Realm);
 
-                if (logGmTrade && !ObjectManager.GetPlayerNameByGUID(bidderGuid, out bidderName))
+                if (logGmTrade && !Global.CharacterCacheStorage.GetCharacterNameByGuid(bidderGuid, out bidderName))
                     bidderName = Global.ObjectMgr.GetCypherString(CypherStrings.Unknown);
             }
 
             // Create item
             BlackMarketTemplate templ = entry.GetTemplate();
-            Item item = Item.CreateItem(templ.Item.ItemID, templ.Quantity);
+            Item item = Item.CreateItem(templ.Item.ItemID, templ.Quantity, ItemContext.BlackMarket);
             if (!item)
                 return;
 
@@ -277,7 +276,7 @@ namespace Game.BlackMarket
 
             uint oldBidder_accId = 0;
             if (!oldBidder)
-                oldBidder_accId = ObjectManager.GetPlayerAccountIdByGUID(oldBidder_guid);
+                oldBidder_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(oldBidder_guid);
 
             // old bidder exist
             if (!oldBidder && oldBidder_accId == 0)

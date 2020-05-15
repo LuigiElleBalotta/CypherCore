@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace Game.DungeonFinding
         // Player Hooks
         public override void OnLogout(Player player)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             if (!player.GetGroup())
@@ -41,7 +41,7 @@ namespace Game.DungeonFinding
 
         public override void OnLogin(Player player)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             // Temporal: Trying to determine when group data and LFG data gets desynched
@@ -60,14 +60,14 @@ namespace Game.DungeonFinding
             }
 
             Global.LFGMgr.SetTeam(player.GetGUID(), player.GetTeam());
-            /// @todo - Restore LfgPlayerData and send proper status to player if it was in a group
+            // @todo - Restore LfgPlayerData and send proper status to player if it was in a group
         }
 
         public override void OnMapChanged(Player player)
         {
             Map map = player.GetMap();
 
-            if (Global.LFGMgr.inLfgDungeonMap(player.GetGUID(), map.GetId(), map.GetDifficultyID()))
+            if (Global.LFGMgr.InLfgDungeonMap(player.GetGUID(), map.GetId(), map.GetDifficultyID()))
             {
                 Group group = player.GetGroup();
                 // This function is also called when players log in
@@ -84,14 +84,14 @@ namespace Game.DungeonFinding
                     return;
                 }
 
-                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                 {
                     Player member = refe.GetSource();
                     if (member)
                         player.GetSession().SendNameQuery(member.GetGUID());
                 }
 
-                if (Global.LFGMgr.selectedRandomLfgDungeon(player.GetGUID()))
+                if (Global.LFGMgr.SelectedRandomLfgDungeon(player.GetGUID()))
                     player.CastSpell(player, SharedConst.LFGSpellLuckOfTheDraw, true);
             }
             else
@@ -117,7 +117,7 @@ namespace Game.DungeonFinding
         // Group Hooks
         public override void OnAddMember(Group group, ObjectGuid guid)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             ObjectGuid gguid = group.GetGUID();
@@ -147,17 +147,17 @@ namespace Game.DungeonFinding
 
         public override void OnRemoveMember(Group group, ObjectGuid guid, RemoveMethod method, ObjectGuid kicker, string reason)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             ObjectGuid gguid = group.GetGUID();
             Log.outDebug(LogFilter.Lfg, "LFGScripts.OnRemoveMember [{0}]: remove [{1}] Method: {2} Kicker: {3} Reason: {4}", gguid, guid, method, kicker, reason);
 
-            bool isLFG = group.isLFGGroup();
+            bool isLFG = group.IsLFGGroup();
 
             if (isLFG && method == RemoveMethod.Kick)        // Player have been kicked
             {
-                /// @todo - Update internal kick cooldown of kicker
+                // @todo - Update internal kick cooldown of kicker
                 string str_reason = "";
                 if (!string.IsNullOrEmpty(reason))
                     str_reason = reason;
@@ -204,7 +204,7 @@ namespace Game.DungeonFinding
 
         public override void OnDisband(Group group)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             ObjectGuid gguid = group.GetGUID();
@@ -215,7 +215,7 @@ namespace Game.DungeonFinding
 
         public override void OnChangeLeader(Group group, ObjectGuid newLeaderGuid, ObjectGuid oldLeaderGuid)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             ObjectGuid gguid = group.GetGUID();
@@ -226,7 +226,7 @@ namespace Game.DungeonFinding
 
         public override void OnInviteMember(Group group, ObjectGuid guid)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser))
                 return;
 
             ObjectGuid gguid = group.GetGUID();

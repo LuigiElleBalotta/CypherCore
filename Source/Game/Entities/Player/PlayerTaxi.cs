@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,16 @@ using Game.DataStorage;
 using Game.Network.Packets;
 using System.Collections.Generic;
 using System.Text;
+using System;
 
 namespace Game.Entities
 {
     public class PlayerTaxi
     {
+        public byte[] m_taximask = new byte[PlayerConst.TaxiMaskSize];
+        List<uint> m_TaxiDestinations = new List<uint>();
+        uint m_flightMasterFactionId;
+
         public void InitTaxiNodesForLevel(Race race, Class chrClass, uint level)
         {
             // class specific initial known nodes
@@ -116,15 +121,18 @@ namespace Game.Entities
 
         public void AppendTaximaskTo(ShowTaxiNodes data, bool all)
         {
+            data.CanLandNodes = new byte[PlayerConst.TaxiMaskSize];
+            data.CanUseNodes = new byte[PlayerConst.TaxiMaskSize];
+
             if (all)
             {
-                data.CanLandNodes = CliDB.TaxiNodesMask;              // all existed nodes
-                data.CanUseNodes = CliDB.TaxiNodesMask;
+                Buffer.BlockCopy(CliDB.TaxiNodesMask, 0, data.CanLandNodes, 0, PlayerConst.TaxiMaskSize);  // all existed nodes
+                Buffer.BlockCopy(CliDB.TaxiNodesMask, 0, data.CanLandNodes, 0, PlayerConst.TaxiMaskSize);
             }
             else
             {
-                data.CanLandNodes = m_taximask;                  // known nodes
-                data.CanUseNodes = m_taximask;
+                Buffer.BlockCopy(m_taximask, 0, data.CanLandNodes, 0, PlayerConst.TaxiMaskSize); // known nodes
+                Buffer.BlockCopy(m_taximask, 0, data.CanUseNodes, 0, PlayerConst.TaxiMaskSize);
             }
         }
 
@@ -225,13 +233,13 @@ namespace Game.Entities
 
         public bool IsTaximaskNodeKnown(uint nodeidx)
         {
-            byte field = (byte)((nodeidx - 1) / 8);
+            uint field = (nodeidx - 1) / 8;
             uint submask = (uint)(1 << (int)((nodeidx - 1) % 8));
             return (m_taximask[field] & submask) == submask;
         }
         public bool SetTaximaskNode(uint nodeidx)
         {
-            byte field = (byte)((nodeidx - 1) / 8);
+            uint field = (nodeidx - 1) / 8;
             uint submask = (uint)(1 << (int)((nodeidx - 1) % 8));
             if ((m_taximask[field] & submask) != submask)
             {
@@ -257,10 +265,6 @@ namespace Game.Entities
             return GetTaxiDestination();
         }
         public List<uint> GetPath() { return m_TaxiDestinations; }
-        public bool empty() { return m_TaxiDestinations.Empty(); }
-
-        public byte[] m_taximask = new byte[PlayerConst.TaxiMaskSize];
-        List<uint> m_TaxiDestinations = new List<uint>();
-        uint m_flightMasterFactionId;
+        public bool Empty() { return m_TaxiDestinations.Empty(); }
     }
 }

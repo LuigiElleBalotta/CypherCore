@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,20 +24,16 @@ namespace Framework.Constants
         public const int MaxTalentTiers = 7;
         public const int MaxTalentColumns = 3;
         public const int MaxTalentRank = 5;
-        public const int MaxPvpTalentTiers = 6;
-        public const int MaxPvpTalentColumns = 3;
+        public const int MaxPvpTalentSlots = 4;
         public const int MinSpecializationLevel = 10;
         public const int MaxSpecializations = 4;
         public const int MaxMasterySpells = 2;
 
         public const int ReqPrimaryTreeTalents = 31;
-        public const int ExploredZonesSize = 320;
-        public const ulong MaxMoneyAmount = ulong.MaxValue;
+        public const int ExploredZonesSize = 192;
+        public const ulong MaxMoneyAmount = 99999999999UL;
         public const int MaxActionButtons = 132;
         public const int MaxActionButtonActionValue = 0x00FFFFFF + 1;
-
-        public const uint KnowTitlesSize = 6;
-        public const uint MaxTitleIndex = KnowTitlesSize * 64;
 
         public const int MaxDailyQuests = 25;
         public const int QuestsCompletedBitsSize = 1750;
@@ -46,7 +42,7 @@ namespace Framework.Constants
         public const uint infinityCooldownDelayCheck = Time.Month / 2;
         public const int MaxPlayerSummonDelay = 2 * Time.Minute;
 
-        public const int TaxiMaskSize = 258;
+        public const int TaxiMaskSize = 319;
 
         // corpse reclaim times
         public const int DeathExpireStep = (5 * Time.Minute);
@@ -59,17 +55,22 @@ namespace Framework.Constants
         public const int MaxRunes = 7;
         public const int MaxRechargingRunes = 3;
 
-        public static uint[] DefaultTalentRowLevels = { 15, 30, 45, 60, 75, 90, 100 };
-        public static uint[] DKTalentRowLevels = { 57, 58, 59, 60, 75, 90, 100 };
-        //public static uint[] DHTalentRowLevels = { 99, 100, 102, 104, 106, 108, 110 };
-
         public const int CustomDisplaySize = 3;
 
         public const int ArtifactsAllWeaponsGeneralWeaponEquippedPassive = 197886;
 
-        public const byte MaxHonorLevel = 50;
+        public const int MaxArtifactTier = 1;
+
+        public const int MaxHonorLevel = 500;
         public const byte LevelMinHonor = 110;
         public const uint SpellPvpRulesEnabled = 134735;
+
+        //Azerite
+        public const uint ItemIdHeartOfAzeroth = 158075;
+        public const uint MaxAzeriteItemLevel = 70;
+        public const uint MaxAzeriteItemKnowledgeLevel = 30;
+        public const uint PlayerConditionIdUnlockedAzeriteEssences = 69048;
+        public const uint SpellIdHeartEssenceActionBarOverride = 298554;
     }
 
     public struct MoneyConstants
@@ -79,45 +80,6 @@ namespace Framework.Constants
         public const int Gold = Silver * 100;
     }
 
-    public struct PlayerFieldOffsets
-    {
-        public const byte BytesOffsetSkinId = 0;
-        public const byte BytesOffsetFaceId = 1;
-        public const byte BytesOffsetHairStyleId = 2;
-        public const byte BytesOffsetHairColorId = 3;
-
-        public const byte Bytes2OffsetCustomDisplayOption = 0; // 3 Bytes
-        public const byte Bytes2OffsetFacialStyle = 3;
-
-        public const byte Bytes3OffsetPartyType = 0;
-        public const byte Bytes3OffsetBankBagSlots = 1;
-        public const byte Bytes3OffsetGender = 2;
-        public const byte Bytes3OffsetInebriation = 3;
-
-        public const byte Bytes4OffsetPvpTitle = 0;
-        public const byte Bytes4OffsetArenaFaction = 1;
-
-        public const byte FieldBytesOffsetRafGrantableLevel = 0;
-        public const byte FieldBytesOffsetActionBarToggles = 1;
-        public const byte FieldBytesOffsetLifetimeMaxPvpRank = 2;
-        public const byte FieldBytesOffsetNumRespecs = 3;
-
-        public const byte FieldBytes2OffsetIgnorePowerRegenPredictionMask = 0;
-        public const byte FieldBytes2OffsetAuraVision = 1;
-        public const byte FieldBytes2OffsetNumBackpackSlots = 2;
-
-        public const byte FieldBytes3OffsetOverrideSpellsId = 2;     // Uint16!
-        public const byte FieldBytes3OffsetOverrideSpellsIdUint16Offset = FieldBytes3OffsetOverrideSpellsId / 2;
-
-        public const byte FieldKillsOffsetTodayKills = 0;
-        public const byte FieldKillsOffsetYesterdayKills = 1;
-
-        public const byte RestStateXp = 0;
-        public const byte RestRestedXp = 1;
-        public const byte RestStateHonor = 2;
-        public const byte RestRestedHonor = 3;
-    }
-    
     public enum TradeSlots
     {
         Invalid = -1,
@@ -323,9 +285,9 @@ namespace Framework.Constants
         SavePlayer = 0x01,
         ResurrectPlayer = 0x02,
         SpellCastDeserter = 0x04,
-        BGMountRestore = 0x08,                     ///< Flag to restore mount state after teleport from BG
-        BGTaxiRestore = 0x10,                     ///< Flag to restore taxi state after teleport from BG
-        BGGroupRestore = 0x20,                     ///< Flag to restore group state after teleport from BG
+        BGMountRestore = 0x08,                     // Flag to restore mount state after teleport from BG
+        BGTaxiRestore = 0x10,                     // Flag to restore taxi state after teleport from BG
+        BGGroupRestore = 0x20,                     // Flag to restore group state after teleport from BG
         End
     }
 
@@ -416,12 +378,12 @@ namespace Framework.Constants
         GM = 0x08,
         Ghost = 0x10,
         Resting = 0x20,
-        Unk6 = 0x40,
+        VoiceChat = 0x40,
         Unk7 = 0x80,
         ContestedPVP = 0x100,
         InPVP = 0x200,
-        HideHelm = 0x400,
-        HideCloak = 0x800,
+        WarModeActive = 0x400,
+        WarModeDesired = 0x800,
         PlayedLongTime = 0x1000,
         PlayedTooLong = 0x2000,
         IsOutOfBounds = 0x4000,
@@ -447,7 +409,8 @@ namespace Framework.Constants
     public enum PlayerFlagsEx
     {
         ReagentBankUnlocked = 0x01,
-        MercenaryMode = 0x02
+        MercenaryMode = 0x02,
+        ArtifactForgeCheat = 0x04
     }
 
     public enum CharacterFlags : uint
@@ -579,7 +542,7 @@ namespace Framework.Constants
         // first slot for item stored (in any way in player items data)
         Start = 0,
         // last+1 slot for item stored (in any way in player items data)
-        End = 195,
+        End = 199,
         Count = (End - Start)
     }
 
@@ -722,9 +685,9 @@ namespace Framework.Constants
 
     public enum AttackSwingErr
     {
-        CantAttack = 0,
+        NotInRange = 0,
         BadFacing = 1,
-        NotInRange = 2,
+        CantAttack = 2,
         DeadTarget = 3
     }
 
@@ -739,7 +702,8 @@ namespace Framework.Constants
         None = 0x00,
         BonusLevel90 = 0x01,
         BonusLevel100 = 0x02,
-        BonusLevel110 = 0x04
+        BonusLevel110 = 0x04,
+        BonusLevel120 = 0x08
     }
 
     public enum HeirloomItemFlags
@@ -774,5 +738,23 @@ namespace Framework.Constants
         FailedCantRemoveTalent = 6,
         FailedCantDoThatChallengeModeActive = 7,
         FailedRestArea = 8
+    }
+
+    public enum TutorialsFlag
+    {
+        None = 0x00,
+        Changed = 0x01,
+        LoadedFromDB = 0x02
+    }
+
+    public enum ItemSearchLocation
+    {
+        InEquipment = 0x01,
+        InInventory = 0x02,
+        InBank = 0x04,
+        InReagentBank = 0x08,
+
+        Default = InEquipment | InInventory,
+        Everywhere = InEquipment | InInventory | InBank | InReagentBank
     }
 }

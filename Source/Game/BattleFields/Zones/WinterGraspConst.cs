@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -380,21 +380,21 @@ namespace Game.BattleFields
     struct WGAchievements
     {
         public const uint WinWg = 1717;
-        public const uint WinWg100 = 1718; /// @Todo: Has To Be Implemented
-        public const uint WgGnomeslaughter = 1723; /// @Todo: Has To Be Implemented
+        public const uint WinWg100 = 1718; // @Todo: Has To Be Implemented
+        public const uint WgGnomeslaughter = 1723; // @Todo: Has To Be Implemented
         public const uint WgTowerDestroy = 1727;
-        public const uint DestructionDerbyA = 1737; /// @Todo: Has To Be Implemented
-        public const uint WgTowerCannonKill = 1751; /// @Todo: Has To Be Implemented
-        public const uint WgMasterA = 1752; /// @Todo: Has To Be Implemented
+        public const uint DestructionDerbyA = 1737; // @Todo: Has To Be Implemented
+        public const uint WgTowerCannonKill = 1751; // @Todo: Has To Be Implemented
+        public const uint WgMasterA = 1752; // @Todo: Has To Be Implemented
         public const uint WinWgTimer10 = 1755;
-        public const uint StoneKeeper50 = 2085; /// @Todo: Has To Be Implemented
-        public const uint StoneKeeper100 = 2086; /// @Todo: Has To Be Implemented
-        public const uint StoneKeeper250 = 2087; /// @Todo: Has To Be Implemented
-        public const uint StoneKeeper500 = 2088; /// @Todo: Has To Be Implemented
-        public const uint StoneKeeper1000 = 2089; /// @Todo: Has To Be Implemented
-        public const uint WgRanger = 2199; /// @Todo: Has To Be Implemented
-        public const uint DestructionDerbyH = 2476; /// @Todo: Has To Be Implemented
-        public const uint WgMasterH = 2776;  /// @Todo: Has To Be Implemented
+        public const uint StoneKeeper50 = 2085; // @Todo: Has To Be Implemented
+        public const uint StoneKeeper100 = 2086; // @Todo: Has To Be Implemented
+        public const uint StoneKeeper250 = 2087; // @Todo: Has To Be Implemented
+        public const uint StoneKeeper500 = 2088; // @Todo: Has To Be Implemented
+        public const uint StoneKeeper1000 = 2089; // @Todo: Has To Be Implemented
+        public const uint WgRanger = 2199; // @Todo: Has To Be Implemented
+        public const uint DestructionDerbyH = 2476; // @Todo: Has To Be Implemented
+        public const uint WgMasterH = 2776;  // @Todo: Has To Be Implemented
     }
 
     struct WGSpells
@@ -548,7 +548,7 @@ namespace Game.BattleFields
         public const uint Max = 7;
     }
 
-    struct WintergraspAreaIds
+    public struct WintergraspAreaIds
     {
         public const uint WintergraspFortress = 4575;
         public const uint TheSunkenRing = 4538;
@@ -693,7 +693,7 @@ namespace Game.BattleFields
         public uint towerEntry;                  // Gameobject id of tower
         public WintergraspGameObjectData[] GameObject = new WintergraspGameObjectData[6];   // Gameobject position and entry (Horde/Alliance)
 
-        // Creature: Turrets and Guard /// @todo: Killed on Tower destruction ? Tower damage ? Requires confirming
+        // Creature: Turrets and Guard // @todo: Killed on Tower destruction ? Tower damage ? Requires confirming
         public WintergraspObjectPositionData[] CreatureBottom = new WintergraspObjectPositionData[9];
     }
 

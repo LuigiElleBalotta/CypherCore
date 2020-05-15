@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,12 +32,12 @@ namespace Game.Network.Packets
         public override void Read()
         {
             Type = (CollectionType)_worldPacket.ReadUInt32();
-            ID = _worldPacket.ReadUInt32();
+            Id = _worldPacket.ReadUInt32();
             IsFavorite = _worldPacket.HasBit();
         }
 
         public CollectionType Type;
-        public uint ID;
+        public uint Id;
         public bool IsFavorite;
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ namespace Framework.Database
 {
     public class SQLTransaction
     {
-        public List<MySqlCommand> commands { get; set; }
+        public List<MySqlCommand> commands { get; }
 
         public SQLTransaction()
         {
@@ -42,5 +42,20 @@ namespace Framework.Database
         {
             commands.Add(new MySqlCommand(string.Format(sql, args)));
         }
+    }
+
+    class TransactionTask : ISqlOperation
+    {
+        public TransactionTask(SQLTransaction trans)
+        {
+            m_trans = trans;
+        }
+
+        public bool Execute<T>(MySqlBase<T> mySqlBase)
+        {
+            return mySqlBase.DirectCommitTransaction(m_trans);
+        }
+
+        SQLTransaction m_trans;
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,6 @@ using Game.Spells;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game
@@ -44,10 +43,10 @@ namespace Game
                 m_timers[timer] = new IntervalTimer();
 
             m_allowedSecurityLevel = AccountTypes.Player;
-            m_gameTime = Time.UnixTime;
-            m_startTime = m_gameTime;
 
             _realm = new Realm();
+
+            _worldUpdateTime = new WorldUpdateTime();
         }
 
         public Player FindPlayerInZone(uint zone)
@@ -124,7 +123,7 @@ namespace Game
 
         void AddSession_(WorldSession s)
         {
-            Contract.Assert(s != null);
+            Cypher.Assert(s != null);
 
             //NOTE - Still there is race condition in WorldSession* being used in the Sockets
 
@@ -304,9 +303,6 @@ namespace Game
 
         public void SetInitialWorldSettings()
         {
-            // Server startup begin
-            uint startupBegin = Time.GetMSTime();
-
             LoadRealmInfo();
 
             LoadConfigSettings();
@@ -316,7 +312,7 @@ namespace Game
 
             Global.ObjectMgr.SetHighestGuids();
 
-            /*if (!Global.MapMgr.ExistMapAndVMap(0, -6240.32f, 331.033f) || !Global.MapMgr.ExistMapAndVMap(0, -8949.95f, -132.493f)
+            if (!Global.MapMgr.ExistMapAndVMap(0, -6240.32f, 331.033f) || !Global.MapMgr.ExistMapAndVMap(0, -8949.95f, -132.493f)
                 || !Global.MapMgr.ExistMapAndVMap(1, -618.518f, -4251.67f) || !Global.MapMgr.ExistMapAndVMap(0, 1676.35f, 1677.45f)
                 || !Global.MapMgr.ExistMapAndVMap(1, 10311.3f, 832.463f) || !Global.MapMgr.ExistMapAndVMap(1, -2917.58f, -257.98f)
                 || (WorldConfig.GetIntValue(WorldCfg.Expansion) != 0 && (!Global.MapMgr.ExistMapAndVMap(530, 10349.6f, -6357.29f) || !Global.MapMgr.ExistMapAndVMap(530, -3961.64f, -13931.2f))))
@@ -324,7 +320,7 @@ namespace Game
                 Log.outError(LogFilter.ServerLoading, "Unable to load critical files - server shutting down !!!");
                 ShutdownServ(0, 0, ShutdownExitCode.Error);
                 return;
-            }*/
+            }
 
             // Initialize pool manager
             Global.PoolMgr.Initialize();
@@ -344,6 +340,9 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Initialize DataStorage...");
             // Load DB2s
             CliDB.LoadStores(_dataPath, m_defaultDbcLocale);
+
+            Log.outInfo(LogFilter.ServerLoading, "Loading hotfix blobs...");
+            Global.DB2Mgr.LoadHotfixBlob();
 
             Log.outInfo(LogFilter.ServerLoading, "Loading hotfix info...");
             Global.DB2Mgr.LoadHotfixData();
@@ -390,6 +389,9 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Loading PetFamilySpellsStore Data...");
             Global.SpellMgr.LoadPetFamilySpellsStore();
 
+            Log.outInfo(LogFilter.ServerLoading, "Loading Spell Totem models...");
+            Global.SpellMgr.LoadSpellTotemModel();
+
             Log.outInfo(LogFilter.ServerLoading, "Loading GameObject models...");
             GameObjectModel.LoadGameObjectModelList();
 
@@ -408,6 +410,7 @@ namespace Game
             Global.ObjectMgr.LoadCreatureLocales();
             Global.ObjectMgr.LoadGameObjectLocales();
             Global.ObjectMgr.LoadQuestTemplateLocale();
+            Global.ObjectMgr.LoadQuestGreetingLocales();
             Global.ObjectMgr.LoadQuestOfferRewardLocale();
             Global.ObjectMgr.LoadQuestRequestItemsLocale();
             Global.ObjectMgr.LoadQuestObjectivesLocale();
@@ -467,8 +470,8 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Loading Enchant Spells Proc datas...");
             Global.SpellMgr.LoadSpellEnchantProcData();
 
-            Log.outInfo(LogFilter.ServerLoading, "Loading Item Random Enchantments Table...");
-            ItemEnchantment.LoadRandomEnchantmentsTable();
+            Log.outInfo(LogFilter.ServerLoading, "Loading Random item bonus list definitions...");
+            ItemEnchantmentManager.LoadItemRandomBonusListTemplates();
 
             Log.outInfo(LogFilter.ServerLoading, "Loading Disables");                         // must be before loading quests and items
             Global.DisableMgr.LoadDisables();
@@ -577,6 +580,9 @@ namespace Game
 
             Log.outInfo(LogFilter.ServerLoading, "Loading SpellArea Data...");                // must be after quest load
             Global.SpellMgr.LoadSpellAreas();
+
+            Log.outInfo(LogFilter.ServerLoading, "Loading World locations...");
+            Global.ObjectMgr.LoadWorldSafeLocs();                            // must be before LoadAreaTriggerTeleports and LoadGraveyardZones
 
             Log.outInfo(LogFilter.ServerLoading, "Loading AreaTrigger definitions...");
             Global.ObjectMgr.LoadAreaTriggerTeleports();
@@ -700,6 +706,10 @@ namespace Game
                 Log.outInfo(LogFilter.ServerLoading, "Loading Black Market Auctions...");
                 Global.BlackMarketMgr.LoadAuctions();
             }
+
+            // Load before guilds and arena teams
+            Log.outInfo(LogFilter.ServerLoading, "Loading character cache store...");
+            Global.CharacterCacheStorage.LoadCharacterCacheStorage();
 
             Log.outInfo(LogFilter.ServerLoading, "Loading Guild rewards...");
             Global.GuildMgr.LoadGuildRewards();
@@ -829,12 +839,14 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Loading Calendar data...");
             Global.CalendarMgr.LoadFromDB();
 
+            Log.outInfo(LogFilter.ServerLoading, "Initialize query data...");
+            Global.ObjectMgr.InitializeQueriesData(QueryDataGroup.All);
+
             // Initialize game time and timers
             Log.outInfo(LogFilter.ServerLoading, "Initialize game time and timers");
-            m_gameTime = Time.UnixTime;
-            m_startTime = m_gameTime;
+            GameTime.UpdateGameTimers();
 
-            DB.Login.Execute("INSERT INTO uptime (realmid, starttime, uptime, revision) VALUES({0}, {1}, 0, '{2}')", _realm.Id.Realm, m_startTime, "");       // One-time query
+            DB.Login.Execute("INSERT INTO uptime (realmid, starttime, uptime, revision) VALUES({0}, {1}, 0, '{2}')", _realm.Id.Realm, GameTime.GetStartTime(), "");       // One-time query
 
             m_timers[WorldTimers.Auctions].SetInterval(Time.Minute * Time.InMilliseconds);
             m_timers[WorldTimers.AuctionsPending].SetInterval(250);
@@ -855,11 +867,13 @@ namespace Game
 
             blackmarket_timer = 0;
 
+            m_timers[WorldTimers.WhoList].SetInterval(5 * Time.InMilliseconds); // update who list cache every 5 seconds
+
             //to set mailtimer to return mails every day between 4 and 5 am
             //mailtimer is increased when updating auctions
             //one second is 1000 -(tested on win system)
-            /// @todo Get rid of magic numbers
-            var localTime = Time.UnixTimeToDateTime(m_gameTime).ToLocalTime();
+            // @todo Get rid of magic numbers
+            var localTime = Time.UnixTimeToDateTime(GameTime.GetGameTime()).ToLocalTime();
             mail_timer = ((((localTime.Hour + 20) % 24) * Time.Hour * Time.InMilliseconds) / m_timers[WorldTimers.Auctions].GetInterval());
             //1440
             mail_timer_expires = ((Time.Day * Time.InMilliseconds) / (m_timers[(int)WorldTimers.Auctions].GetInterval()));
@@ -930,8 +944,6 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Calculate next currency reset time...");
             InitCurrencyResetTime();
 
-            LoadCharacterInfoStorage();
-
             Log.outInfo(LogFilter.ServerLoading, "Loading race and class expansion requirements...");
             Global.ObjectMgr.LoadRaceAndClassExpansionRequirements();
 
@@ -963,10 +975,6 @@ namespace Game
                     }
                 });
             }
-
-            uint startupDuration = Time.GetMSTimeDiffToNow(startupBegin);
-
-            Log.outInfo(LogFilter.Server, "World initialized in {0} minutes {1} seconds", (startupDuration / 60000), ((startupDuration % 60000) / 1000));
 
             Log.SetRealmId(_realm.Id.Realm);
         }
@@ -1078,33 +1086,11 @@ namespace Game
             if (!EnableHeight)
                 Log.outError(LogFilter.ServerLoading, "VMap height checking Disabled! Creatures movements and other various things WILL be broken! Expect no support.");
 
-            Global.VMapMgr.setEnableLineOfSightCalc(EnableLOS);
-            Global.VMapMgr.setEnableHeightCalc(EnableHeight);
+            Global.VMapMgr.SetEnableLineOfSightCalc(EnableLOS);
+            Global.VMapMgr.SetEnableHeightCalc(EnableHeight);
 
             Log.outInfo(LogFilter.ServerLoading, "VMap support included. LineOfSight: {0}, getHeight: {1}, indoorCheck: {2}", EnableLOS, EnableHeight, EnableIndoor);
             Log.outInfo(LogFilter.ServerLoading, @"VMap data directory is: {0}\vmaps", GetDataPath());
-        }
-
-        void ResetTimeDiffRecord()
-        {
-            if (m_updateTimeCount != 1)
-                return;
-
-            m_currentTime = Time.GetMSTime();
-        }
-
-        void RecordTimeDiff(string text)
-        {
-            if (m_updateTimeCount != 1)
-                return;
-
-            uint thisTime = Time.GetMSTime();
-            uint diff = Time.GetMSTimeDiff(m_currentTime, thisTime);
-
-            if (diff > WorldConfig.GetIntValue(WorldCfg.MinLogUpdate))
-                Log.outInfo(LogFilter.Server, "Difftime {0}: {1}.", text, diff);
-
-            m_currentTime = thisTime;
         }
 
         public void LoadAutobroadcasts()
@@ -1136,22 +1122,14 @@ namespace Game
 
         public void Update(uint diff)
         {
-            m_updateTime = diff;
+            ///- Update the game time and check for shutdown time
+            _UpdateGameTime();
+            long currentGameTime = GameTime.GetGameTime();
 
-            if (diff > 100)
-            {
-                if (m_updateTimeSum > 60000)
-                {
-                    Log.outDebug(LogFilter.Server, "Update time diff: {0}. Players online: {1}.", m_updateTimeSum / m_updateTimeCount, GetActiveSessionCount());
-                    m_updateTimeSum = m_updateTime;
-                    m_updateTimeCount = 1;
-                }
-                else
-                {
-                    m_updateTimeSum += m_updateTime;
-                    ++m_updateTimeCount;
-                }
-            }
+            _worldUpdateTime.UpdateWithDiff(diff);
+
+            // Record update if recording set in log and diff is greater then minimum set in log
+            _worldUpdateTime.RecordUpdateTime(GameTime.GetGameTimeMS(), diff, (uint)GetActiveSessionCount());
 
             // Update the different timers
             for (WorldTimers i = 0; i < WorldTimers.Max; ++i)
@@ -1162,30 +1140,35 @@ namespace Game
                     m_timers[i].SetCurrent(0);
             }
 
-            _UpdateGameTime();
+            // Update Who List Storage
+            if (m_timers[WorldTimers.WhoList].Passed())
+            {
+                m_timers[WorldTimers.WhoList].Reset();
+                Global.WhoListStorageMgr.Update();
+            }
 
             // Handle daily quests reset time
-            if (m_gameTime > m_NextDailyQuestReset)
+            if (currentGameTime > m_NextDailyQuestReset)
             {
                 DailyReset();
                 InitDailyQuestResetTime(false);
             }
 
             // Handle weekly quests reset time
-            if (m_gameTime > m_NextWeeklyQuestReset)
+            if (currentGameTime > m_NextWeeklyQuestReset)
                 ResetWeeklyQuests();
 
             // Handle monthly quests reset time
-            if (m_gameTime > m_NextMonthlyQuestReset)
+            if (currentGameTime > m_NextMonthlyQuestReset)
                 ResetMonthlyQuests();
 
-            if (m_gameTime > m_NextRandomBGReset)
+            if (currentGameTime > m_NextRandomBGReset)
                 ResetRandomBG();
 
-            if (m_gameTime > m_NextGuildReset)
+            if (currentGameTime > m_NextGuildReset)
                 ResetGuildCap();
 
-            if (m_gameTime > m_NextCurrencyReset)
+            if (currentGameTime > m_NextCurrencyReset)
                 ResetCurrencyWeekCap();
 
             //Handle auctions when the timer has passed
@@ -1215,7 +1198,7 @@ namespace Game
             {
                 m_timers[WorldTimers.Blackmarket].Reset();
 
-                ///- Update blackmarket, refresh auctions if necessary
+                //- Update blackmarket, refresh auctions if necessary
                 if ((blackmarket_timer * m_timers[WorldTimers.Blackmarket].GetInterval() >= WorldConfig.GetIntValue(WorldCfg.BlackmarketUpdatePeriod) * Time.Hour * Time.InMilliseconds) || blackmarket_timer == 0)
                 {
                     Global.BlackMarketMgr.RefreshAuctions();
@@ -1229,14 +1212,14 @@ namespace Game
             }
 
             //Handle session updates when the timer has passed
-            ResetTimeDiffRecord();
+            _worldUpdateTime.RecordUpdateTimeReset();
             UpdateSessions(diff);
-            RecordTimeDiff("UpdateSessions");
+            _worldUpdateTime.RecordUpdateTimeDuration("UpdateSessions");
 
-            /// <li> Update uptime table
+            // <li> Update uptime table
             if (m_timers[WorldTimers.UpTime].Passed())
             {
-                uint tmpDiff = (uint)(m_gameTime - m_startTime);
+                uint tmpDiff = GameTime.GetUptime();
                 uint maxOnlinePlayers = GetMaxPlayerCount();
 
                 m_timers[WorldTimers.UpTime].Reset();
@@ -1246,12 +1229,12 @@ namespace Game
                 stmt.AddValue(0, tmpDiff);
                 stmt.AddValue(1, maxOnlinePlayers);
                 stmt.AddValue(2, _realm.Id.Realm);
-                stmt.AddValue(3, m_startTime);
+                stmt.AddValue(3, (uint)GameTime.GetStartTime());
 
                 DB.Login.Execute(stmt);
             }
 
-            /// <li> Clean logs table
+            // <li> Clean logs table
             if (WorldConfig.GetIntValue(WorldCfg.LogdbCleartime) > 0) // if not enabled, ignore the timer
             {
                 if (m_timers[WorldTimers.CleanDB].Passed())
@@ -1267,9 +1250,9 @@ namespace Game
                 }
             }
 
-            ResetTimeDiffRecord();
+            _worldUpdateTime.RecordUpdateTimeReset();
             Global.MapMgr.Update(diff);
-            RecordTimeDiff("UpdateMapMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("UpdateMapMgr");
 
             if (WorldConfig.GetBoolValue(WorldCfg.AutoBroadcast))
             {
@@ -1281,13 +1264,13 @@ namespace Game
             }
 
             Global.BattlegroundMgr.Update(diff);
-            RecordTimeDiff("UpdateBattlegroundMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("UpdateBattlegroundMgr");
 
             Global.OutdoorPvPMgr.Update(diff);
-            RecordTimeDiff("UpdateOutdoorPvPMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("UpdateOutdoorPvPMgr");
 
             Global.BattleFieldMgr.Update(diff);
-            RecordTimeDiff("BattlefieldMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("BattlefieldMgr");
 
             //- Delete all characters which have been deleted X days before
             if (m_timers[WorldTimers.DeleteChars].Passed())
@@ -1297,14 +1280,14 @@ namespace Game
             }
 
             Global.LFGMgr.Update(diff);
-            RecordTimeDiff("UpdateLFGMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("UpdateLFGMgr");
 
             Global.GroupMgr.Update(diff);
-            RecordTimeDiff("GroupMgr");
+            _worldUpdateTime.RecordUpdateTimeDuration("GroupMgr");
 
             // execute callbacks from sql queries that were queued recently
             ProcessQueryCallbacks();
-            RecordTimeDiff("ProcessQueryCallbacks");
+            _worldUpdateTime.RecordUpdateTimeDuration("ProcessQueryCallbacks");
 
             // Erase corpses once every 20 minutes
             if (m_timers[WorldTimers.Corpses].Passed())
@@ -1555,14 +1538,7 @@ namespace Game
                 if (mode == BanMode.Account)
                     account = Global.AccountMgr.GetId(nameOrIP);
                 else if (mode == BanMode.Character)
-                {
-                    stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_ACCOUNT_BY_NAME);
-                    stmt.AddValue(0, nameOrIP);
-
-                    SQLResult result = DB.Characters.Query(stmt);
-                    if (!result.IsEmpty())
-                        account = result.Read<uint>(0);
-                }
+                    account = Global.CharacterCacheStorage.GetCharacterAccountIdByName(nameOrIP);
 
                 if (account == 0)
                     return false;
@@ -1583,10 +1559,10 @@ namespace Game
 
             uint duration_secs = Time.TimeStringToSecs(duration);
 
-            /// Pick a player to ban if not online
+            // Pick a player to ban if not online
             if (!pBanned)
             {
-                guid = ObjectManager.GetPlayerGUIDByName(name);
+                guid = Global.CharacterCacheStorage.GetCharacterGuidByName(name);
                 if (guid.IsEmpty())
                     return BanReturn.Notfound;                                    // Nobody to ban
             }
@@ -1624,7 +1600,7 @@ namespace Game
             // Pick a player to ban if not online
             if (!pBanned)
             {
-                guid = ObjectManager.GetPlayerGUIDByName(name);
+                guid = Global.CharacterCacheStorage.GetCharacterGuidByName(name);
                 if (guid.IsEmpty())
                     return false;                                    // Nobody to ban
             }
@@ -1640,9 +1616,10 @@ namespace Game
         void _UpdateGameTime()
         {
             // update the time
-            long thisTime = Time.UnixTime;
-            uint elapsed = (uint)(thisTime - m_gameTime);
-            m_gameTime = thisTime;
+            long lastGameTime = GameTime.GetGameTime();
+            GameTime.UpdateGameTimers();
+
+            uint elapsed = (uint)(GameTime.GetGameTime() - lastGameTime);
 
             //- if there is a shutdown timer
             if (!IsStopped && m_ShutdownTimer > 0 && elapsed > 0)
@@ -1762,7 +1739,7 @@ namespace Game
                 AddSession_(sess);
 
             // Then send an update signal to remaining ones
-            foreach (var pair in m_sessions.ToList())
+            foreach (var pair in m_sessions)
             {
                 WorldSession session = pair.Value;
                 WorldSessionFilter updater = new WorldSessionFilter(session);
@@ -1772,7 +1749,7 @@ namespace Game
                         m_disconnects[session.GetAccountId()] = Time.UnixTime;
 
                     RemoveQueuedPlayer(session);
-                    m_sessions.Remove(pair.Key);
+                    m_sessions.TryRemove(pair.Key, out WorldSession tempSession);
                     session.Dispose();
                 }
             }
@@ -1783,10 +1760,7 @@ namespace Game
             if (m_Autobroadcasts.Empty())
                 return;
 
-            var pair = m_Autobroadcasts.SelectRandomElementByWeight(autoPair =>
-            {
-                return autoPair.Value.Weight;
-            });
+            var pair = m_Autobroadcasts.SelectRandomElementByWeight(autoPair => autoPair.Value.Weight);
 
             uint abcenter = WorldConfig.GetUIntValue(WorldCfg.AutoBroadcastCenter);
 
@@ -1836,7 +1810,7 @@ namespace Game
 
         void InitWeeklyQuestResetTime()
         {
-            long wstime = getWorldState(WorldStates.WeeklyQuestResetTime);
+            long wstime = GetWorldState(WorldStates.WeeklyQuestResetTime);
             long curtime = Time.UnixTime;
             m_NextWeeklyQuestReset = wstime < curtime ? curtime : wstime;
         }
@@ -1873,14 +1847,14 @@ namespace Game
 
         void InitMonthlyQuestResetTime()
         {
-            long wstime = getWorldState(WorldStates.MonthlyQuestResetTime);
+            long wstime = GetWorldState(WorldStates.MonthlyQuestResetTime);
             long curtime = Time.UnixTime;
             m_NextMonthlyQuestReset = wstime < curtime ? curtime : wstime;
         }
 
         void InitRandomBGResetTime()
         {
-            long bgtime = getWorldState(WorldStates.BGDailyResetTime);
+            long bgtime = GetWorldState(WorldStates.BGDailyResetTime);
             if (bgtime == 0)
                 m_NextRandomBGReset = Time.UnixTime;         // game time not yet init
 
@@ -1898,12 +1872,12 @@ namespace Game
             m_NextRandomBGReset = bgtime < curTime ? nextDayResetTime - Time.Day : nextDayResetTime;
 
             if (bgtime == 0)
-                setWorldState(WorldStates.BGDailyResetTime, (ulong)m_NextRandomBGReset);
+                SetWorldState(WorldStates.BGDailyResetTime, (ulong)m_NextRandomBGReset);
         }
 
         void InitGuildResetTime()
         {
-            long gtime = getWorldState(WorldStates.GuildDailyResetTime);
+            long gtime = GetWorldState(WorldStates.GuildDailyResetTime);
             if (gtime == 0)
                 m_NextGuildReset = Time.UnixTime;         // game time not yet init
 
@@ -1917,12 +1891,12 @@ namespace Game
             m_NextGuildReset = gtime < curTime ? nextDayResetTime - Time.Day : nextDayResetTime;
 
             if (gtime == 0)
-                setWorldState(WorldStates.GuildDailyResetTime, (ulong)m_NextGuildReset);
+                SetWorldState(WorldStates.GuildDailyResetTime, (ulong)m_NextGuildReset);
         }
 
         void InitCurrencyResetTime()
         {
-            long currencytime = getWorldState(WorldStates.CurrencyResetTime);
+            long currencytime = GetWorldState(WorldStates.CurrencyResetTime);
             if (currencytime == 0)
                 m_NextCurrencyReset = Time.UnixTime;         // game time not yet init
 
@@ -1939,7 +1913,7 @@ namespace Game
             m_NextCurrencyReset = currencytime < curTime ? nextWeekResetTime - WorldConfig.GetIntValue(WorldCfg.CurrencyResetInterval) * Time.Day : nextWeekResetTime;
 
             if (currencytime == 0)
-                setWorldState(WorldStates.CurrencyResetTime, (ulong)m_NextCurrencyReset);
+                SetWorldState(WorldStates.CurrencyResetTime, (ulong)m_NextCurrencyReset);
         }
 
         void DailyReset()
@@ -1970,7 +1944,7 @@ namespace Game
                     session.GetPlayer().ResetCurrencyWeekCap();
 
             m_NextCurrencyReset = m_NextCurrencyReset + Time.Day * WorldConfig.GetIntValue(WorldCfg.CurrencyResetInterval);
-            setWorldState(WorldStates.CurrencyResetTime, (ulong)m_NextCurrencyReset);
+            SetWorldState(WorldStates.CurrencyResetTime, (ulong)m_NextCurrencyReset);
         }
 
         public void LoadDBAllowedSecurityLevel()
@@ -2004,7 +1978,7 @@ namespace Game
                     session.GetPlayer().ResetWeeklyQuestStatus();
 
             m_NextWeeklyQuestReset = (m_NextWeeklyQuestReset + Time.Week);
-            setWorldState(WorldStates.WeeklyQuestResetTime, (ulong)m_NextWeeklyQuestReset);
+            SetWorldState(WorldStates.WeeklyQuestResetTime, (ulong)m_NextWeeklyQuestReset);
 
             // change available weeklies
             Global.PoolMgr.ChangeWeeklyQuests();
@@ -2032,7 +2006,7 @@ namespace Game
             // plan next reset time
             m_NextMonthlyQuestReset = (curTime >= nextMonthResetTime) ? nextMonthResetTime + Time.Month : nextMonthResetTime;
 
-            setWorldState(WorldStates.MonthlyQuestResetTime, (ulong)m_NextMonthlyQuestReset);
+            SetWorldState(WorldStates.MonthlyQuestResetTime, (ulong)m_NextMonthlyQuestReset);
         }
 
         public void ResetEventSeasonalQuests(ushort event_id)
@@ -2058,18 +2032,18 @@ namespace Game
                     session.GetPlayer().SetRandomWinner(false);
 
             m_NextRandomBGReset = m_NextRandomBGReset + Time.Day;
-            setWorldState(WorldStates.BGDailyResetTime, (ulong)m_NextRandomBGReset);
+            SetWorldState(WorldStates.BGDailyResetTime, (ulong)m_NextRandomBGReset);
         }
 
         void ResetGuildCap()
         {
             m_NextGuildReset = (m_NextGuildReset + Time.Day);
-            setWorldState(WorldStates.GuildDailyResetTime, (ulong)m_NextGuildReset);
-            ulong week = getWorldState(WorldStates.GuildWeeklyResetTime);
+            SetWorldState(WorldStates.GuildDailyResetTime, (ulong)m_NextGuildReset);
+            ulong week = GetWorldState(WorldStates.GuildWeeklyResetTime);
             week = week < 7 ? week + 1 : 1;
 
             Log.outInfo(LogFilter.Server, "Guild Daily Cap reset. Week: {0}", week == 1);
-            setWorldState(WorldStates.GuildWeeklyResetTime, week);
+            SetWorldState(WorldStates.GuildWeeklyResetTime, week);
             Global.GuildMgr.ResetTimes(week == 1);
         }
 
@@ -2130,12 +2104,12 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Loaded {0} world states in {1} ms", count, Time.GetMSTimeDiffToNow(oldMSTime));
         }
 
-        public void setWorldState(WorldStates index, ulong value)
+        public void SetWorldState(WorldStates index, ulong value)
         {
-            setWorldState((uint)index, value);
+            SetWorldState((uint)index, value);
         }
 
-        public void setWorldState(uint index, object value)
+        public void SetWorldState(uint index, object value)
         {
             PreparedStatement stmt;
 
@@ -2159,12 +2133,12 @@ namespace Game
             m_worldstates[index] = Convert.ToUInt32(value);
         }
 
-        public uint getWorldState(WorldStates index)
+        public uint GetWorldState(WorldStates index)
         {
-            return getWorldState((uint)index);
+            return GetWorldState((uint)index);
         }
 
-        public uint getWorldState(uint index)
+        public uint GetWorldState(uint index)
         {
             return m_worldstates.LookupByKey(index);
         }
@@ -2174,85 +2148,6 @@ namespace Game
             _queryProcessor.ProcessReadyQueries();
         }
 
-        public CharacterInfo GetCharacterInfo(ObjectGuid guid) { return _characterInfoStorage.LookupByKey(guid); }
-
-        public void LoadCharacterInfoStorage()
-        {
-            Log.outInfo(LogFilter.ServerLoading, "Loading character name data");
-
-            _characterInfoStorage.Clear();
-
-            SQLResult result = DB.Characters.Query("SELECT guid, name, account, race, gender, class, level, deleteDate FROM characters");
-            if (result.IsEmpty())
-            {
-                Log.outInfo(LogFilter.ServerLoading, "No character name data loaded, empty query");
-                return;
-            }
-
-            uint count = 0;
-            do
-            {
-                AddCharacterInfo(ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0)), result.Read<uint>(2), result.Read<string>(1),
-                    result.Read<byte>(4), result.Read<byte>(3), result.Read<byte>(5), result.Read<byte>(6), result.Read<uint>(7) != 0);
-                ++count;
-            } while (result.NextRow());
-
-            Log.outInfo(LogFilter.ServerLoading, "Loaded name data for {0} characters", count);
-        }
-
-        public void AddCharacterInfo(ObjectGuid guid, uint accountId, string name, byte gender, byte race, byte playerClass, byte level, bool isDeleted)
-        {
-            CharacterInfo data = new CharacterInfo();
-            data.Name = name;
-            data.AccountId = accountId;
-            data.RaceID = (Race)race;
-            data.Sex = (Gender)gender;
-            data.ClassID = (Class)playerClass;
-            data.Level = level;
-            data.IsDeleted = isDeleted;
-            _characterInfoStorage[guid] = data;
-        }
-
-        public void DeleteCharacterInfo(ObjectGuid guid) { _characterInfoStorage.Remove(guid); }
-
-        public void UpdateCharacterInfo(ObjectGuid guid, string name, Gender gender = Gender.None, Race race = Race.None)
-        {
-            if (!_characterInfoStorage.ContainsKey(guid))
-                return;
-
-            var charData = _characterInfoStorage[guid];
-            charData.Name = name;
-
-            if (gender != Gender.None)
-                charData.Sex = gender;
-
-            if (race != Race.None)
-                charData.RaceID = race;
-
-            InvalidatePlayer data = new InvalidatePlayer();
-            data.Guid = guid;
-            SendGlobalMessage(data);
-        }
-
-        public void UpdateCharacterInfoLevel(ObjectGuid guid, byte level)
-        {
-            if (!_characterInfoStorage.ContainsKey(guid))
-                return;
-
-            _characterInfoStorage[guid].Level = level;
-        }
-
-        public void UpdateCharacterInfoDeleted(ObjectGuid guid, bool deleted, string name = null)
-        {
-            if (!_characterInfoStorage.ContainsKey(guid))
-                return;
-
-            _characterInfoStorage[guid].IsDeleted = deleted;
-
-            if (!string.IsNullOrEmpty(name))
-                _characterInfoStorage[guid].Name = name;
-        }
-
         public void ReloadRBAC()
         {
             // Passive reload, we mark the data as invalidated and next time a permission is checked it will be reloaded
@@ -2260,8 +2155,6 @@ namespace Game
             foreach (var session in m_sessions.Values)
                 session.InvalidateRBACData();
         }
-
-        public bool HasCharacterInfo(ObjectGuid guid) { return _characterInfoStorage.ContainsKey(guid); }
 
         public List<WorldSession> GetAllSessions()
         {
@@ -2294,15 +2187,6 @@ namespace Game
         public string GetDataPath() { return _dataPath; }
 
         public void SetDataPath(string path) { _dataPath = path; }
-
-        // When server started?
-        long GetStartTime() { return m_startTime; }
-        // What time is it?
-        public long GetGameTime() { return m_gameTime; }
-        // Uptime (in secs)
-        public uint GetUptime() { return (uint)(m_gameTime - m_startTime); }
-        // Update time
-        public uint GetUpdateTime() { return m_updateTime; }
 
         public long GetNextDailyQuestsResetTime() { return m_NextDailyQuestReset; }
         public long GetNextWeeklyQuestsResetTime() { return m_NextWeeklyQuestReset; }
@@ -2387,6 +2271,8 @@ namespace Game
         public CleaningFlags GetCleaningFlags() { return m_CleaningFlags; }
         public void SetCleaningFlags(CleaningFlags flags) { m_CleaningFlags = flags; }
 
+        public WorldUpdateTime GetWorldUpdateTime() { return _worldUpdateTime; }
+
         #region Fields
         uint m_ShutdownTimer;
         ShutdownMask m_ShutdownMask;
@@ -2394,8 +2280,6 @@ namespace Game
         public bool IsStopped;
 
         Dictionary<byte, Autobroadcast> m_Autobroadcasts = new Dictionary<byte, Autobroadcast>();
-
-        Dictionary<ObjectGuid, CharacterInfo> _characterInfoStorage = new Dictionary<ObjectGuid, CharacterInfo>();
 
         CleaningFlags m_CleaningFlags;
 
@@ -2409,17 +2293,12 @@ namespace Game
 
         bool m_isClosed;
 
-        long m_startTime;
-        long m_gameTime;
         Dictionary<WorldTimers, IntervalTimer> m_timers = new Dictionary<WorldTimers, IntervalTimer>();
         long mail_timer;
         long mail_timer_expires;
         long blackmarket_timer;
-        uint m_updateTime, m_updateTimeSum;
-        uint m_updateTimeCount;
-        uint m_currentTime;
 
-        Dictionary<uint, WorldSession> m_sessions = new Dictionary<uint, WorldSession>();
+        ConcurrentDictionary<uint, WorldSession> m_sessions = new ConcurrentDictionary<uint, WorldSession>();
         Dictionary<uint, long> m_disconnects = new Dictionary<uint, long>();
         uint m_maxActiveSessionCount;
         uint m_maxQueuedSessionCount;
@@ -2450,6 +2329,8 @@ namespace Game
         Realm _realm;
 
         string _dataPath;
+
+        WorldUpdateTime _worldUpdateTime;
         #endregion
     }
 
@@ -2469,6 +2350,7 @@ namespace Game
         PingDB,
         GuildSave,
         Blackmarket,
+        WhoList,
         Max
     }
 
@@ -2502,17 +2384,6 @@ namespace Game
         Shutdown = 0,
         Error = 1,
         Restart = 2,
-    }
-
-    public class CharacterInfo
-    {
-        public string Name;
-        public uint AccountId;
-        public Class ClassID;
-        public Race RaceID;
-        public Gender Sex;
-        public byte Level;
-        public bool IsDeleted;
     }
 
     public class WorldWorldTextBuilder : MessageBuilder

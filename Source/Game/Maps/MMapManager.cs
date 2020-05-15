@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,13 +16,9 @@
  */
 
 using Framework.Constants;
-using Game.DataStorage;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Game
@@ -47,7 +43,7 @@ namespace Game
             return loadedMMaps.LookupByKey(mapId);
         }
 
-        bool loadMapData(string basePath, uint mapId)
+        bool LoadMapData(string basePath, uint mapId)
         {
             // we already have this map loaded?
             if (loadedMMaps.ContainsKey(mapId) && loadedMMaps[mapId] != null)
@@ -88,38 +84,38 @@ namespace Game
             }
         }
 
-        uint packTileID(uint x, uint y)
+        uint PackTileID(uint x, uint y)
         {
             return (x << 16 | y);
         }
 
-        public bool loadMap(string basePath, uint mapId, uint x, uint y)
+        public bool LoadMap(string basePath, uint mapId, uint x, uint y)
         {
             // make sure the mmap is loaded and ready to load tiles
-            if (!loadMapImpl(basePath, mapId, x, y))
+            if (!LoadMapImpl(basePath, mapId, x, y))
                 return false;
 
             bool success = true;
             var childMaps = childMapData.LookupByKey(mapId);
             foreach (uint childMapId in childMaps)
-                if (!loadMapImpl(basePath, childMapId, x, y))
+                if (!LoadMapImpl(basePath, childMapId, x, y))
                     success = false;
 
             return success;
         }
 
-        bool loadMapImpl(string basePath, uint mapId, uint x, uint y)
+        bool LoadMapImpl(string basePath, uint mapId, uint x, uint y)
         {
             // make sure the mmap is loaded and ready to load tiles
-            if (!loadMapData(basePath, mapId))
+            if (!LoadMapData(basePath, mapId))
                 return false;
 
             // get this mmap data
             MMapData mmap = loadedMMaps[mapId];
-            Contract.Assert(mmap.navMesh != null);
+            Cypher.Assert(mmap.navMesh != null);
 
             // check if we already have this tile loaded
-            uint packedGridPos = packTileID(x, y);
+            uint packedGridPos = PackTileID(x, y);
             if (mmap.loadedTileRefs.ContainsKey(packedGridPos))
                 return false;
 
@@ -139,9 +135,8 @@ namespace Game
 
             using (BinaryReader reader = new BinaryReader(new FileStream(fileName, FileMode.Open, FileAccess.Read)))
             {
-                MmapTileHeader fileHeader = reader.ReadStruct<MmapTileHeader>();
-                Array.Reverse(fileHeader.mmapMagic);
-                if (new string(fileHeader.mmapMagic) != MapConst.mmapMagic)
+                MmapTileHeader fileHeader = reader.Read<MmapTileHeader>();
+                if (fileHeader.mmapMagic != MapConst.mmapMagic)
                 {
                     Log.outError(LogFilter.Maps, "MMAP:loadMap: Bad header in mmap {0:D4}{1:D2}{2:D2}.mmtile", mapId, x, y);
                     return false;
@@ -154,13 +149,12 @@ namespace Game
                 }
 
                 var bytes = reader.ReadBytes((int)fileHeader.size);
-
                 Detour.dtRawTileData data = new Detour.dtRawTileData();
                 data.FromBytes(bytes, 0);
 
                 ulong tileRef = 0;
                 // memory allocated for data is now managed by detour, and will be deallocated when the tile is removed
-                if (Detour.dtStatusSucceed(mmap.navMesh.addTile(data, 0, 0, ref tileRef)))
+                if (Detour.dtStatusSucceed(mmap.navMesh.addTile(data, 1, 0, ref tileRef)))
                 {
                     mmap.loadedTileRefs.Add(packedGridPos, tileRef);
                     ++loadedTiles;
@@ -173,23 +167,23 @@ namespace Game
             }
         }
 
-        public bool loadMapInstance(string basePath, uint mapId, uint instanceId)
+        public bool LoadMapInstance(string basePath, uint mapId, uint instanceId)
         {
-            if (!loadMapInstanceImpl(basePath, mapId, instanceId))
+            if (!LoadMapInstanceImpl(basePath, mapId, instanceId))
                 return false;
 
             bool success = true;
             var childMaps = childMapData.LookupByKey(mapId);
             foreach (uint childMapId in childMaps)
-                if (!loadMapInstanceImpl(basePath, childMapId, instanceId))
+                if (!LoadMapInstanceImpl(basePath, childMapId, instanceId))
                     success = false;
 
             return success;
         }
 
-        bool loadMapInstanceImpl(string basePath, uint mapId, uint instanceId)
+        bool LoadMapInstanceImpl(string basePath, uint mapId, uint instanceId)
         {
-            if (!loadMapData(basePath, mapId))
+            if (!LoadMapData(basePath, mapId))
                 return false;
 
             MMapData mmap = loadedMMaps[mapId];
@@ -209,16 +203,16 @@ namespace Game
             return true;
         }
 
-        public bool unloadMap(uint mapId, uint x, uint y)
+        public bool UnloadMap(uint mapId, uint x, uint y)
         {
             var childMaps = childMapData.LookupByKey(mapId);
             foreach (uint childMapId in childMaps)
-                unloadMapImpl(childMapId, x, y);
+                UnloadMapImpl(childMapId, x, y);
 
-            return unloadMapImpl(mapId, x, y);
+            return UnloadMapImpl(mapId, x, y);
         }
 
-        bool unloadMapImpl(uint mapId, uint x, uint y)
+        bool UnloadMapImpl(uint mapId, uint x, uint y)
         {
             // check if we have this map loaded
             MMapData mmap = GetMMapData(mapId);
@@ -230,7 +224,7 @@ namespace Game
             }
 
             // check if we have this tile loaded
-            uint packedGridPos = packTileID(x, y);
+            uint packedGridPos = PackTileID(x, y);
             if (!mmap.loadedTileRefs.ContainsKey(packedGridPos))
             {
                 // file may not exist, therefore not loaded
@@ -248,7 +242,7 @@ namespace Game
                 // if the grid is later reloaded, dtNavMesh.addTile will return error but no extra memory is used
                 // we cannot recover from this error - assert out
                 Log.outError(LogFilter.Maps, "MMAP:unloadMap: Could not unload {0:D4}{1:D2}{2:D2}.mmtile from navmesh", mapId, x, y);
-                Contract.Assert(false);
+                Cypher.Assert(false);
             }
             else
             {
@@ -261,7 +255,7 @@ namespace Game
             return false;
         }
 
-        public bool unloadMap(uint mapId)
+        public bool UnloadMap(uint mapId)
         {
             if (!loadedMMaps.ContainsKey(mapId))
             {
@@ -292,7 +286,7 @@ namespace Game
             return true;
         }
 
-        public bool unloadMapInstance(uint mapId, uint instanceId)
+        public bool UnloadMapInstance(uint mapId, uint instanceId)
         {
             // check if we have this map loaded
             MMapData mmap = GetMMapData(mapId);
@@ -333,8 +327,8 @@ namespace Game
             return mmap.navMeshQueries[instanceId];
         }
 
-        public uint getLoadedTilesCount() { return loadedTiles; }
-        public int getLoadedMapsCount() { return loadedMMaps.Count; }
+        public uint GetLoadedTilesCount() { return loadedTiles; }
+        public int GetLoadedMapsCount() { return loadedMMaps.Count; }
 
         Dictionary<uint, MMapData> loadedMMaps = new Dictionary<uint, MMapData>();
         uint loadedTiles;
@@ -356,16 +350,12 @@ namespace Game
         public Dictionary<uint, ulong> loadedTileRefs = new Dictionary<uint, ulong>(); // maps [map grid coords] to [dtTile]
     }
 
-    [StructLayout(LayoutKind.Sequential)]
     public struct MmapTileHeader
     {
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
-        public char[] mmapMagic;
+        public uint mmapMagic;
         public uint dtVersion;
         public uint mmapVersion;
         public uint size;
         public byte usesLiquids;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
-        public byte[] padding;
     }
 }

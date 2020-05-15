@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,12 +66,18 @@ namespace Framework.Constants
         GarrisonMonument = 44,
         GarrisonShipment = 45,
         GarrisonMonumentPlaque = 46,
-        ArtifactForge = 47,
+        ItemForge = 47,
         UILink = 48,
         KeystoneReceptacle = 49,
         GatheringNode = 50,
         ChallengeModeReward = 51,
-        Max = 52
+        Multi = 52,
+        SiegeableMulti = 53,
+        SiegeableMo = 54,
+        PvpReward = 55,
+        FuturePatch1 = 56,
+        FuturePatch2 = 57,
+        Max = 58
     }
 
     public enum GameObjectState

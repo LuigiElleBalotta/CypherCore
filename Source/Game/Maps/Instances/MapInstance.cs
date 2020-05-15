@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,18 +23,13 @@ using Game.Garrisons;
 using Game.Groups;
 using Game.Scenarios;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Maps
 {
     public class MapInstanced : Map
     {
-        public MapInstanced(uint id, uint expiry) : base(id, expiry, 0, Difficulty.Normal)
-        {
-            for (uint x = 0; x < MapConst.MaxGrids; ++x)
-                GridMapReference[x] = new uint[MapConst.MaxGrids];
-        }
+        public MapInstanced(uint id, uint expiry) : base(id, expiry, 0, Difficulty.Normal) { }
 
         public override void InitVisibilityDistance()
         {
@@ -49,17 +44,17 @@ namespace Game.Maps
         {
             base.Update(diff);
 
-            foreach (var i in m_InstancedMaps.ToList())
+            foreach (var pair in m_InstancedMaps.ToList())
             {
-                if (i.Value.CanUnload(diff))
+                if (pair.Value.CanUnload(diff))
                 {
-                    if (!DestroyInstance(i))
+                    if (!DestroyInstance(pair))
                     {
                         //m_unloadTimer
                     }
                 }
                 else
-                    i.Value.Update(diff);
+                    pair.Value.Update(diff);
             }
         }
 
@@ -178,64 +173,73 @@ namespace Game.Maps
 
         InstanceMap CreateInstance(uint InstanceId, InstanceSave save, Difficulty difficulty, int teamId)
         {
-            // make sure we have a valid map id
-            MapRecord entry = CliDB.MapStorage.LookupByKey(GetId());
-            if (entry == null)
+            lock (_mapLock)
             {
-                Log.outError(LogFilter.Maps, "CreateInstance: no record for map {0}", GetId());
-                Contract.Assert(false);
+                // make sure we have a valid map id
+                MapRecord entry = CliDB.MapStorage.LookupByKey(GetId());
+                if (entry == null)
+                {
+                    Log.outError(LogFilter.Maps, "CreateInstance: no record for map {0}", GetId());
+                    Cypher.Assert(false);
+                }
+                InstanceTemplate iTemplate = Global.ObjectMgr.GetInstanceTemplate(GetId());
+                if (iTemplate == null)
+                {
+                    Log.outError(LogFilter.Maps, "CreateInstance: no instance template for map {0}", GetId());
+                    Cypher.Assert(false);
+                }
+
+                // some instances only have one difficulty
+                Global.DB2Mgr.GetDownscaledMapDifficultyData(GetId(), ref difficulty);
+
+                Log.outDebug(LogFilter.Maps, "MapInstanced.CreateInstance: {0} map instance {1} for {2} created with difficulty {3}", save != null ? "" : "new ", InstanceId, GetId(), difficulty);
+
+                InstanceMap map = new InstanceMap(GetId(), GetGridExpiry(), InstanceId, difficulty, this);
+                Cypher.Assert(map.IsDungeon());
+
+                map.LoadRespawnTimes();
+                map.LoadCorpseData();
+
+                bool load_data = save != null;
+                map.CreateInstanceData(load_data);
+                InstanceScenario instanceScenario = Global.ScenarioMgr.CreateInstanceScenario(map, teamId);
+                if (instanceScenario != null)
+                    map.SetInstanceScenario(instanceScenario);
+
+                if (WorldConfig.GetBoolValue(WorldCfg.InstancemapLoadGrids))
+                    map.LoadAllCells();
+
+                m_InstancedMaps[InstanceId] = map;
+                return map;
             }
-            InstanceTemplate iTemplate = Global.ObjectMgr.GetInstanceTemplate(GetId());
-            if (iTemplate == null)
-            {
-                Log.outError(LogFilter.Maps, "CreateInstance: no instance template for map {0}", GetId());
-                Contract.Assert(false);
-            }
-
-            // some instances only have one difficulty
-            Global.DB2Mgr.GetDownscaledMapDifficultyData(GetId(), ref difficulty);
-
-            Log.outDebug(LogFilter.Maps, "MapInstanced.CreateInstance: {0} map instance {1} for {2} created with difficulty {3}", save != null ? "" : "new ", InstanceId, GetId(), difficulty);
-
-            InstanceMap map = new InstanceMap(GetId(), GetGridExpiry(), InstanceId, difficulty, this);
-            Contract.Assert(map.IsDungeon());
-
-            map.LoadRespawnTimes();
-            map.LoadCorpseData();
-
-            bool load_data = save != null;
-            map.CreateInstanceData(load_data);
-            InstanceScenario instanceScenario = Global.ScenarioMgr.CreateInstanceScenario(map, teamId);
-            if (instanceScenario != null)
-                map.SetInstanceScenario(instanceScenario);
-
-            if (WorldConfig.GetBoolValue(WorldCfg.InstancemapLoadGrids))
-                map.LoadAllCells();
-
-            m_InstancedMaps[InstanceId] = map;
-            return map;
         }
 
         BattlegroundMap CreateBattleground(uint InstanceId, Battleground bg)
         {
-            Log.outDebug(LogFilter.Maps, "MapInstanced.CreateBattleground: map bg {0} for {1} created.", InstanceId, GetId());
+            lock (_mapLock)
+            {
+                Log.outDebug(LogFilter.Maps, "MapInstanced.CreateBattleground: map bg {0} for {1} created.", InstanceId, GetId());
 
-            BattlegroundMap map = new BattlegroundMap(GetId(), (uint)GetGridExpiry(), InstanceId, this, Difficulty.None);
-            Contract.Assert(map.IsBattlegroundOrArena());
-            map.SetBG(bg);
-            bg.SetBgMap(map);
+                BattlegroundMap map = new BattlegroundMap(GetId(), (uint)GetGridExpiry(), InstanceId, this, Difficulty.None);
+                Cypher.Assert(map.IsBattlegroundOrArena());
+                map.SetBG(bg);
+                bg.SetBgMap(map);
 
-            m_InstancedMaps[InstanceId] = map;
-            return map;
+                m_InstancedMaps[InstanceId] = map;
+                return map;
+            }
         }
 
         GarrisonMap CreateGarrison(uint instanceId, Player owner)
         {
-            GarrisonMap map = new GarrisonMap(GetId(), GetGridExpiry(), instanceId, this, owner.GetGUID());
-            Contract.Assert(map.IsGarrison());
+            lock (_mapLock)
+            {
+                GarrisonMap map = new GarrisonMap(GetId(), GetGridExpiry(), instanceId, this, owner.GetGUID());
+                Cypher.Assert(map.IsGarrison());
 
-            m_InstancedMaps[instanceId] = map;
-            return map;
+                m_InstancedMaps[instanceId] = map;
+                return map;
+            }
         }
 
         bool DestroyInstance(KeyValuePair<uint, Map> pair)
@@ -248,8 +252,8 @@ namespace Game.Maps
             // should only unload VMaps if this is the last instance and grid unloading is enabled
             if (m_InstancedMaps.Count <= 1 && WorldConfig.GetBoolValue(WorldCfg.GridUnload))
             {
-                Global.VMapMgr.unloadMap(pair.Value.GetId());
-                Global.MMapMgr.unloadMap(pair.Value.GetId());
+                Global.VMapMgr.UnloadMap(pair.Value.GetId());
+                Global.MMapMgr.UnloadMap(pair.Value.GetId());
                 // in that case, unload grids of the base map, too
                 // so in the next map creation, (EnsureGridCreated actually) VMaps will be reloaded
                 base.UnloadAll();
@@ -260,6 +264,7 @@ namespace Game.Maps
                 Global.MapMgr.FreeInstanceId(pair.Value.GetInstanceId());
 
             // erase map
+            pair.Value.Dispose();
             m_InstancedMaps.Remove(pair.Key);
 
             return true;
@@ -272,23 +277,9 @@ namespace Game.Maps
             return m_InstancedMaps.LookupByKey(instanceId);
         }
 
-        public void AddGridMapReference(GridCoord p)
-        {
-            ++GridMapReference[p.x_coord][p.y_coord];
-            SetUnloadReferenceLock(new GridCoord(63 - p.x_coord, 63 - p.y_coord), true);
-        }
-
-        public void RemoveGridMapReference(GridCoord p)
-        {
-            --GridMapReference[p.x_coord][p.y_coord];
-            if (GridMapReference[p.x_coord][p.y_coord] == 0)
-                SetUnloadReferenceLock(new GridCoord(63 - p.x_coord, 63 - p.y_coord), false);
-        }
-
         public Dictionary<uint, Map> GetInstancedMaps() { return m_InstancedMaps; }
 
         Dictionary<uint, Map> m_InstancedMaps = new Dictionary<uint, Map>();
-        uint[][] GridMapReference = new uint[MapConst.MaxGrids][];
     }
 
     public class InstanceTemplate

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2003-2004  Eran Kampf	eran@ekampf.com	http://www.ekampf.com
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -164,7 +164,7 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns>
         public override string ToString()
         {
-            return string.Format("({0}, {1})", _origin, _direction);
+            return $"({_origin}, {_direction})";
         }
         #endregion
 
@@ -285,7 +285,6 @@ namespace Framework.GameMath
         /// <param name="culture">The <see cref="System.Globalization.CultureInfo"/> to use as the current culture. </param>
         /// <param name="value">The <see cref="Object"/> to convert.</param>
         /// <returns>An <see cref="Object"/> that represents the converted value.</returns>
-        /// <exception cref="ParseException">Failed parsing from string.</exception>
         public override object ConvertFrom(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value)
         {
             if (value.GetType() == typeof(string))

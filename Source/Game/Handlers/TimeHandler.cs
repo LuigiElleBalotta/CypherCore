@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ namespace Game
 
             Log.outDebug(LogFilter.Network, "Time sync received: counter {0}, client ticks {1}, time since last sync {2}", packet.SequenceIndex, packet.ClientTime, packet.ClientTime - _player.m_timeSyncClient);
 
-            uint ourTicks = packet.ClientTime + (Time.GetMSTime() - _player.m_timeSyncServer);
+            uint ourTicks = packet.ClientTime + (GameTime.GetGameTimeMS() - _player.m_timeSyncServer);
 
             // diff should be small
             Log.outDebug(LogFilter.Network, "Our ticks: {0}, diff {1}, latency {2}", ourTicks, ourTicks - packet.ClientTime, GetLatency());

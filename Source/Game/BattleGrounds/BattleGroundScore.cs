@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 using Framework.Constants;
 using Game.Entities;
-using System.Diagnostics.Contracts;
 using Game.Network.Packets;
 
 namespace Game.BattleGrounds
@@ -53,14 +52,14 @@ namespace Game.BattleGrounds
                     HealingDone += value;
                     break;
                 default:
-                    Contract.Assert(false, "Not implemented Battleground score type!");
+                    Cypher.Assert(false, "Not implemented Battleground score type!");
                     break;
             }
         }
 
-        public virtual void BuildPvPLogPlayerDataPacket(out PVPLogData.PlayerData playerData)
+        public virtual void BuildPvPLogPlayerDataPacket(out PVPLogData.PVPMatchPlayerStatistics playerData)
         {
-            playerData = new PVPLogData.PlayerData();
+            playerData = new PVPLogData.PVPMatchPlayerStatistics();
             playerData.PlayerGUID = PlayerGuid;
             playerData.Kills = KillingBlows;
             playerData.Faction = (byte)TeamId;

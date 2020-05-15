@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,12 +32,16 @@ namespace Game
     public partial class WorldSession
     {
         [WorldPacketHandler(ClientOpcodes.MoveChangeTransport, Processing = PacketProcessing.ThreadSafe)]
-        [WorldPacketHandler(ClientOpcodes.MoveFallReset, Processing = PacketProcessing.ThreadSafe)]
+        [WorldPacketHandler(ClientOpcodes.MoveDoubleJump, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveFallLand, Processing = PacketProcessing.ThreadSafe)]
+        [WorldPacketHandler(ClientOpcodes.MoveFallReset, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveHeartbeat, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveJump, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveSetFacing, Processing = PacketProcessing.ThreadSafe)]
+        [WorldPacketHandler(ClientOpcodes.MoveSetFly, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveSetPitch, Processing = PacketProcessing.ThreadSafe)]
+        [WorldPacketHandler(ClientOpcodes.MoveSetRunMode, Processing = PacketProcessing.ThreadSafe)]
+        [WorldPacketHandler(ClientOpcodes.MoveSetWalkMode, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveStartAscend, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveStartBackward, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveStartDescend, Processing = PacketProcessing.ThreadSafe)]
@@ -55,7 +59,6 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.MoveStopStrafe, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveStopSwim, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveStopTurn, Processing = PacketProcessing.ThreadSafe)]
-        [WorldPacketHandler(ClientOpcodes.MoveDoubleJump, Processing = PacketProcessing.ThreadSafe)]
         void HandleMovement(ClientPlayerMovement packet)
         {
             HandleMovementOpcode(packet.GetOpcode(), packet.Status);
@@ -83,13 +86,17 @@ namespace Game
             }
 
             // stop some emotes at player move
-            if (plrMover && (plrMover.GetUInt32Value(UnitFields.NpcEmotestate) != 0))
-                plrMover.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotNone);
+            if (plrMover && (plrMover.GetEmoteState() != 0))
+                plrMover.SetEmoteState(Emote.OneshotNone);
 
             //handle special cases
             if (!movementInfo.transport.guid.IsEmpty())
             {
-                if (movementInfo.transport.pos.GetPositionX() > 50 || movementInfo.transport.pos.GetPositionY() > 50 || movementInfo.transport.pos.GetPositionZ() > 50)
+                // We were teleported, skip packets that were broadcast before teleport
+                if (movementInfo.Pos.GetExactDist2d(mover) > MapConst.SizeofGrids)
+                    return;
+
+                if (Math.Abs(movementInfo.transport.pos.GetPositionX()) > 75f || Math.Abs(movementInfo.transport.pos.GetPositionY()) > 75f || Math.Abs(movementInfo.transport.pos.GetPositionZ()) > 75f)
                     return;
 
                 if (!GridDefines.IsValidMapCoord(movementInfo.Pos.posX + movementInfo.transport.pos.posX, movementInfo.Pos.posY + movementInfo.transport.pos.posY,
@@ -129,13 +136,17 @@ namespace Game
             if (opcode == ClientOpcodes.MoveFallLand && plrMover && !plrMover.IsInFlight())
                 plrMover.HandleFall(movementInfo);
 
+            // interrupt parachutes upon falling or landing in water
+            if (opcode == ClientOpcodes.MoveFallLand || opcode == ClientOpcodes.MoveStartSwim)
+                mover.RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags.Landing); // Parachutes
+
             if (plrMover && movementInfo.HasMovementFlag(MovementFlag.Swimming) != plrMover.IsInWater())
             {
                 // now client not include swimming flag in case jumping under water
                 plrMover.SetInWater(!plrMover.IsInWater() || plrMover.GetMap().IsUnderWater(plrMover.GetPhaseShift(), movementInfo.Pos.posX, movementInfo.Pos.posY, movementInfo.Pos.posZ));
             }
 
-            uint mstime = Time.GetMSTime();
+            uint mstime = GameTime.GetGameTimeMS();
 
             if (m_clientTimeDelay == 0)
                 m_clientTimeDelay = mstime - movementInfo.Time;
@@ -183,10 +194,10 @@ namespace Game
                     {
                         // NOTE: this is actually called many times while falling
                         // even after the player has been teleported away
-                        /// @todo discard movement packets after the player is rooted
+                        // @todo discard movement packets after the player is rooted
                         if (plrMover.IsAlive())
                         {
-                            plrMover.SetFlag(PlayerFields.Flags, PlayerFlags.IsOutOfBounds);
+                            plrMover.AddPlayerFlag(PlayerFlags.IsOutOfBounds);
                             plrMover.EnvironmentalDamage(EnviromentalDamage.FallToVoid, (uint)GetPlayer().GetMaxHealth());
                             // player can be alive if GM/etc
                             // change the death state to CORPSE to prevent the death timer from
@@ -197,7 +208,13 @@ namespace Game
                     }
                 }
                 else
-                    plrMover.RemoveFlag(PlayerFields.Flags, PlayerFlags.IsOutOfBounds);
+                    plrMover.RemovePlayerFlag(PlayerFlags.IsOutOfBounds);
+
+                if (opcode == ClientOpcodes.MoveJump)
+                { 
+                    plrMover.RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags.Jump, 605); // Mind Control
+                    plrMover.ProcSkillsAndAuras(null, ProcFlags.Jump, ProcFlags.None, ProcFlagsSpellType.MaskAll, ProcFlagsSpellPhase.None, ProcFlagsHit.None, null, null, null);
+                }
             }
         }
 
@@ -255,9 +272,10 @@ namespace Game
 
             float z = loc.GetPositionZ();
             if (GetPlayer().HasUnitMovementFlag(MovementFlag.Hover))
-                z += GetPlayer().GetFloatValue(UnitFields.HoverHeight);
+                z += GetPlayer().m_unitData.HoverHeight;
 
             GetPlayer().Relocate(loc.GetPositionX(), loc.GetPositionY(), z, loc.GetOrientation());
+            GetPlayer().SetFallInformation(0, GetPlayer().GetPositionZ());
 
             GetPlayer().ResetMap();
             GetPlayer().SetMap(newMap);
@@ -284,7 +302,6 @@ namespace Game
             // only add to bg group and object, if the player was invited (else he entered through command)
             if (GetPlayer().InBattleground())
             {
-                Battleground bg;
                 // cleanup setting if outdated
                 if (!mapEntry.IsBattlegroundOrArena())
                 {
@@ -294,10 +311,14 @@ namespace Game
                     GetPlayer().SetBGTeam(0);
                 }
                 // join to bg case
-                else if (bg = GetPlayer().GetBattleground())
+                else
                 {
-                    if (GetPlayer().IsInvitedForBattlegroundInstance(GetPlayer().GetBattlegroundId()))
-                        bg.AddPlayer(GetPlayer());
+                    Battleground bg = GetPlayer().GetBattleground();
+                    if (bg)
+                    {
+                        if (GetPlayer().IsInvitedForBattlegroundInstance(GetPlayer().GetBattlegroundId()))
+                            bg.AddPlayer(GetPlayer());
+                    }
                 }
             }
 
@@ -319,7 +340,7 @@ namespace Game
                     if (!seamlessTeleport)
                     {
                         // short preparations to continue flight
-                        FlightPathMovementGenerator flight = (FlightPathMovementGenerator)GetPlayer().GetMotionMaster().top();
+                        FlightPathMovementGenerator flight = (FlightPathMovementGenerator)GetPlayer().GetMotionMaster().Top();
                         flight.Initialize(GetPlayer());
                     }
                     return;
@@ -344,7 +365,7 @@ namespace Game
             if (mInstance != null)
             {
                 // check if this instance has a reset time and send it to player if so
-                Difficulty diff = GetPlayer().GetDifficultyID(mapEntry);
+                Difficulty diff = newMap.GetDifficultyID();
                 MapDifficultyRecord mapDiff = Global.DB2Mgr.GetMapDifficultyData(mapEntry.Id, diff);
                 if (mapDiff != null)
                 {
@@ -381,7 +402,7 @@ namespace Game
                 GetPlayer().CastSpell(GetPlayer(), 2479, true);
 
             // in friendly area
-            else if (GetPlayer().IsPvP() && !GetPlayer().HasFlag(PlayerFields.Flags, PlayerFlags.InPVP))
+            else if (GetPlayer().IsPvP() && !GetPlayer().HasPlayerFlag(PlayerFlags.InPVP))
                 GetPlayer().UpdatePvP(false, false);
 
             // resummon pet
@@ -434,6 +455,7 @@ namespace Game
             WorldLocation dest = plMover.GetTeleportDest();
 
             plMover.UpdatePosition(dest, true);
+            plMover.SetFallInformation(0, GetPlayer().GetPositionZ());
 
             uint newzone, newarea;
             plMover.GetZoneAndAreaId(out newzone, out newarea);
@@ -447,7 +469,7 @@ namespace Game
                     plMover.CastSpell(plMover, 2479, true);
 
                 // in friendly area
-                else if (plMover.IsPvP() && !plMover.HasFlag(PlayerFields.Flags, PlayerFlags.InPVP))
+                else if (plMover.IsPvP() && !plMover.HasPlayerFlag(PlayerFlags.InPVP))
                     plMover.UpdatePvP(false, false);
             }
 
@@ -566,6 +588,7 @@ namespace Game
             GetPlayer().SendMessageToSet(updateKnockBack, false);
         }
 
+        [WorldPacketHandler(ClientOpcodes.MoveEnableDoubleJumpAck, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveEnableSwimToFlyTransAck, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveFeatherFallAck, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveForceRootAck, Processing = PacketProcessing.ThreadSafe)]
@@ -577,7 +600,6 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.MoveSetCanTurnWhileFallingAck, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveSetIgnoreMovementForcesAck, Processing = PacketProcessing.ThreadSafe)]
         [WorldPacketHandler(ClientOpcodes.MoveWaterWalkAck, Processing = PacketProcessing.ThreadSafe)]
-        [WorldPacketHandler(ClientOpcodes.MoveEnableDoubleJumpAck, Processing = PacketProcessing.ThreadSafe)]
         void HandleMovementAckMessage(MovementAckMessage movementAck)
         {
             GetPlayer().ValidateMovementInfo(movementAck.Ack.Status);
@@ -596,6 +618,92 @@ namespace Game
         void HandleSetCollisionHeightAck(MoveSetCollisionHeightAck packet)
         {
             GetPlayer().ValidateMovementInfo(packet.Data.Status);
+        }
+
+        [WorldPacketHandler(ClientOpcodes.MoveApplyMovementForceAck, Processing = PacketProcessing.ThreadSafe)]
+        void HandleMoveApplyMovementForceAck(MoveApplyMovementForceAck moveApplyMovementForceAck)
+        {
+            Unit mover = _player.m_unitMovedByMe;
+            Cypher.Assert(mover != null);
+            _player.ValidateMovementInfo(moveApplyMovementForceAck.Ack.Status);
+
+            // prevent tampered movement data
+            if (moveApplyMovementForceAck.Ack.Status.Guid != mover.GetGUID())
+            {
+                Log.outError(LogFilter.Network, $"HandleMoveApplyMovementForceAck: guid error, expected {mover.GetGUID().ToString()}, got {moveApplyMovementForceAck.Ack.Status.Guid.ToString()}");
+                return;
+            }
+
+            moveApplyMovementForceAck.Ack.Status.Time += m_clientTimeDelay;
+
+            MoveUpdateApplyMovementForce updateApplyMovementForce = new MoveUpdateApplyMovementForce();
+            updateApplyMovementForce.Status = moveApplyMovementForceAck.Ack.Status;
+            updateApplyMovementForce.Force = moveApplyMovementForceAck.Force;
+            mover.SendMessageToSet(updateApplyMovementForce, false);
+        }
+
+        [WorldPacketHandler(ClientOpcodes.MoveRemoveMovementForceAck, Processing = PacketProcessing.ThreadSafe)]
+        void HandleMoveRemoveMovementForceAck(MoveRemoveMovementForceAck moveRemoveMovementForceAck)
+        {
+            Unit mover = _player.m_unitMovedByMe;
+            Cypher.Assert(mover != null);
+            _player.ValidateMovementInfo(moveRemoveMovementForceAck.Ack.Status);
+
+            // prevent tampered movement data
+            if (moveRemoveMovementForceAck.Ack.Status.Guid != mover.GetGUID())
+            {
+                Log.outError(LogFilter.Network, $"HandleMoveRemoveMovementForceAck: guid error, expected {mover.GetGUID().ToString()}, got {moveRemoveMovementForceAck.Ack.Status.Guid.ToString()}");
+                return;
+            }
+
+            moveRemoveMovementForceAck.Ack.Status.Time += m_clientTimeDelay;
+
+            MoveUpdateRemoveMovementForce updateRemoveMovementForce = new MoveUpdateRemoveMovementForce();
+            updateRemoveMovementForce.Status = moveRemoveMovementForceAck.Ack.Status;
+            updateRemoveMovementForce.TriggerGUID = moveRemoveMovementForceAck.ID;
+            mover.SendMessageToSet(updateRemoveMovementForce, false);
+        }
+
+        [WorldPacketHandler(ClientOpcodes.MoveSetModMovementForceMagnitudeAck, Processing = PacketProcessing.ThreadSafe)]
+        void HandleMoveSetModMovementForceMagnitudeAck(MovementSpeedAck setModMovementForceMagnitudeAck)
+        {
+            Unit mover = _player.m_unitMovedByMe;
+            Cypher.Assert(mover != null);                      // there must always be a mover
+            _player.ValidateMovementInfo(setModMovementForceMagnitudeAck.Ack.Status);
+
+            // prevent tampered movement data
+            if (setModMovementForceMagnitudeAck.Ack.Status.Guid != mover.GetGUID())
+            {
+                Log.outError(LogFilter.Network, "HandleSetModMovementForceMagnitudeAck: guid error, expected {mover.GetGUID().ToString()}, got {setModMovementForceMagnitudeAck.Ack.Status.guid.ToString()}");
+                return;
+            }
+
+            // skip all except last
+            if (_player.m_movementForceModMagnitudeChanges > 0)
+            {
+                --_player.m_movementForceModMagnitudeChanges;
+                if (_player.m_movementForceModMagnitudeChanges == 0)
+                {
+                    float expectedModMagnitude = 1.0f;
+                    MovementForces movementForces = mover.GetMovementForces();
+                    if (movementForces != null)
+                        expectedModMagnitude = movementForces.GetModMagnitude();
+
+                    if (Math.Abs(expectedModMagnitude - setModMovementForceMagnitudeAck.Speed) > 0.01f)
+                    {
+                        Log.outDebug(LogFilter.Misc, $"Player {_player.GetName()} from account id {_player.GetSession().GetAccountId()} kicked for incorrect movement force magnitude (must be {expectedModMagnitude} instead {setModMovementForceMagnitudeAck.Speed})");
+                        _player.GetSession().KickPlayer();
+                        return;
+                    }
+                }
+            }
+
+            setModMovementForceMagnitudeAck.Ack.Status.Time += m_clientTimeDelay;
+
+            MoveUpdateSpeed updateModMovementForceMagnitude = new MoveUpdateSpeed(ServerOpcodes.MoveUpdateModMovementForceMagnitude);
+            updateModMovementForceMagnitude.Status = setModMovementForceMagnitudeAck.Ack.Status;
+            updateModMovementForceMagnitude.Speed = setModMovementForceMagnitudeAck.Speed;
+            mover.SendMessageToSet(updateModMovementForceMagnitude, false);
         }
 
         [WorldPacketHandler(ClientOpcodes.MoveTimeSkipped, Processing = PacketProcessing.Inplace)]
@@ -625,7 +733,7 @@ namespace Game
                     if (GetPlayer().GetMotionMaster().GetCurrentMovementGeneratorType() == MovementGeneratorType.Flight)
                     {
                         // short preparations to continue flight
-                        FlightPathMovementGenerator flight = (FlightPathMovementGenerator)GetPlayer().GetMotionMaster().top();
+                        FlightPathMovementGenerator flight = (FlightPathMovementGenerator)GetPlayer().GetMotionMaster().Top();
 
                         flight.SetCurrentNodeAfterTeleport();
                         TaxiPathNodeRecord node = flight.GetPath()[(int)flight.GetCurrentNode()];

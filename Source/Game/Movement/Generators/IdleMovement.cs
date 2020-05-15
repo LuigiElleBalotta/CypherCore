@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,11 +27,11 @@ namespace Game.Movement
             return MovementGeneratorType.Idle;
         }
 
-        public bool isActive { get; set; }
+        public bool IsActive { get; set; }
 
         public override void Reset(Unit owner)
         {
-            if (!owner.isStopped())
+            if (!owner.IsStopped())
                 owner.StopMoving();
         }
         public override void Initialize(Unit owner)

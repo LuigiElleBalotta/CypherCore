@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,66 +25,33 @@ namespace Framework.Cryptography
         static readonly byte[] ServerEncryptionKey = { 0x08, 0xF1, 0x95, 0x9F, 0x47, 0xE5, 0xD2, 0xDB, 0xA1, 0x3D, 0x77, 0x8F, 0x3F, 0x3E, 0xE7, 0x00 };
         static readonly byte[] ServerDecryptionKey = { 0x40, 0xAA, 0xD3, 0x92, 0x26, 0x71, 0x43, 0x47, 0x3A, 0x31, 0x08, 0xA6, 0xE7, 0xDC, 0x98, 0x2A };
 
-        public void Initialize(byte[] sessionKey)
+        public void Initialize(byte[] key)
         {
             if (IsInitialized)
                 throw new InvalidOperationException("PacketCrypt already initialized!");
 
-            SARC4Encrypt = new SARC4();
-            SARC4Decrypt = new SARC4();
-
-            var encryptSHA1 = new HMACSHA1(ServerEncryptionKey);
-            var decryptSHA1 = new HMACSHA1(ServerDecryptionKey);
-
-            SARC4Encrypt.PrepareKey(encryptSHA1.ComputeHash(sessionKey));
-            SARC4Decrypt.PrepareKey(decryptSHA1.ComputeHash(sessionKey));
-
-            var PacketEncryptionDummy = new byte[0x400];
-            var PacketDecryptionDummy = new byte[0x400];
-
-            SARC4Encrypt.ProcessBuffer(PacketEncryptionDummy, PacketEncryptionDummy.Length);
-            SARC4Decrypt.ProcessBuffer(PacketDecryptionDummy, PacketDecryptionDummy.Length);
+            _serverEncrypt = new AesGcm(key);
+            _clientDecrypt = new AesGcm(key);
 
             IsInitialized = true;
         }
 
-        public void Initialize(byte[] sessionKey, byte[] serverSeed, byte[] clientSeed)
+        public bool Encrypt(ref byte[] data, ref byte[] tag)
         {
             if (IsInitialized)
-                throw new InvalidOperationException("PacketCrypt already initialized!");
+                _serverEncrypt.Encrypt(BitConverter.GetBytes(_serverCounter).Combine(BitConverter.GetBytes(0x52565253)), data, data, tag);
 
-            SARC4Encrypt = new SARC4();
-            SARC4Decrypt = new SARC4();
-
-            var encryptSHA1 = new HMACSHA1(serverSeed);
-            var decryptSHA1 = new HMACSHA1(clientSeed);
-
-            SARC4Encrypt.PrepareKey(encryptSHA1.ComputeHash(sessionKey));
-            SARC4Decrypt.PrepareKey(decryptSHA1.ComputeHash(sessionKey));
-
-            var PacketEncryptionDummy = new byte[0x400];
-            var PacketDecryptionDummy = new byte[0x400];
-
-            SARC4Encrypt.ProcessBuffer(PacketEncryptionDummy, PacketEncryptionDummy.Length);
-            SARC4Decrypt.ProcessBuffer(PacketDecryptionDummy, PacketDecryptionDummy.Length);
-
-            IsInitialized = true;
+            ++_serverCounter;
+            return true;
         }
 
-        public void Encrypt(byte[] data, int count)
+        public bool Decrypt(ref byte[] data, byte[] tag)
         {
-            if (!IsInitialized)
-                throw new InvalidOperationException("PacketCrypt not initialized!");
+            if (IsInitialized)
+                _clientDecrypt.Decrypt(BitConverter.GetBytes(_clientCounter).Combine(BitConverter.GetBytes(0x544E4C43)), data, tag, data);
 
-            SARC4Encrypt.ProcessBuffer(data, count);
-        }
-
-        public void Decrypt(byte[] data, int count)
-        {
-            if (!IsInitialized)
-                throw new InvalidOperationException("PacketCrypt not initialized!");
-
-            SARC4Decrypt.ProcessBuffer(data, count);
+            ++_clientCounter;
+            return true;
         }
 
         public void Dispose()
@@ -93,7 +60,11 @@ namespace Framework.Cryptography
         }
 
         public bool IsInitialized { get; set; }
-        SARC4 SARC4Encrypt;
-        SARC4 SARC4Decrypt;
+
+        AesGcm _serverEncrypt;
+        AesGcm _clientDecrypt;
+        ulong _clientCounter;
+        ulong _serverCounter;
     }
+
 }

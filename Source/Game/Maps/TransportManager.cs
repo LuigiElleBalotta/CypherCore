@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ using Game.Entities;
 using Game.Movement;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Maps
@@ -116,8 +115,8 @@ namespace Game.Maps
 
             SplineRawInitializer initer = new SplineRawInitializer(allPoints);
             Spline orientationSpline = new Spline();
-            orientationSpline.init_spline_custom(initer);
-            orientationSpline.initLengths();
+            orientationSpline.InitSplineCustom(initer);
+            orientationSpline.InitLengths();
 
             for (uint i = 0; i < path.Length; ++i)
             {
@@ -161,12 +160,12 @@ namespace Game.Maps
                 }
             }
 
-            Contract.Assert(!keyFrames.Empty());
+            Cypher.Assert(!keyFrames.Empty());
 
             if (transport.mapsUsed.Count > 1)
             {
                 foreach (var mapId in transport.mapsUsed)
-                    Contract.Assert(!CliDB.MapStorage.LookupByKey(mapId).Instanceable());
+                    Cypher.Assert(!CliDB.MapStorage.LookupByKey(mapId).Instanceable());
 
                 transport.inInstance = false;
             }
@@ -204,12 +203,13 @@ namespace Game.Maps
                 {
                     int extra = !keyFrames[i - 1].Teleport ? 1 : 0;
                     Spline spline = new Spline();
-                    spline.Init_Spline(splinePath.Skip(start).ToArray(), i - start + extra, Spline.EvaluationMode.Catmullrom);
-                    spline.initLengths();
+                    Span<Vector3> span = splinePath.ToArray();
+                    spline.InitSpline(span.Slice(start), i - start + extra, Spline.EvaluationMode.Catmullrom);
+                    spline.InitLengths();
                     for (int j = start; j < i + extra; ++j)
                     {
                         keyFrames[j].Index = (uint)(j - start + 1);
-                        keyFrames[j].DistFromPrev = spline.length(j - start, j + 1 - start);
+                        keyFrames[j].DistFromPrev = spline.Length(j - start, j + 1 - start);
                         if (j > 0)
                             keyFrames[j - 1].NextDistFromPrev = keyFrames[j].DistFromPrev;
                         keyFrames[j].Spline = spline;

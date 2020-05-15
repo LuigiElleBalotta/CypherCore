@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -229,15 +229,15 @@ namespace Scripts.Northrend.DraktharonKeep.Novos
             _bubbled = state;
             if (!state)
             {
-                if (me.HasFlag(UnitFields.Flags, UnitFlags.NonAttackable))
-                    me.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                if (me.HasUnitFlag(UnitFlags.NonAttackable))
+                    me.RemoveUnitFlag(UnitFlags.NonAttackable);
                 if (me.HasUnitState(UnitState.Casting))
                     me.CastStop();
             }
             else
             {
-                if (!me.HasFlag(UnitFields.Flags, UnitFlags.NonAttackable))
-                    me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                if (!me.HasUnitFlag(UnitFlags.NonAttackable))
+                    me.AddUnitFlag(UnitFlags.NonAttackable);
                 DoCast(SpellIds.ArcaneField);
             }
         }

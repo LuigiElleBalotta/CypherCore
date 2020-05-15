@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@ namespace Framework.Constants
         //Grids
         public const int MaxGrids = 64;
         public const float SizeofGrids = 533.33333f;
-        public const float CenterGridCellId = (MaxCells * MaxGrids / 2);
-        public const float CenterGridId = (MaxGrids / 2);
+        public const int CenterGridCellId = (MaxCells * MaxGrids / 2);
+        public const int CenterGridId = (MaxGrids / 2);
         public const float CenterGridOffset = (SizeofGrids / 2);
         public const float CenterGridCellOffset = (SizeofCells / 2);
 
@@ -61,16 +61,16 @@ namespace Framework.Constants
         public const float MaxHeight = 100000.0f;
         public const float MaxFallDistance = 250000.0f;
 
-        public const string MapMagic = "MAPS";
-        public const string MapVersionMagic = "v1.9";
-        public const string MapAreaMagic = "AREA";
-        public const string MapHeightMagic = "MHGT";
-        public const string MapLiquidMagic = "MLIQ";
+        public const uint MapMagic = 0x5350414D; //"MAPS";
+        public const uint MapVersionMagic = 0x392E3176; //"v1.9";
+        public const uint MapAreaMagic = 0x41455241; //"AREA";
+        public const uint MapHeightMagic = 0x5447484D; //"MHGT";
+        public const uint MapLiquidMagic = 0x51494C4D; //"MLIQ";
 
-        public const string mmapMagic = "MMAP";
-        public const int mmapVersion = 8;
+        public const uint mmapMagic = 0x4D4D4150; // 'MMAP'
+        public const int mmapVersion = 9;
 
-        public const string VMapMagic = "VMAP_4.7";
+        public const string VMapMagic = "VMAP_4.8";
         public const float VMAPInvalidHeightValue = -200000.0f;
     }
 
@@ -181,5 +181,11 @@ namespace Framework.Constants
         CannotEnterMaxPlayers, // Target Map Already Has The Maximum Number Of Players Allowed
         CannotEnterZoneInCombat, // A Boss Encounter Is Currently In Progress On The Target Map
         CannotEnterUnspecifiedReason
+    }
+
+    public enum ModelIgnoreFlags
+    {
+        Nothing = 0x00,
+        M2 = 0x01
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2003-2004  Eran Kampf	eran@ekampf.com	http://www.ekampf.com
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -205,7 +205,7 @@ namespace Framework.GameMath
         /// <returns>A float representing the shortest distance from the given vector to the plane.</returns>
         public float GetDistanceToPlane(Vector3 p)
         {
-            return Vector3.DotProduct(p, this.Normal) - this.Constant;
+            return Vector3.DotProduct(p, Normal) - Constant;
         }
 
         public void getEquation(ref Vector3 n, out float d)
@@ -236,7 +236,7 @@ namespace Framework.GameMath
         /// the specified object.
         /// </summary>
         /// <param name="obj">An object to compare to this instance.</param>
-        /// <returns>True if <paramref name="obj"/> is a <see cref="Vector2D"/> and has the same values as this instance; otherwise, False.</returns>
+        /// <returns>True if <paramref name="obj"/> is a <see cref="Plane"/> and has the same values as this instance; otherwise, False.</returns>
         public override bool Equals(object obj)
         {
             if (obj is Plane)
@@ -253,7 +253,7 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns>
         public override string ToString()
         {
-            return string.Format("Plane[n={0}, c={1}]", _normal.ToString(), _const.ToString());
+            return $"Plane[n={_normal.ToString()}, c={_const.ToString()}]";
         }
         #endregion
     }

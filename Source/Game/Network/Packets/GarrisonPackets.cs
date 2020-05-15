@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteUInt32((uint)Result);
             _worldPacket.WriteUInt32(GarrSiteID);
         }
 
@@ -64,9 +64,9 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(FactionIndex);
-            _worldPacket.WriteUInt32(Garrisons.Count);
-            _worldPacket.WriteUInt32(FollowerSoftCaps.Count);
+            _worldPacket.WriteUInt32(FactionIndex);
+            _worldPacket.WriteInt32(Garrisons.Count);
+            _worldPacket.WriteInt32(FollowerSoftCaps.Count);
 
             foreach (FollowerSoftCapInfo followerSoftCapInfo in FollowerSoftCaps)
                 followerSoftCapInfo.Write(_worldPacket);
@@ -86,7 +86,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Sites.Count);
+            _worldPacket.WriteInt32(Sites.Count);
             foreach (GarrisonRemoteSiteInfo site in Sites)
                 site.Write(_worldPacket);
         }
@@ -116,8 +116,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteInt32((int)GarrTypeID);
+            _worldPacket.WriteUInt32((uint)Result);
             BuildingInfo.Write(_worldPacket);
             _worldPacket.WriteBit(PlayActivationCinematic);
             _worldPacket.FlushBits();
@@ -149,8 +149,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteInt32((int)GarrTypeID);
+            _worldPacket.WriteUInt32((uint)Result);
             _worldPacket.WriteUInt32(GarrPlotInstanceID);
             _worldPacket.WriteUInt32(GarrBuildingID);
         }
@@ -167,8 +167,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteInt32((int)GarrTypeID);
+            _worldPacket.WriteUInt32((uint)Result);
             _worldPacket.WriteUInt32(BuildingID);
         }
 
@@ -183,8 +183,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteInt32((int)GarrTypeID);
+            _worldPacket.WriteUInt32((uint)Result);
             _worldPacket.WriteUInt32(BuildingID);
         }
 
@@ -206,9 +206,9 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket.WriteUInt32(BlueprintsKnown != null ? BlueprintsKnown.Count : 0);
-            _worldPacket.WriteUInt32(SpecializationsKnown != null ? SpecializationsKnown.Count : 0);
+            _worldPacket.WriteUInt32((uint)GarrTypeID);
+            _worldPacket.WriteInt32(BlueprintsKnown != null ? BlueprintsKnown.Count : 0);
+            _worldPacket.WriteInt32(SpecializationsKnown != null ? SpecializationsKnown.Count : 0);
             if (BlueprintsKnown != null)
                 foreach (uint blueprint in BlueprintsKnown)
                     _worldPacket.WriteUInt32(blueprint);
@@ -236,7 +236,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Landmarks.Count);
+            _worldPacket.WriteInt32(Landmarks.Count);
             foreach (GarrisonBuildingLandmark landmark in Landmarks)
                 landmark.Write(_worldPacket);
         }
@@ -250,7 +250,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
+            _worldPacket.WriteInt32((int)GarrTypeID);
             PlotInfo.Write(_worldPacket);
         }
 
@@ -276,8 +276,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(GarrTypeID);
-            _worldPacket .WriteUInt32(Result);
+            _worldPacket.WriteInt32((int)GarrTypeID);
+            _worldPacket .WriteUInt32((uint)Result);
             Follower.Write(_worldPacket);
         }
 
@@ -337,9 +337,9 @@ namespace Game.Network.Packets
         {
             data.WriteUInt32(GarrPlotInstanceID);
             data.WriteUInt32(GarrBuildingID);
-            data.WriteUInt32(TimeBuilt);
+            data.WriteUInt32((uint)TimeBuilt);
             data.WriteUInt32(CurrentGarSpecID);
-            data.WriteUInt32(TimeSpecCooldown);
+            data.WriteUInt32((uint)TimeSpecCooldown);
             data.WriteBit(Active);
             data.FlushBits();
         }
@@ -366,7 +366,7 @@ namespace Game.Network.Packets
             data.WriteUInt32(Durability);
             data.WriteUInt32(CurrentBuildingID);
             data.WriteUInt32(CurrentMissionID);
-            data.WriteUInt32(AbilityID.Count);
+            data.WriteInt32(AbilityID.Count);
             data.WriteUInt32(ZoneSupportSpellID);
             data.WriteUInt32(FollowerStatus);
 
@@ -399,9 +399,9 @@ namespace Game.Network.Packets
         {
             data.WriteUInt64(DbID);
             data.WriteUInt32(MissionRecID);
-            data.WriteUInt32(OfferTime);
+            data.WriteUInt32((uint)OfferTime);
             data.WriteUInt32(OfferDuration);
-            data.WriteUInt32(StartTime);
+            data.WriteUInt32((uint)StartTime);
             data.WriteUInt32(TravelDuration);
             data.WriteUInt32(MissionDuration);
             data.WriteUInt32(MissionState);
@@ -443,12 +443,12 @@ namespace Game.Network.Packets
         public int Unknown;
     }
 
-    struct GarrisonMissionAreaBonus
+    struct GarrisonMissionBonusAbility
     {
         public void Write(WorldPacket data)
         {
             data.WriteUInt32(GarrMssnBonusAbilityID);
-            data.WriteUInt32(StartTime);
+            data.WriteUInt32((uint)StartTime);
         }
 
         public uint GarrMssnBonusAbilityID;
@@ -460,11 +460,13 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteInt32(GarrTalentID);
-            data.WriteInt32(ResearchStartTime);
+            data.WriteInt32(Rank);
+            data.WriteUInt32((uint)ResearchStartTime);
             data.WriteInt32(Flags);
         }
 
         public int GarrTalentID;
+        public int Rank;
         public long ResearchStartTime;
         public int Flags;
     }
@@ -473,20 +475,20 @@ namespace Game.Network.Packets
     {
         public void Write(WorldPacket data)
         {
-            data.WriteInt32(GarrTypeID);
-            data.WriteInt32(GarrSiteID);
-            data.WriteInt32(GarrSiteLevelID);
-            data.WriteUInt32(Buildings.Count);
-            data.WriteUInt32(Plots.Count);
-            data.WriteUInt32(Followers.Count);
-            data.WriteUInt32(Missions.Count);
-            data.WriteUInt32(MissionRewards.Count);
-            data.WriteUInt32(MissionOvermaxRewards.Count);
-            data.WriteUInt32(MissionAreaBonuses.Count);
-            data.WriteUInt32(Talents.Count);
-            data.WriteUInt32(CanStartMission.Count);
-            data.WriteUInt32(ArchivedMissions.Count);
-            data.WriteInt32(NumFollowerActivationsRemaining);
+            data.WriteUInt32((uint)GarrTypeID);
+            data.WriteUInt32(GarrSiteID);
+            data.WriteUInt32(GarrSiteLevelID);
+            data.WriteInt32(Buildings.Count);
+            data.WriteInt32(Plots.Count);
+            data.WriteInt32(Followers.Count);
+            data.WriteInt32(Missions.Count);
+            data.WriteInt32(MissionRewards.Count);
+            data.WriteInt32(MissionOvermaxRewards.Count);
+            data.WriteInt32(MissionAreaBonuses.Count);
+            data.WriteInt32(Talents.Count);
+            data.WriteInt32(CanStartMission.Count);
+            data.WriteInt32(ArchivedMissions.Count);
+            data.WriteUInt32(NumFollowerActivationsRemaining);
             data.WriteUInt32(NumMissionsStartedToday);
 
             foreach (GarrisonPlotInfo plot in Plots)
@@ -496,27 +498,27 @@ namespace Game.Network.Packets
                 mission.Write(data);
 
             foreach (List<GarrisonMissionReward> missionReward in MissionRewards)
-            {
-                data.WriteUInt32(missionReward.Count);
+                data.WriteInt32(missionReward.Count);
+
+            foreach (List<GarrisonMissionReward> missionReward in MissionRewards)
                 foreach (GarrisonMissionReward missionRewardItem in missionReward)
                     missionRewardItem.Write(data);
-            }
 
             foreach (List<GarrisonMissionReward> missionReward in MissionOvermaxRewards)
-            {
-                data.WriteUInt32(missionReward.Count);
+                data.WriteInt32(missionReward.Count);
+
+            foreach (List<GarrisonMissionReward> missionReward in MissionOvermaxRewards)
                 foreach (GarrisonMissionReward missionRewardItem in missionReward)
                     missionRewardItem.Write(data);
-            }
 
-            foreach (GarrisonMissionAreaBonus areaBonus in MissionAreaBonuses)
+            foreach (GarrisonMissionBonusAbility areaBonus in MissionAreaBonuses)
                 areaBonus.Write(data);
 
             foreach (GarrisonTalent talent in Talents)
                 talent.Write(data);
 
-            if (!ArchivedMissions.Empty())
-                ArchivedMissions.ForEach(id => data.WriteInt32(id));
+            foreach(var id in ArchivedMissions)
+                    data.WriteInt32(id);
 
             foreach (GarrisonBuildingInfo building in Buildings)
                 building.Write(data);
@@ -541,7 +543,7 @@ namespace Game.Network.Packets
         public List<GarrisonMission> Missions = new List<GarrisonMission>();
         public List<List<GarrisonMissionReward>> MissionRewards = new List<List<GarrisonMissionReward>>();
         public List<List<GarrisonMissionReward>> MissionOvermaxRewards = new List<List<GarrisonMissionReward>>();
-        public List<GarrisonMissionAreaBonus> MissionAreaBonuses = new List<GarrisonMissionAreaBonus>();
+        public List<GarrisonMissionBonusAbility> MissionAreaBonuses = new List<GarrisonMissionBonusAbility>();
         public List<GarrisonTalent> Talents = new List<GarrisonTalent>();
         public List<bool> CanStartMission = new List<bool>();
         public List<int> ArchivedMissions = new List<int>();
@@ -582,7 +584,7 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteUInt32(GarrSiteLevelID);
-            data.WriteUInt32(Buildings.Count);
+            data.WriteInt32(Buildings.Count);
             foreach (GarrisonRemoteBuildingInfo building in Buildings)
                 building.Write(data);
         }

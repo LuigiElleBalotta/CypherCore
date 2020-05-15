@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ using Game;
 using Game.Chat;
 using Game.Network;
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -45,14 +46,17 @@ namespace WorldServer
 
             Console.CancelKeyPress += (o, e) => Global.WorldMgr.StopNow(ShutdownExitCode.Shutdown);
 
-            if (!ConfigMgr.Load(System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".conf"))
+            if (!ConfigMgr.Load(Process.GetCurrentProcess().ProcessName + ".conf"))
                 ExitNow();
 
             if (!StartDB())
                 ExitNow();
 
+            // Server startup begin
+            uint startupBegin = Time.GetMSTime();
+
             // set server offline (not connectable)
-            DB.Login.Execute("UPDATE realmlist SET flag = (flag & ~{0}) | {1} WHERE id = '{2}'", (uint)RealmFlags.VersionMismatch, (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
+            DB.Login.DirectExecute("UPDATE realmlist SET flag = (flag & ~{0}) | {1} WHERE id = '{2}'", (uint)RealmFlags.VersionMismatch, (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
 
             Global.RealmMgr.Initialize(ConfigMgr.GetDefaultValue("RealmsStateUpdateDelay", 10));
 
@@ -78,7 +82,7 @@ namespace WorldServer
             }
 
             // set server online (allow connecting now)
-            DB.Login.Execute("UPDATE realmlist SET flag = flag & ~{0}, population = 0 WHERE id = '{1}'", (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
+            DB.Login.DirectExecute("UPDATE realmlist SET flag = flag & ~{0}, population = 0 WHERE id = '{1}'", (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
             Global.WorldMgr.GetRealm().PopulationLevel = 0.0f;
             Global.WorldMgr.GetRealm().Flags = Global.WorldMgr.GetRealm().Flags & ~RealmFlags.VersionMismatch;
 
@@ -101,6 +105,9 @@ namespace WorldServer
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
+            uint startupDuration = Time.GetMSTimeDiffToNow(startupBegin);
+            Log.outInfo(LogFilter.Server, "World initialized in {0} minutes {1} seconds", (startupDuration / 60000), ((startupDuration % 60000) / 1000));
+
             WorldUpdateLoop();
 
             try
@@ -118,7 +125,7 @@ namespace WorldServer
                 Global.ScriptMgr.Unload();
 
                 // set server offline
-                DB.Login.Execute("UPDATE realmlist SET flag = flag | {0} WHERE id = '{1}'", (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
+                DB.Login.DirectExecute("UPDATE realmlist SET flag = flag | {0} WHERE id = '{1}'", (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
                 Global.RealmMgr.Close();
 
                 ClearOnlineAccounts();
@@ -163,13 +170,13 @@ namespace WorldServer
         static void ClearOnlineAccounts()
         {
             // Reset online status for all accounts with characters on the current realm
-            DB.Login.Execute("UPDATE account SET online = 0 WHERE online > 0 AND id IN (SELECT acctid FROM realmcharacters WHERE realmid = {0})", Global.WorldMgr.GetRealm().Id.Realm);
+            DB.Login.DirectExecute("UPDATE account SET online = 0 WHERE online > 0 AND id IN (SELECT acctid FROM realmcharacters WHERE realmid = {0})", Global.WorldMgr.GetRealm().Id.Realm);
 
             // Reset online status for all characters
-            DB.Characters.Execute("UPDATE characters SET online = 0 WHERE online <> 0");
+            DB.Characters.DirectExecute("UPDATE characters SET online = 0 WHERE online <> 0");
 
             // Battlegroundinstance ids reset at server restart
-            DB.Characters.Execute("UPDATE character_battleground_data SET instanceId = 0");
+            DB.Characters.DirectExecute("UPDATE character_battleground_data SET instanceId = 0");
         }
 
         static void WorldUpdateLoop()
@@ -187,8 +194,8 @@ namespace WorldServer
                 uint executionTimeDiff = Time.GetMSTimeDiffToNow(realCurrTime);
 
                 // we know exactly how long it took to update the world, if the update took less than WORLD_SLEEP_CONST, sleep for WORLD_SLEEP_CONST - world update time
-                if (executionTimeDiff < WorldSleep)               
-                    Thread.Sleep((int)(WorldSleep - executionTimeDiff));                
+                if (executionTimeDiff < WorldSleep)
+                    Thread.Sleep((int)(WorldSleep - executionTimeDiff));
             }
         }
 

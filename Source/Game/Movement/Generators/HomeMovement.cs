@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ namespace Game.AI
 
         public override bool DoUpdate(T owner, uint time_diff)
         {
-            arrived = skipToHome || owner.moveSpline.Finalized();
+            arrived = skipToHome || owner.MoveSpline.Finalized();
             return !arrived;
         }
 
@@ -59,7 +59,7 @@ namespace Game.AI
             MoveSplineInit init = new MoveSplineInit(owner);
             float x, y, z, o;
             // at apply we can select more nice return points base at current movegen
-            if (owner.GetMotionMaster().empty() || !owner.GetMotionMaster().top().GetResetPosition(owner, out x, out y, out z))
+            if (owner.GetMotionMaster().Empty() || !owner.GetMotionMaster().Top().GetResetPosition(owner, out x, out y, out z))
             {
                 owner.GetHomePosition(out x, out y, out z, out o);
                 init.SetFacing(o);

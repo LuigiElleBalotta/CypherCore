@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1058,8 +1058,8 @@ namespace Scripts.Spells.Generic
         void HandleEffectApply(AuraEffect aurEff, AuraEffectHandleModes mode)
         {
             Unit target = GetTarget();
-            target.SetFlag(ObjectFields.DynamicFlags, UnitDynFlags.Dead);
-            target.SetFlag(UnitFields.Flags2, UnitFlags2.FeignDeath);
+            target.AddDynamicFlag(UnitDynFlags.Dead);
+            target.AddUnitFlag2(UnitFlags2.FeignDeath);
 
             if (target.IsTypeId(TypeId.Unit))
                 target.ToCreature().SetReactState(ReactStates.Passive);
@@ -1068,8 +1068,8 @@ namespace Scripts.Spells.Generic
         void OnRemove(AuraEffect aurEff, AuraEffectHandleModes mode)
         {
             Unit target = GetTarget();
-            target.RemoveFlag(ObjectFields.DynamicFlags, UnitDynFlags.Dead);
-            target.RemoveFlag(UnitFields.Flags2, UnitFlags2.FeignDeath);
+            target.RemoveDynamicFlag(UnitDynFlags.Dead);
+            target.RemoveUnitFlag2(UnitFlags2.FeignDeath);
         }
 
         public override void Register()
@@ -1203,7 +1203,7 @@ namespace Scripts.Spells.Generic
 
         void HandleDummy(uint effIndex)
         {
-            if (GetSpellInfo().GetEffect(effIndex).Effect == SpellEffectName.Dummy || GetSpellInfo().GetEffect(effIndex).Effect == SpellEffectName.ScriptEffect)
+            if (GetEffectInfo().IsEffect(SpellEffectName.Dummy) || GetEffectInfo().IsEffect(SpellEffectName.ScriptEffect))
                 GetCaster().ToCreature().DespawnOrUnsummon();
         }
 
@@ -1922,8 +1922,8 @@ namespace Scripts.Spells.Generic
         void HandleDummy(uint effIndex)
         {
             Player player = GetCaster().ToPlayer();
-            uint factionId = (uint)GetSpellInfo().GetEffect(effIndex).CalcValue();
-            int repChange = GetSpellInfo().GetEffect(1).CalcValue();
+            uint factionId = (uint)GetEffectInfo(effIndex).CalcValue();
+            int repChange = GetEffectInfo(1).CalcValue();
 
             FactionRecord factionEntry = CliDB.FactionStorage.LookupByKey(factionId);
 
@@ -2067,8 +2067,8 @@ namespace Scripts.Spells.Generic
                 if (newPet.LoadPetFromDB(player, 0, player.GetLastPetNumber(), true))
                 {
                     // revive the pet if it is dead
-                    if (newPet.getDeathState() == DeathState.Dead)
-                        newPet.setDeathState(DeathState.Alive);
+                    if (newPet.GetDeathState() == DeathState.Dead)
+                        newPet.SetDeathState(DeathState.Alive);
 
                     newPet.SetFullHealth();
                     newPet.SetFullPower(newPet.GetPowerType());
@@ -2451,7 +2451,7 @@ namespace Scripts.Spells.Generic
             {
                 Unit owner = GetCaster().GetOwner();
                 if (owner)
-                    if (owner.IsTypeId(TypeId.Player)) /// @todo this check is maybe wrong
+                    if (owner.IsTypeId(TypeId.Player)) // @todo this check is maybe wrong
                         owner.ToPlayer().RemovePet(null, PetSaveMode.NotInSlot, true);
             }
         }
@@ -2661,7 +2661,7 @@ namespace Scripts.Spells.Generic
         void OnApply(AuraEffect aurEff, AuraEffectHandleModes mode)
         {
             // store stack apply times, so we can pop them while they expire
-            _applyTimes.Add(Time.GetMSTime());
+            _applyTimes.Add(GameTime.GetGameTimeMS());
             Unit target = GetTarget();
 
             // on stack 15 cast the achievement crediting spell
@@ -2675,7 +2675,7 @@ namespace Scripts.Spells.Generic
                 return;
 
             // pop stack if it expired for us
-            if (_applyTimes.First() + GetMaxDuration() < Time.GetMSTime())
+            if (_applyTimes.First() + GetMaxDuration() < GameTime.GetGameTimeMS())
                 ModStackAmount(-1, AuraRemoveMode.Expire);
         }
 
@@ -2703,7 +2703,7 @@ namespace Scripts.Spells.Generic
                         return;
                 }
 
-                CreateItem(effIndex, itemId[RandomHelper.URand(0, 4)]);
+                CreateItem(effIndex, itemId[RandomHelper.URand(0, 4)], ItemContext.None);
             }
         }
 
@@ -2757,7 +2757,7 @@ namespace Scripts.Spells.Generic
             float factor;
             ushort baseItemLevel;
 
-            /// @todo Reserach coeffs for different vehicles
+            // @todo Reserach coeffs for different vehicles
             switch (GetId())
             {
                 case SpellIds.GearScaling:
@@ -2772,7 +2772,7 @@ namespace Scripts.Spells.Generic
 
             float avgILvl = caster.ToPlayer().GetAverageItemLevel();
             if (avgILvl < baseItemLevel)
-                return;                     /// @todo Research possibility of scaling down
+                return;                     // @todo Research possibility of scaling down
 
             amount = (int)((avgILvl - baseItemLevel) * factor);
         }
@@ -2873,7 +2873,7 @@ namespace Scripts.Spells.Generic
                 player.CombatStop();
                 if (player.IsNonMeleeSpellCast(true))
                     player.InterruptNonMeleeSpells(true);
-                player.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                player.AddUnitFlag(UnitFlags.NonAttackable);
 
                 // if player class = hunter || warlock remove pet if alive
                 if ((player.GetClass() == Class.Hunter) || (player.GetClass() == Class.Warlock))
@@ -2897,8 +2897,8 @@ namespace Scripts.Spells.Generic
             if (player)
             {
                 // Reset player faction + allow combat + allow duels
-                player.setFactionForRace(player.GetRace());
-                player.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                player.SetFactionForRace(player.GetRace());
+                player.RemoveUnitFlag(UnitFlags.NonAttackable);
                 // save player
                 player.SaveToDB();
             }

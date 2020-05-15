@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,25 +16,29 @@
  */
 
 using System;
-using System.Diagnostics.Contracts;
 using System.Net.Sockets;
 
 namespace Framework.Networking
 {
-    public class SocketManager<SocketType> where SocketType : ISocket
+    public class SocketManager<TSocketType> where TSocketType : ISocket
     {
         public virtual bool StartNetwork(string bindIp, int port, int threadCount = 1)
         {
-            Contract.Assert(threadCount > 0);
+            Cypher.Assert(threadCount > 0);
 
-            Acceptor = new AsyncAcceptor(bindIp, port);
+            Acceptor = new AsyncAcceptor();
+            if (!Acceptor.Start(bindIp, port))
+            {
+                Log.outError(LogFilter.Network, "StartNetwork failed to Start AsyncAcceptor");
+                return false;
+            }
 
             _threadCount = threadCount;
-            _threads = new NetworkThread<SocketType>[GetNetworkThreadCount()];
+            _threads = new NetworkThread<TSocketType>[GetNetworkThreadCount()];
 
             for (int i = 0; i < _threadCount; ++i)
             {
-                _threads[i] = new NetworkThread<SocketType>();
+                _threads[i] = new NetworkThread<TSocketType>();
                 _threads[i].Start();
             }
 
@@ -60,16 +64,16 @@ namespace Framework.Networking
 
         void Wait()
         {
-            //if (_threadCount != 0)
-                //for (int i = 0; i < _threadCount; ++i)
-                    //_threads[i].Wait();
+            if (_threadCount != 0)
+                for (int i = 0; i < _threadCount; ++i)
+                    _threads[i].Wait();
         }
 
         public virtual void OnSocketOpen(Socket sock)
         {
             try
             {
-                SocketType newSocket = (SocketType)Activator.CreateInstance(typeof(SocketType), sock);
+                TSocketType newSocket = (TSocketType)Activator.CreateInstance(typeof(TSocketType), sock);
                 newSocket.Start();
 
                 _threads[SelectThreadWithMinConnections()].AddSocket(newSocket);
@@ -94,7 +98,7 @@ namespace Framework.Networking
         }
 
         public AsyncAcceptor Acceptor;
-        NetworkThread<SocketType>[] _threads;
+        NetworkThread<TSocketType>[] _threads;
         int _threadCount;
     }
 }

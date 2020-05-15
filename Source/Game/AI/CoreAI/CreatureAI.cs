@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,9 +72,9 @@ namespace Game.AI
                     Unit summoner = creature.ToTempSummon().GetSummoner();
                     if (summoner != null)
                     {
-                        Unit target = summoner.getAttackerForHelper();
-                        if (target == null && summoner.CanHaveThreatList() && !summoner.GetThreatManager().isThreatListEmpty())
-                            target = summoner.GetThreatManager().getHostilTarget();
+                        Unit target = summoner.GetAttackerForHelper();
+                        if (target == null && summoner.CanHaveThreatList() && !summoner.GetThreatManager().IsThreatListEmpty())
+                            target = summoner.GetThreatManager().GetHostilTarget();
                         if (target != null && (creature.IsFriendlyTo(summoner) || creature.IsHostileTo(target)))
                             creature.GetAI().AttackStart(target);
                     }
@@ -238,7 +238,7 @@ namespace Game.AI
 
                 return me.GetVictim() != null;
             }
-            else if (me.GetThreatManager().isThreatListEmpty())
+            else if (me.GetThreatManager().IsThreatListEmpty())
             {
                 EnterEvadeMode(EvadeReason.NoHostiles);
                 return false;
@@ -261,6 +261,7 @@ namespace Game.AI
             me.ResetPlayerDamageReq();
             me.SetLastDamagedTime(0);
             me.SetCannotReachTarget(false);
+            me.DoNotReacquireTarget();
 
             if (me.IsInEvadeMode())
                 return false;
@@ -332,9 +333,9 @@ namespace Game.AI
                     if (point)
                     {
                         point.SetObjectScale(SharedConst.BoundaryVisualizeCreatureScale);
-                        point.SetFlag(UnitFields.Flags, UnitFlags.ImmuneToPc | UnitFlags.Stunned | UnitFlags.ImmuneToNpc);
+                        point.AddUnitFlag(UnitFlags.ImmuneToPc | UnitFlags.Stunned | UnitFlags.ImmuneToNpc);
                         if (!hasOutOfBoundsNeighbor)
-                            point.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                            point.AddUnitFlag(UnitFlags.NotSelectable);
                     }
                     Q.Remove(front);
                 }

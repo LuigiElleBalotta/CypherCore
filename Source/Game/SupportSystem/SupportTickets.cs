@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ namespace Game.SupportSystem
         {
             string name = "";
             if (!_playerGuid.IsEmpty())
-                ObjectManager.GetPlayerNameByGUID(_playerGuid, out name);
+                Global.CharacterCacheStorage.GetCharacterNameByGuid(_playerGuid, out name);
 
             return name;
         }
@@ -89,7 +89,7 @@ namespace Game.SupportSystem
         {
             string name;
             if (!_assignedTo.IsEmpty())
-                if (ObjectManager.GetPlayerNameByGUID(_assignedTo, out name))
+                if (Global.CharacterCacheStorage.GetCharacterNameByGuid(_assignedTo, out name))
                     return name;
 
             return "";
@@ -117,7 +117,7 @@ namespace Game.SupportSystem
         string _note;
 
 
-        public BugTicket() : base()
+        public BugTicket()
         {
             _note = "";
         }
@@ -217,7 +217,7 @@ namespace Game.SupportSystem
         SupportTicketSubmitComplaint.SupportTicketChatLog _chatLog;
         string _note;
 
-        public ComplaintTicket() : base()
+        public ComplaintTicket()
         {
             _note = "";
         }
@@ -359,7 +359,7 @@ namespace Game.SupportSystem
         float _facing;
         string _note;
 
-        public SuggestionTicket() : base()
+        public SuggestionTicket()
         {
             _note = "";
         }
@@ -433,9 +433,8 @@ namespace Game.SupportSystem
             ss.Append(handler.GetParsedString(CypherStrings.CommandTicketlistname, GetPlayerName()));
             ss.Append(handler.GetParsedString(CypherStrings.CommandTicketlistagecreate, Time.secsToTimeString(curTime - _createTime, true, false)));
 
-            string name;
-            if (ObjectManager.GetPlayerNameByGUID(_assignedTo, out name))
-                ss.Append(handler.GetParsedString(CypherStrings.CommandTicketlistassignedto, name));
+            if (!_assignedTo.IsEmpty())
+                ss.Append(handler.GetParsedString(CypherStrings.CommandTicketlistassignedto, GetAssignedToName()));
 
             if (detailed)
             {

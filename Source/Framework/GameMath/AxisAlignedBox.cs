@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -174,7 +174,7 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns> 
         public override string ToString()
         {
-            return string.Format("AxisAlignedBox(Min={0}, Max={1})", _lo, _hi);
+            return $"AxisAlignedBox(Min={_lo}, Max={_hi})";
         }
         #endregion
 

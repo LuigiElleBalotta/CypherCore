@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@ namespace Framework.Constants
     public enum SessionStatus
     {
         Authed = 0,                                      // Player authenticated (_player == NULL, m_playerRecentlyLogout = false or will be reset before handler call, m_GUID have garbage)
-        Loggedin,                                        // Player in game (_player != NULL, m_GUID == _player->GetGUID(), inWorld())
-        Transfer,                                        // Player transferring to another map (_player != NULL, m_GUID == _player->GetGUID(), !inWorld())
+        Loggedin,                                        // Player in game (_player != NULL, m_GUID == _player.GetGUID(), inWorld())
+        Transfer,                                        // Player transferring to another map (_player != NULL, m_GUID == _player.GetGUID(), !inWorld())
         LoggedinOrRecentlyLogout,                    // _player != NULL or _player == NULL && m_playerRecentlyLogout && m_playerLogout, m_GUID store last _player guid)
     }
 

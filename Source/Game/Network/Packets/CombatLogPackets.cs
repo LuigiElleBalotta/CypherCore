@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,6 +68,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteInt32(SpellID);
             _worldPacket.WriteInt32(SpellXSpellVisualID);
             _worldPacket.WriteInt32(Damage);
+            _worldPacket.WriteInt32(OriginalDamage);
             _worldPacket.WriteInt32(Overkill);
             _worldPacket.WriteUInt8(SchoolMask);
             _worldPacket.WriteInt32(Absorbed);
@@ -78,11 +79,11 @@ namespace Game.Network.Packets
             _worldPacket.WriteBits(Flags, 7);
             _worldPacket.WriteBit(false); // Debug info
             WriteLogDataBit();
-            _worldPacket.WriteBit(SandboxScaling.HasValue);
+            _worldPacket.WriteBit(ContentTuning.HasValue);
             FlushBits();
             WriteLogData();
-            if (SandboxScaling.HasValue)
-                SandboxScaling.Value.Write(_worldPacket);
+            if (ContentTuning.HasValue)
+                ContentTuning.Value.Write(_worldPacket);
         }
 
         public ObjectGuid Me;
@@ -91,6 +92,7 @@ namespace Game.Network.Packets
         public int SpellID;
         public int SpellXSpellVisualID;
         public int Damage;
+        public int OriginalDamage;
         public int Overkill = -1;
         public byte SchoolMask;
         public int ShieldBlock;
@@ -99,7 +101,7 @@ namespace Game.Network.Packets
         public int Absorbed;
         public int Flags;
         // Optional<SpellNonMeleeDamageLogDebugInfo> DebugInfo;
-        public Optional<SandboxScalingData> SandboxScaling = new Optional<SandboxScalingData>();
+        public Optional<ContentTuningParams> ContentTuning = new Optional<ContentTuningParams>();
     }
 
     class EnvironmentalDamageLog : CombatLogServerPacket
@@ -109,7 +111,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(Victim);
-            _worldPacket.WriteUInt8(Type);
+            _worldPacket.WriteUInt8((byte)Type);
             _worldPacket.WriteInt32(Amount);
             _worldPacket.WriteInt32(Resisted);
             _worldPacket.WriteInt32(Absorbed);
@@ -134,18 +136,18 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(Caster);
             _worldPacket.WriteUInt32(SpellID);
-            _worldPacket.WriteUInt32(Effects.Count);
+            _worldPacket.WriteInt32(Effects.Count);
 
             foreach (SpellLogEffect effect in Effects)
             {
-                _worldPacket.WriteUInt32(effect.Effect);
+                _worldPacket.WriteInt32(effect.Effect);
 
-                _worldPacket.WriteUInt32(effect.PowerDrainTargets.Count);
-                _worldPacket.WriteUInt32(effect.ExtraAttacksTargets.Count);
-                _worldPacket.WriteUInt32(effect.DurabilityDamageTargets.Count);
-                _worldPacket.WriteUInt32(effect.GenericVictimTargets.Count);
-                _worldPacket.WriteUInt32(effect.TradeSkillTargets.Count);
-                _worldPacket.WriteUInt32(effect.FeedPetTargets.Count);
+                _worldPacket.WriteInt32(effect.PowerDrainTargets.Count);
+                _worldPacket.WriteInt32(effect.ExtraAttacksTargets.Count);
+                _worldPacket.WriteInt32(effect.DurabilityDamageTargets.Count);
+                _worldPacket.WriteInt32(effect.GenericVictimTargets.Count);
+                _worldPacket.WriteInt32(effect.TradeSkillTargets.Count);
+                _worldPacket.WriteInt32(effect.FeedPetTargets.Count);
 
                 foreach (SpellLogEffectPowerDrainParams powerDrainTarget in effect.PowerDrainTargets)
                 {
@@ -212,6 +214,7 @@ namespace Game.Network.Packets
 
             _worldPacket.WriteUInt32(SpellID);
             _worldPacket.WriteUInt32(Health);
+            _worldPacket.WriteInt32(OriginalHeal);
             _worldPacket.WriteUInt32(OverHeal);
             _worldPacket.WriteUInt32(Absorbed);
 
@@ -220,7 +223,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteBit(CritRollMade.HasValue);
             _worldPacket.WriteBit(CritRollNeeded.HasValue);
             WriteLogDataBit();
-            _worldPacket.WriteBit(SandboxScaling.HasValue);
+            _worldPacket.WriteBit(ContentTuning.HasValue);
             FlushBits();
 
             WriteLogData();
@@ -231,20 +234,21 @@ namespace Game.Network.Packets
             if (CritRollNeeded.HasValue)
                 _worldPacket.WriteFloat(CritRollNeeded.Value);
 
-            if (SandboxScaling.HasValue)
-                SandboxScaling.Value.Write(_worldPacket);
+            if (ContentTuning.HasValue)
+                ContentTuning.Value.Write(_worldPacket);
         }
 
         public ObjectGuid CasterGUID;
         public ObjectGuid TargetGUID;
         public uint SpellID;
         public uint Health;
+        public int OriginalHeal;
         public uint OverHeal;
         public uint Absorbed;
         public bool Crit;
         public Optional<float> CritRollMade;
         public Optional<float> CritRollNeeded;
-        Optional<SandboxScalingData> SandboxScaling = new Optional<SandboxScalingData>();
+        Optional<ContentTuningParams> ContentTuning = new Optional<ContentTuningParams>();
     }
 
     class SpellPeriodicAuraLog : CombatLogServerPacket
@@ -256,7 +260,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(TargetGUID);
             _worldPacket.WritePackedGuid(CasterGUID);
             _worldPacket.WriteUInt32(SpellID);
-            _worldPacket.WriteUInt32(Effects.Count);
+            _worldPacket.WriteInt32(Effects.Count);
             WriteLogDataBit();
             FlushBits();
 
@@ -282,6 +286,7 @@ namespace Game.Network.Packets
             {
                 data.WriteUInt32(Effect);
                 data.WriteUInt32(Amount);
+                data.WriteInt32(OriginalDamage);
                 data.WriteUInt32(OverHealOrKill);
                 data.WriteUInt32(SchoolMaskOrPower);
                 data.WriteUInt32(AbsorbedOrAmplitude);
@@ -289,11 +294,11 @@ namespace Game.Network.Packets
 
                 data.WriteBit(Crit);
                 data.WriteBit(DebugInfo.HasValue);
-                data.WriteBit(SandboxScaling.HasValue);
+                data.WriteBit(ContentTuning.HasValue);
                 data.FlushBits();
 
-                if (SandboxScaling.HasValue)
-                    SandboxScaling.Value.Write(data);
+                if (ContentTuning.HasValue)
+                    ContentTuning.Value.Write(data);
 
                 if (DebugInfo.HasValue)
                 {
@@ -304,13 +309,14 @@ namespace Game.Network.Packets
 
             public uint Effect;
             public uint Amount;
+            public int OriginalDamage;
             public uint OverHealOrKill;
             public uint SchoolMaskOrPower;
             public uint AbsorbedOrAmplitude;
             public uint Resisted;
             public bool Crit;
             public Optional<PeriodicalAuraLogEffectDebugInfo> DebugInfo;
-            public Optional<SandboxScalingData> SandboxScaling = new Optional<SandboxScalingData>();
+            public Optional<ContentTuningParams> ContentTuning = new Optional<ContentTuningParams>();
         }
     }
 
@@ -352,9 +358,9 @@ namespace Game.Network.Packets
                 _worldPacket.WriteBit(data.Rolled.HasValue);
                 _worldPacket.WriteBit(data.Needed.HasValue);
                 if (data.Rolled.HasValue)
-                    _worldPacket.WriteUInt32(data.Rolled.Value);
+                    _worldPacket.WriteInt32(data.Rolled.Value);
                 if (data.Needed.HasValue)
-                    _worldPacket.WriteUInt32(data.Needed.Value);
+                    _worldPacket.WriteInt32(data.Needed.Value);
 
                 _worldPacket.FlushBits();
             }
@@ -379,7 +385,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(CasterGUID);
 
             _worldPacket.WriteUInt32(SpellID);
-            _worldPacket.WriteUInt32(Type);
+            _worldPacket.WriteUInt32((uint)Type);
             _worldPacket.WriteInt32(Amount);
             _worldPacket.WriteInt32(OverEnergize);
 
@@ -396,7 +402,7 @@ namespace Game.Network.Packets
         public int OverEnergize;
     }
 
-    class SpellInstakillLog : ServerPacket
+    public class SpellInstakillLog : ServerPacket
     {
         public SpellInstakillLog() : base(ServerOpcodes.SpellInstakillLog, ConnectionType.Instance) { }
 
@@ -420,7 +426,7 @@ namespace Game.Network.Packets
         {
             _worldPacket.WriteUInt32(SpellID);
             _worldPacket.WritePackedGuid(Caster);
-            _worldPacket.WriteUInt32(Entries);
+            _worldPacket.WriteInt32(Entries.Count);
 
             foreach (SpellLogMissEntry missEntry in Entries)
                 missEntry.Write(_worldPacket);
@@ -487,6 +493,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(Defender);
             _worldPacket.WriteUInt32(SpellID);
             _worldPacket.WriteUInt32(TotalDamage);
+            _worldPacket.WriteInt32(OriginalDamage);
             _worldPacket.WriteUInt32(OverKill);
             _worldPacket.WriteUInt32(SchoolMask);
             _worldPacket.WriteUInt32(LogAbsorbed);
@@ -500,6 +507,7 @@ namespace Game.Network.Packets
         public ObjectGuid Defender;
         public uint SpellID;
         public uint TotalDamage;
+        public int OriginalDamage;
         public uint OverKill;
         public uint SchoolMask;
         public uint LogAbsorbed;
@@ -515,12 +523,13 @@ namespace Game.Network.Packets
         public override void Write()
         {
             WorldPacket attackRoundInfo = new WorldPacket();
-            attackRoundInfo.WriteUInt32(hitInfo);
+            attackRoundInfo.WriteUInt32((uint)hitInfo);
             attackRoundInfo.WritePackedGuid(AttackerGUID);
             attackRoundInfo.WritePackedGuid(VictimGUID);
             attackRoundInfo.WriteInt32(Damage);
+            attackRoundInfo.WriteInt32(OriginalDamage);
             attackRoundInfo.WriteInt32(OverDamage);
-            attackRoundInfo.WriteUInt8(SubDmg.HasValue);
+            attackRoundInfo.WriteUInt8((byte)(SubDmg.HasValue ? 1 : 0));
 
             if (SubDmg.HasValue)
             {
@@ -534,8 +543,8 @@ namespace Game.Network.Packets
             }
 
             attackRoundInfo.WriteUInt8(VictimState);
-            attackRoundInfo.WriteInt32(AttackerState);
-            attackRoundInfo.WriteInt32(MeleeSpellID);
+            attackRoundInfo.WriteUInt32(AttackerState);
+            attackRoundInfo.WriteUInt32(MeleeSpellID);
 
             if (hitInfo.HasAnyFlag(HitInfo.Block))
                 attackRoundInfo.WriteInt32(BlockAmount);
@@ -562,21 +571,23 @@ namespace Game.Network.Packets
             if (hitInfo.HasAnyFlag(HitInfo.Block | HitInfo.Unk12))
                 attackRoundInfo.WriteFloat(Unk);
 
-            attackRoundInfo.WriteUInt8(SandboxScaling.Type);
-            attackRoundInfo.WriteUInt8(SandboxScaling.TargetLevel);
-            attackRoundInfo.WriteUInt8(SandboxScaling.Expansion);
-            attackRoundInfo.WriteUInt8(SandboxScaling.Class);
-            attackRoundInfo.WriteUInt8(SandboxScaling.TargetMinScalingLevel);
-            attackRoundInfo.WriteUInt8(SandboxScaling.TargetMaxScalingLevel);
-            attackRoundInfo.WriteInt16(SandboxScaling.PlayerLevelDelta);
-            attackRoundInfo.WriteInt8(SandboxScaling.TargetScalingLevelDelta);
-            attackRoundInfo.WriteUInt16(SandboxScaling.PlayerItemLevel);
+            attackRoundInfo.WriteUInt8((byte)ContentTuning.TuningType);
+            attackRoundInfo.WriteUInt8(ContentTuning.TargetLevel);
+            attackRoundInfo.WriteUInt8(ContentTuning.Expansion);
+            attackRoundInfo.WriteUInt8(ContentTuning.TargetMinScalingLevel);
+            attackRoundInfo.WriteUInt8(ContentTuning.TargetMaxScalingLevel);
+            attackRoundInfo.WriteInt16(ContentTuning.PlayerLevelDelta);
+            attackRoundInfo.WriteInt8(ContentTuning.TargetScalingLevelDelta);
+            attackRoundInfo.WriteUInt16(ContentTuning.PlayerItemLevel);
+            attackRoundInfo.WriteUInt16(ContentTuning.TargetItemLevel);
+            attackRoundInfo.WriteUInt16(ContentTuning.ScalingHealthItemLevelCurveID);
+            attackRoundInfo.WriteUInt8((byte)(ContentTuning.ScalesWithItemLevel ? 1 : 0));
 
             WriteLogDataBit();
             FlushBits();
             WriteLogData();
 
-            _worldPacket.WriteInt32(attackRoundInfo.GetSize());
+            _worldPacket.WriteUInt32(attackRoundInfo.GetSize());
             _worldPacket.WriteBytes(attackRoundInfo);
         }
 
@@ -584,6 +595,7 @@ namespace Game.Network.Packets
         public ObjectGuid AttackerGUID;
         public ObjectGuid VictimGUID;
         public int Damage;
+        public int OriginalDamage;
         public int OverDamage = -1; // (damage - health) or -1 if unit is still alive
         public Optional<SubDamage> SubDmg;
         public byte VictimState;
@@ -593,7 +605,7 @@ namespace Game.Network.Packets
         public int RageGained;
         public UnkAttackerState UnkState;
         public float Unk;
-        public SandboxScalingData SandboxScaling = new SandboxScalingData();
+        public ContentTuningParams ContentTuning = new ContentTuningParams();
     }
 
     //Structs
@@ -645,7 +657,7 @@ namespace Game.Network.Packets
         public float HitRollNeeded;
     }
 
-    public struct SpellLogMissEntry
+    public class SpellLogMissEntry
     {
         public SpellLogMissEntry(ObjectGuid victim, byte missReason)
         {

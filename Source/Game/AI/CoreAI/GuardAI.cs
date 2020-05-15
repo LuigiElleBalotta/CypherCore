@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,12 +34,12 @@ namespace Game.AI
 
         public override bool CanSeeAlways(WorldObject obj)
         {
-            if (!obj.isTypeMask(TypeMask.Unit))
+            if (!obj.IsTypeMask(TypeMask.Unit))
                 return false;
 
-            var threatList = me.GetThreatManager().getThreatList();
+            var threatList = me.GetThreatManager().GetThreatList();
             foreach (var refe in threatList)
-                if (refe.getUnitGuid() == obj.GetGUID())
+                if (refe.GetUnitGuid() == obj.GetGUID())
                     return true;
 
             return false;

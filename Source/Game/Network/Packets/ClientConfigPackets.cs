@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -76,7 +76,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteBits(DataType, 3);
 
             var bytes = CompressedData.GetData();
-            _worldPacket.WriteUInt32(bytes.Length);
+            _worldPacket.WriteInt32(bytes.Length);
             _worldPacket.WriteBytes(bytes);
         }
 
@@ -106,8 +106,8 @@ namespace Game.Network.Packets
         }
 
         public ObjectGuid PlayerGuid;
-        public uint Time = 0; // UnixTime
-        public uint Size = 0; // decompressed size
+        public uint Time; // UnixTime
+        public uint Size; // decompressed size
         public AccountDataTypes DataType = 0;
         public ByteBuffer CompressedData;
     }

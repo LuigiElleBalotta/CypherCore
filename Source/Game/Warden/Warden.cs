@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ namespace Game
 {
     public abstract class Warden
     {
-        public Warden()
+        protected Warden()
         {
             _inputCrypto = new SARC4();
             _outputCrypto = new SARC4();
@@ -87,7 +87,7 @@ namespace Game
         {
             if (_initialized)
             {
-                uint currentTimestamp = Time.GetMSTime();
+                uint currentTimestamp = GameTime.GetGameTimeMS();
                 uint diff = currentTimestamp - _previousTimestamp;
                 _previousTimestamp = currentTimestamp;
 
@@ -119,10 +119,9 @@ namespace Game
             }
         }
 
-        public byte[] DecryptData(byte[] buffer)
+        public void DecryptData(byte[] buffer)
         {
             _inputCrypto.ProcessBuffer(buffer, buffer.Length);
-            return buffer;
         }
 
         public ByteBuffer EncryptData(byte[] buffer)

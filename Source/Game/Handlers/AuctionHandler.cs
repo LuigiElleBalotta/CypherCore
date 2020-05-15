@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,9 @@ namespace Game
     public partial class WorldSession
     {
         [WorldPacketHandler(ClientOpcodes.AuctionHelloRequest)]
-        void HandleAuctionHelloOpcode(AuctionHelloRequest packet)
+        void HandleAuctionHello(AuctionHelloRequest packet)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Guid, NPCFlags.Auctioneer);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Guid, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!unit)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionHelloOpcode - {0} not found or you can't interact with him.", packet.Guid.ToString());
@@ -49,19 +49,19 @@ namespace Game
 
         public void SendAuctionHello(ObjectGuid guid, Creature unit)
         {
-            if (GetPlayer().getLevel() < WorldConfig.GetIntValue(WorldCfg.AuctionLevelReq))
+            if (GetPlayer().GetLevel() < WorldConfig.GetIntValue(WorldCfg.AuctionLevelReq))
             {
                 SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.AuctionReq), WorldConfig.GetIntValue(WorldCfg.AuctionLevelReq));
                 return;
             }
 
-            AuctionHouseRecord ahEntry = Global.AuctionMgr.GetAuctionHouseEntry(unit.getFaction());
+            AuctionHouseRecord ahEntry = Global.AuctionMgr.GetAuctionHouseEntry(unit.GetFaction());
             if (ahEntry == null)
                 return;
 
             AuctionHelloResponse packet = new AuctionHelloResponse();
             packet.Guid = guid;
-            packet.OpenForBusiness = true;                         // 3.3.3: 1 - AH enabled, 0 - AH disabled
+            packet.OpenForBusiness = false;                         // 3.3.3: 1 - AH enabled, 0 - AH disabled
             SendPacket(packet);
         }
 
@@ -125,7 +125,7 @@ namespace Game
                 return;
             }
 
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionSellItem - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -133,7 +133,7 @@ namespace Game
             }
 
             uint houseId = 0;
-            AuctionHouseRecord auctionHouseEntry = Global.AuctionMgr.GetAuctionHouseEntry(creature.getFaction(), ref houseId);
+            AuctionHouseRecord auctionHouseEntry = Global.AuctionMgr.GetAuctionHouseEntry(creature.GetFaction(), ref houseId);
             if (auctionHouseEntry == null)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionSellItem - {0} has wrong faction.", packet.Auctioneer.ToString());
@@ -166,7 +166,7 @@ namespace Game
                 }
 
                 if (Global.AuctionMgr.GetAItem(items[i].GetGUID().GetCounter()) || !items[i].CanBeTraded() || items[i].IsNotEmptyBag() ||
-                    items[i].GetTemplate().GetFlags().HasAnyFlag(ItemFlags.Conjured) || items[i].GetUInt32Value(ItemFields.Duration) != 0 ||
+                    items[i].GetTemplate().GetFlags().HasAnyFlag(ItemFlags.Conjured) || items[i].m_itemData.Expiration != 0 ||
                     items[i].GetCount() < packet.Items[i].UseCount)
                 {
                     SendAuctionCommandResult(null, AuctionAction.SellItem, AuctionError.DatabaseError);
@@ -218,7 +218,7 @@ namespace Game
             Item item = items[0];
 
             uint auctionTime = (uint)(packet.RunTime * WorldConfig.GetFloatValue(WorldCfg.RateAuctionTime));
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
             ulong deposit = Global.AuctionMgr.GetAuctionDeposit(auctionHouseEntry, packet.RunTime, item, finalCount);
             if (!GetPlayer().HasEnoughMoney(deposit))
@@ -231,7 +231,7 @@ namespace Game
             SQLTransaction trans;
 
             if (WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideInteractionAuction))
-                AH.auctioneer = 23442;     ///@TODO - HARDCODED DB GUID, BAD BAD BAD
+                AH.auctioneer = 23442;     //@TODO - HARDCODED DB GUID, BAD BAD BAD
             else
                 AH.auctioneer = creature.GetSpawnId();
 
@@ -358,7 +358,7 @@ namespace Game
             if (packet.AuctionItemID == 0 || packet.BidAmount == 0)
                 return; // check for cheaters
 
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionPlaceBid - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -369,7 +369,7 @@ namespace Game
             if (GetPlayer().HasUnitState(UnitState.Died))
                 GetPlayer().RemoveAurasByType(AuraType.FeignDeath);
 
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
             AuctionEntry auction = auctionHouse.GetAuction(packet.AuctionItemID);
             Player player = GetPlayer();
@@ -384,7 +384,7 @@ namespace Game
             // impossible have online own another character (use this for speedup check in case online owner)
             ObjectGuid ownerGuid = ObjectGuid.Create(HighGuid.Player, auction.owner);
             Player auction_owner = Global.ObjAccessor.FindPlayer(ownerGuid);
-            if (!auction_owner && ObjectManager.GetPlayerAccountIdByGUID(ownerGuid) == player.GetSession().GetAccountId())
+            if (!auction_owner && Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(ownerGuid) == player.GetSession().GetAccountId())
             {
                 //you cannot bid your another character auction:
                 SendAuctionCommandResult(null, AuctionAction.PlaceBid, AuctionError.BidOwn);
@@ -480,7 +480,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.AuctionRemoveItem)]
         void HandleAuctionRemoveItem(AuctionRemoveItem packet)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionRemoveItem - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -491,7 +491,7 @@ namespace Game
             if (GetPlayer().HasUnitState(UnitState.Died))
                 GetPlayer().RemoveAurasByType(AuraType.FeignDeath);
 
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
             AuctionEntry auction = auctionHouse.GetAuction((uint)packet.AuctionItemID);
             Player player = GetPlayer();
@@ -546,7 +546,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.AuctionListBidderItems)]
         void HandleAuctionListBidderItems(AuctionListBidderItems packet)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionListBidderItems - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -557,7 +557,7 @@ namespace Game
             if (GetPlayer().HasUnitState(UnitState.Died))
                 GetPlayer().RemoveAurasByType(AuraType.FeignDeath);
 
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
             AuctionListBidderItemsResult result = new AuctionListBidderItemsResult();
 
@@ -570,7 +570,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.AuctionListOwnerItems)]
         void HandleAuctionListOwnerItems(AuctionListOwnerItems packet)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionListOwnerItems - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -581,7 +581,7 @@ namespace Game
             if (GetPlayer().HasUnitState(UnitState.Died))
                 GetPlayer().RemoveAurasByType(AuraType.FeignDeath);
 
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
             AuctionListOwnerItemsResult result = new AuctionListOwnerItemsResult();
 
@@ -590,10 +590,10 @@ namespace Game
             SendPacket(result);
         }
 
-        [WorldPacketHandler(ClientOpcodes.AuctionListItems)]
+        //[WorldPacketHandler(ClientOpcodes.AuctionListItems)]
         void HandleAuctionListItems(AuctionListItems packet)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, NPCFlags.Auctioneer, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleAuctionListItems - {0} not found or you can't interact with him.", packet.Auctioneer.ToString());
@@ -604,7 +604,7 @@ namespace Game
             if (GetPlayer().HasUnitState(UnitState.Died))
                 GetPlayer().RemoveAurasByType(AuraType.FeignDeath);
 
-            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.getFaction());
+            AuctionHouseObject auctionHouse = Global.AuctionMgr.GetAuctionsMap(creature.GetFaction());
 
 
             Optional<AuctionSearchFilters> filters = new Optional<AuctionSearchFilters>();
@@ -636,7 +636,7 @@ namespace Game
             SendPacket(result);
         }
 
-        [WorldPacketHandler(ClientOpcodes.AuctionListPendingSales)]
+        //[WorldPacketHandler(ClientOpcodes.AuctionListPendingSales)]
         void HandleAuctionListPendingSales(AuctionListPendingSales packet)
         {
             AuctionListPendingSalesResult result = new AuctionListPendingSalesResult();
@@ -647,7 +647,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.AuctionReplicateItems)]
         void HandleReplicateItems(AuctionReplicateItems packet)
         {
-           /* Creature* creature = GetPlayer()->GetNPCIfCanInteractWith(packet.Auctioneer, UNIT_NPC_FLAG_AUCTIONEER);
+           /* Creature* creature = GetPlayer().GetNPCIfCanInteractWith(packet.Auctioneer, UNIT_NPC_FLAG_AUCTIONEER);
             if (!creature)
             {
                 TC_LOG_DEBUG("network", "WORLD: HandleReplicateItems - {0} not found or you can't interact with him.", packet.Auctioneer.ToString().c_str());
@@ -655,14 +655,14 @@ namespace Game
             }
 
             // remove fake death
-            if (GetPlayer()->HasUnitState(UNIT_STATE_DIED))
-                GetPlayer()->RemoveAurasByType(SPELL_AURA_FEIGN_DEATH);
+            if (GetPlayer().HasUnitState(UNIT_STATE_DIED))
+                GetPlayer().RemoveAurasByType(SPELL_AURA_FEIGN_DEATH);
 
-            AuctionHouseObject* auctionHouse = sAuctionMgr->GetAuctionsMap(creature->getFaction());
+            AuctionHouseObject* auctionHouse = sAuctionMgr.GetAuctionsMap(creature.getFaction());
 
             WorldPackets::AuctionHouse::AuctionReplicateResponse response;
 
-            auctionHouse->BuildReplicate(response, GetPlayer(), packet.ChangeNumberGlobal, packet.ChangeNumberCursor, packet.ChangeNumberTombstone, packet.Count);
+            auctionHouse.BuildReplicate(response, GetPlayer(), packet.ChangeNumberGlobal, packet.ChangeNumberCursor, packet.ChangeNumberTombstone, packet.Count);
             */
             //@todo implement this properly
             AuctionReplicateResponse response = new AuctionReplicateResponse();

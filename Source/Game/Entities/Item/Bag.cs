@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 
 using Framework.Constants;
 using Framework.Database;
+using Game.Network;
 
 namespace Game.Entities
 {
@@ -24,11 +25,10 @@ namespace Game.Entities
     {
         public Bag()
         {
-            objectTypeMask |= TypeMask.Container;
-            objectTypeId = TypeId.Container;
+            ObjectTypeMask |= TypeMask.Container;
+            ObjectTypeId = TypeId.Container;
 
-            valuesCount = (int)ContainerFields.End;
-            _dynamicValuesCount = (int)ItemDynamicFields.End;
+            m_containerData = new ContainerData();
         }
 
         public override void Dispose()
@@ -70,7 +70,7 @@ namespace Game.Entities
             base.RemoveFromWorld();
         }
 
-        public override bool Create(ulong guidlow, uint itemid, Player owner)
+        public override bool Create(ulong guidlow, uint itemid, ItemContext context, Player owner)
         {
             var itemProto = Global.ObjectMgr.GetItemTemplate(itemid);
 
@@ -86,29 +86,24 @@ namespace Game.Entities
 
             if (owner)
             {
-                SetGuidValue(ItemFields.Owner, owner.GetGUID());
-                SetGuidValue(ItemFields.Contained, owner.GetGUID());
+                SetOwnerGUID(owner.GetGUID());
+                SetContainedIn(owner.GetGUID());
             }
 
-            SetUInt32Value(ItemFields.MaxDurability, itemProto.MaxDurability);
-            SetUInt32Value(ItemFields.Durability, itemProto.MaxDurability);
-            SetUInt32Value(ItemFields.StackCount, 1);
+            SetUpdateFieldValue(m_values.ModifyValue(m_itemData).ModifyValue(m_itemData.MaxDurability), itemProto.MaxDurability);
+            SetDurability(itemProto.MaxDurability);
+            SetCount(1);
+            SetContext(context);
 
             // Setting the number of Slots the Container has
-            SetUInt32Value(ContainerFields.NumSlots, itemProto.GetContainerSlots());
+            SetBagSize(itemProto.GetContainerSlots());
 
             // Cleaning 20 slots
             for (byte i = 0; i < ItemConst.MaxBagSize; ++i)
-                SetGuidValue(ContainerFields.Slot1 + (i * 4), ObjectGuid.Empty);
+                SetSlot(i, ObjectGuid.Empty);
 
             m_bagslot = new Item[ItemConst.MaxBagSize];
             return true;
-        }
-
-        public override void SaveToDB(SQLTransaction trans)
-        {
-            base.SaveToDB(trans);
-
         }
 
         public override bool LoadFromDB(ulong guid, ObjectGuid owner_guid, SQLFields fields, uint entry)
@@ -117,11 +112,11 @@ namespace Game.Entities
                 return false;
 
             ItemTemplate itemProto = GetTemplate(); // checked in Item.LoadFromDB
-            SetUInt32Value(ContainerFields.NumSlots, itemProto.GetContainerSlots());
+            SetBagSize(itemProto.GetContainerSlots());
             // cleanup bag content related item value fields (its will be filled correctly from `character_inventory`)
             for (byte i = 0; i < ItemConst.MaxBagSize; ++i)
             {
-                SetGuidValue(ContainerFields.Slot1 + (i * 4), ObjectGuid.Empty);
+                SetSlot(i, ObjectGuid.Empty);
                 m_bagslot[i] = null;
             }
             return true;
@@ -150,9 +145,9 @@ namespace Game.Entities
         {
             if (m_bagslot[slot] != null)
                 m_bagslot[slot].SetContainer(null);
-            
+
             m_bagslot[slot] = null;
-            SetGuidValue(ContainerFields.Slot1 + (slot * 4), ObjectGuid.Empty);
+            SetSlot(slot, ObjectGuid.Empty);
         }
 
         public void StoreItem(byte slot, Item pItem, bool update)
@@ -160,9 +155,9 @@ namespace Game.Entities
             if (pItem != null && pItem.GetGUID() != GetGUID())
             {
                 m_bagslot[slot] = pItem;
-                SetGuidValue(ContainerFields.Slot1 + (slot * 4), pItem.GetGUID());
-                pItem.SetGuidValue(ItemFields.Contained, GetGUID());
-                pItem.SetGuidValue(ItemFields.Owner, GetOwnerGUID());
+                SetSlot(slot, pItem.GetGUID());
+                pItem.SetContainedIn(GetGUID());
+                pItem.SetOwnerGUID(GetOwnerGUID());
                 pItem.SetContainer(this);
                 pItem.SetSlot(slot);
             }
@@ -175,6 +170,45 @@ namespace Game.Entities
             for (int i = 0; i < GetBagSize(); ++i)
                 if (m_bagslot[i] != null)
                     m_bagslot[i].BuildCreateUpdateBlockForPlayer(data, target);
+        }
+
+        public override void BuildValuesCreate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
+
+            buffer.WriteUInt8((byte)flags);
+            m_objectData.WriteCreate(buffer, flags, this, target);
+            m_itemData.WriteCreate(buffer, flags, this, target);
+            m_containerData.WriteCreate(buffer, flags, this, target);
+
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
+
+        public override void BuildValuesUpdate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
+
+            buffer.WriteUInt32(m_values.GetChangedObjectTypeMask());
+            if (m_values.HasChanged(TypeId.Object))
+                m_objectData.WriteUpdate(buffer, flags, this, target);
+
+            if (m_values.HasChanged(TypeId.Item))
+                m_itemData.WriteUpdate(buffer, flags, this, target);
+
+            if (m_values.HasChanged(TypeId.Container))
+                m_containerData.WriteUpdate(buffer, flags, this, target);
+
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
+
+        public override void ClearUpdateMask(bool remove)
+        {
+            m_values.ClearChangesMask(m_containerData);
+            base.ClearUpdateMask(remove);
         }
 
         public bool IsEmpty()
@@ -249,13 +283,12 @@ namespace Game.Entities
             return null;
         }
 
-        public uint GetBagSize() { return GetUInt32Value(ContainerFields.NumSlots); }
+        public uint GetBagSize() { return m_containerData.NumSlots; }
+        void SetBagSize(uint numSlots) { SetUpdateFieldValue(m_values.ModifyValue(m_containerData).ModifyValue(m_containerData.NumSlots), numSlots); }
 
-        public static Item NewItemOrBag(ItemTemplate proto)
-        {
-            return (proto.GetInventoryType() == InventoryType.Bag) ? new Bag() : new Item();
-        }
+        void SetSlot(int slot, ObjectGuid guid) { SetUpdateFieldValue(ref m_values.ModifyValue(m_containerData).ModifyValue(m_containerData.Slots, slot), guid); }
 
+        ContainerData m_containerData;
         Item[] m_bagslot = new Item[36];
     }
 }

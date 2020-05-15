@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,6 +66,9 @@ namespace System.Collections.Generic
         }
         public static KeyValuePair<TKey, TValue> Find<TKey, TValue>(this IDictionary<TKey, TValue> dict, TKey key)
         {
+            if (!dict.ContainsKey(key))
+                return default(KeyValuePair<TKey, TValue>);
+
             return new KeyValuePair<TKey, TValue>(key, dict[key]);
         }
 
@@ -100,6 +103,11 @@ namespace System.Collections.Generic
             int cur = list.Count;
             if (size < cur)
                 list.RemoveRange((int)size, cur - (int)size);
+            else
+            {
+                for (var i = list.Count; i < size; ++i)
+                    list.Add(default(T));
+            }
         }
 
         public static void RandomResize<T>(this IList<T> list, uint size)
@@ -113,17 +121,17 @@ namespace System.Collections.Generic
             }
         }
 
-        public static void RandomResize<T>(this ICollection<T> list, Predicate<T> predicate, uint size)
+        public static void RandomResize<T>(this List<T> list, Predicate<T> predicate, uint size)
         {
-            List<T> listCopy = new List<T>();
-            foreach (var obj in list)
-                if (predicate(obj))
-                    listCopy.Add(obj);
+            for (var i = 0; i < list.Count; ++i)
+            {
+                var obj = list[i];
+                if (!predicate(obj))
+                    list.Remove(obj);
+            }
 
             if (size != 0)
-                listCopy.Resize(size);
-
-            list = listCopy;
+                list.Resize(size);
         }
 
         public static T SelectRandom<T>(this IEnumerable<T> source)
@@ -174,12 +182,12 @@ namespace System.Collections.Generic
         }
     }
 
-    public interface ICheck<T>
+    public interface ICheck<in T>
     {
         bool Invoke(T obj);
     }
 
-    public interface IDoWork<T>
+    public interface IDoWork<in T>
     {
         void Invoke(T obj);
     }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@ using Game.Network;
 using Game.Network.Packets;
 using Game.Spells;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game
 {
@@ -83,7 +82,7 @@ namespace Game
                     return;
             }
 
-            /// @todo allow control charmed player?
+            // @todo allow control charmed player?
             if (pet.IsTypeId(TypeId.Player) && !(flag == ActiveStates.Command && spellid == (uint)CommandStates.Attack))
                 return;
 
@@ -122,6 +121,7 @@ namespace Game
                 return;
 
             pet.AttackStop();
+            pet.ClearInPetCombat();
         }
 
         void HandlePetActionHelper(Unit pet, ObjectGuid guid1, uint spellid, ActiveStates flag, ObjectGuid guid2, float x, float y, float z)
@@ -155,6 +155,7 @@ namespace Game
                         case CommandStates.Follow:                        //spellid=1792  //FOLLOW
                             pet.AttackStop();
                             pet.InterruptNonMeleeSpells(false);
+                            pet.ClearInPetCombat();
                             pet.GetMotionMaster().MoveFollow(GetPlayer(), SharedConst.PetFollowDist, pet.GetFollowAngle());
                             charmInfo.SetCommandState(CommandStates.Follow);
 
@@ -169,7 +170,7 @@ namespace Game
                                 // Can't attack if owner is pacified
                                 if (GetPlayer().HasAuraType(AuraType.ModPacify))
                                 {
-                                    /// @todo Send proper error message to client
+                                    // @todo Send proper error message to client
                                     return;
                                 }
 
@@ -201,7 +202,7 @@ namespace Game
                                         pet.ToCreature().GetAI().AttackStart(TargetUnit);
 
                                         //10% chance to play special pet attack talk, else growl
-                                        if (pet.IsPet() && pet.ToPet().getPetType() == PetType.Summon && pet != TargetUnit && RandomHelper.IRand(0, 100) < 10)
+                                        if (pet.IsPet() && pet.ToPet().GetPetType() == PetType.Summon && pet != TargetUnit && RandomHelper.IRand(0, 100) < 10)
                                             pet.SendPetTalk(PetTalk.Attack);
                                         else
                                         {
@@ -211,9 +212,6 @@ namespace Game
                                     }
                                     else                                // charmed player
                                     {
-                                        if (pet.GetVictim() && pet.GetVictim() != TargetUnit)
-                                            pet.AttackStop();
-
                                         charmInfo.SetIsCommandAttack(true);
                                         charmInfo.SetIsAtStay(false);
                                         charmInfo.SetIsFollowing(false);
@@ -231,14 +229,14 @@ namespace Game
                                 GetPlayer().StopCastingCharm();
                             else if (pet.GetOwnerGUID() == GetPlayer().GetGUID())
                             {
-                                Contract.Assert(pet.IsTypeId(TypeId.Unit));
+                                Cypher.Assert(pet.IsTypeId(TypeId.Unit));
                                 if (pet.IsPet())
                                 {
-                                    if (pet.ToPet().getPetType() == PetType.Hunter)
+                                    if (pet.ToPet().GetPetType() == PetType.Hunter)
                                         GetPlayer().RemovePet(pet.ToPet(), PetSaveMode.AsDeleted);
                                     else
                                         //dismissing a summoned pet is like killing them (this prevents returning a soulshard...)
-                                        pet.setDeathState(DeathState.Corpse);
+                                        pet.SetDeathState(DeathState.Corpse);
                                 }
                                 else if (pet.HasUnitTypeMask(UnitTypeMask.Minion))
                                 {
@@ -268,6 +266,7 @@ namespace Game
                     {
                         case ReactStates.Passive:                         //passive
                             pet.AttackStop();
+                            pet.ClearInPetCombat();
                             goto case ReactStates.Defensive;
                         case ReactStates.Defensive:                       //recovery
                         case ReactStates.Aggressive:                      //activete
@@ -318,7 +317,7 @@ namespace Game
                         SpellCastResult result = spell.CheckPetCast(unit_target);
 
                         //auto turn to target unless possessed
-                        if (result == SpellCastResult.UnitNotInfront && !pet.isPossessed() && !pet.IsVehicle())
+                        if (result == SpellCastResult.UnitNotInfront && !pet.IsPossessed() && !pet.IsVehicle())
                         {
                             Unit unit_target2 = spell.m_targets.GetUnitTarget();
                             if (unit_target)
@@ -352,31 +351,29 @@ namespace Game
 
                             //10% chance to play special pet attack talk, else growl
                             //actually this only seems to happen on special spells, fire shield for imp, torment for voidwalker, but it's stupid to check every spell
-                            if (pet.IsPet() && (pet.ToPet().getPetType() == PetType.Summon) && (pet != unit_target) && (RandomHelper.IRand(0, 100) < 10))
+                            if (pet.IsPet() && (pet.ToPet().GetPetType() == PetType.Summon) && (pet != unit_target) && (RandomHelper.IRand(0, 100) < 10))
                                 pet.SendPetTalk(PetTalk.SpecialSpell);
                             else
                             {
                                 pet.SendPetAIReaction(guid1);
                             }
 
-                            if (unit_target && !GetPlayer().IsFriendlyTo(unit_target) && !pet.isPossessed() && !pet.IsVehicle())
+                            if (unit_target && !GetPlayer().IsFriendlyTo(unit_target) && !pet.IsPossessed() && !pet.IsVehicle())
                             {
                                 // This is true if pet has no target or has target but targets differs.
                                 if (pet.GetVictim() != unit_target)
                                 {
-                                    if (pet.GetVictim())
-                                        pet.AttackStop();
                                     pet.GetMotionMaster().Clear();
                                     if (pet.ToCreature().IsAIEnabled)
                                         pet.ToCreature().GetAI().AttackStart(unit_target);
                                 }
                             }
 
-                            spell.prepare(spell.m_targets);
+                            spell.Prepare(spell.m_targets);
                         }
                         else
                         {
-                            if (pet.isPossessed() || pet.IsVehicle()) /// @todo: confirm this check
+                            if (pet.IsPossessed() || pet.IsVehicle()) // @todo: confirm this check
                                 Spell.SendCastResult(GetPlayer(), spellInfo, spell.m_SpellVisual, spell.m_castId, result);
                             else
                                 spell.SendPetCastResult(result);
@@ -384,7 +381,7 @@ namespace Game
                             if (!pet.GetSpellHistory().HasCooldown(spellid))
                                 pet.GetSpellHistory().ResetCooldown(spellid, true);
 
-                            spell.finish(false);
+                            spell.Finish(false);
                             spell.Dispose();
 
                             // reset specific flags in case of spell fail. AI will reset other flags
@@ -414,7 +411,7 @@ namespace Game
             if (unit)
             {
                 response.Allow = true;
-                response.Timestamp = unit.GetUInt32Value(UnitFields.PetNameTimestamp);
+                response.Timestamp = unit.m_unitData.PetNameTimestamp;
                 response.Name = unit.GetName();
 
                 Pet pet = unit.ToPet();
@@ -446,7 +443,7 @@ namespace Game
             // stable master case
             else
             {
-                if (!GetPlayer().GetNPCIfCanInteractWith(guid, NPCFlags.StableMaster))
+                if (!GetPlayer().GetNPCIfCanInteractWith(guid, NPCFlags.StableMaster, NPCFlags2.None))
                 {
                     Log.outDebug(LogFilter.Network, "Stablemaster {0} not found or you can't interact with him.", guid.ToString());
                     return false;
@@ -527,7 +524,7 @@ namespace Game
 
             Pet pet = ObjectAccessor.GetPet(GetPlayer(), petguid);
             // check it!
-            if (!pet || !pet.IsPet() || pet.ToPet().getPetType() != PetType.Hunter || !pet.HasByteFlag(UnitFields.Bytes2, UnitBytes2Offsets.PetFlags, UnitPetFlags.CanBeRenamed) ||
+            if (!pet || !pet.IsPet() || pet.ToPet().GetPetType() != PetType.Hunter || !pet.HasPetFlag(UnitPetFlags.CanBeRenamed) ||
                 pet.GetOwnerGUID() != GetPlayer().GetGUID() || pet.GetCharmInfo() == null)
                 return;
 
@@ -546,7 +543,7 @@ namespace Game
 
             pet.SetName(name);
             pet.SetGroupUpdateFlag(GroupUpdatePetFlags.Name);
-            pet.RemoveByteFlag(UnitFields.Bytes2, UnitBytes2Offsets.PetFlags, UnitPetFlags.CanBeRenamed);
+            pet.RemovePetFlag(UnitPetFlags.CanBeRenamed);
 
             PreparedStatement stmt;
             SQLTransaction trans = new SQLTransaction();
@@ -574,7 +571,7 @@ namespace Game
 
             DB.Characters.CommitTransaction(trans);
 
-            pet.SetUInt32Value(UnitFields.PetNameTimestamp, (uint)Time.UnixTime); // cast can't be helped
+            pet.SetPetNameTimestamp((uint)Time.UnixTime); // cast can't be helped
         }
 
         [WorldPacketHandler(ClientOpcodes.PetAbandon)]
@@ -583,13 +580,11 @@ namespace Game
             if (!GetPlayer().IsInWorld)
                 return;
 
+            // pet/charmed
             Creature pet = ObjectAccessor.GetCreatureOrPetOrVehicle(GetPlayer(), packet.Pet);
-            if (pet)
+            if (pet && pet.ToPet() && pet.ToPet().GetPetType() == PetType.Hunter)
             {
-                if (pet.IsPet())
-                    GetPlayer().RemovePet(pet.ToPet(), PetSaveMode.AsDeleted);
-                else if (pet.GetGUID() == GetPlayer().GetCharmGUID())
-                    GetPlayer().StopCastingCharm();
+                _player.RemovePet((Pet)pet, PetSaveMode.AsDeleted);
             }
         }
 
@@ -685,7 +680,7 @@ namespace Game
                     {
                         // 10% chance to play special pet attack talk, else growl
                         // actually this only seems to happen on special spells, fire shield for imp, torment for voidwalker, but it's stupid to check every spell
-                        if (pet.getPetType() == PetType.Summon && (RandomHelper.IRand(0, 100) < 10))
+                        if (pet.GetPetType() == PetType.Summon && (RandomHelper.IRand(0, 100) < 10))
                             pet.SendPetTalk(PetTalk.SpecialSpell);
                         else
                             pet.SendPetAIReaction(petCastSpell.PetGUID);
@@ -697,7 +692,7 @@ namespace Game
                 spellPrepare.ServerCastID = spell.m_castId;
                 SendPacket(spellPrepare);
 
-                spell.prepare(targets);
+                spell.Prepare(targets);
             }
             else
             {
@@ -706,7 +701,7 @@ namespace Game
                 if (!caster.GetSpellHistory().HasCooldown(spellInfo.Id))
                     caster.GetSpellHistory().ResetCooldown(spellInfo.Id, true);
 
-                spell.finish(false);
+                spell.Finish(false);
                 spell.Dispose();
             }
         }

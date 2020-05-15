@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -368,7 +368,7 @@ namespace Scripts.Spells.Holiday
     [Script("spell_gen_candied_sweet_potato", SpellIds.WellFedHasteTrigger)]
     class spell_pilgrims_bounty_buff_food : AuraScript
     {
-        public spell_pilgrims_bounty_buff_food(uint triggeredSpellId) : base()
+        public spell_pilgrims_bounty_buff_food(uint triggeredSpellId)
         {
             _triggeredSpellId = triggeredSpellId;
             _handled = false;
@@ -626,7 +626,7 @@ namespace Scripts.Spells.Holiday
             PreventHitDefaultEffect(effIndex);
             // All this spells trigger a spell that requires reagents; if the
             // triggered spell is cast as "triggered", reagents are not consumed
-            GetHitUnit().CastSpell(null, GetSpellInfo().GetEffect(effIndex).TriggerSpell, TriggerCastFlags.FullMask & ~TriggerCastFlags.IgnorePowerAndReagentCost);
+            GetHitUnit().CastSpell(null, GetEffectInfo().TriggerSpell, TriggerCastFlags.FullMask & ~TriggerCastFlags.IgnorePowerAndReagentCost);
         }
 
         public override void Register()

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,6 +89,9 @@ namespace Game.Loots
 
             foreach (var id in lootIdSetUsed)
                 lootIdSet.Remove(id);
+
+            // 1 means loot for player corpse
+            lootIdSet.Remove(SharedConst.PlayerCorpseLootEntry);
 
             // output error for any still listed (not referenced from appropriate table) ids
             Creature.ReportUnusedIds(lootIdSet);
@@ -484,7 +487,7 @@ namespace Game.Loots
                 ItemTemplate proto = Global.ObjectMgr.GetItemTemplate(itemid);
                 if (proto == null)
                 {
-                    Log.outError(LogFilter.Sql, "Table '{0}' entry {1} item {2}: item entry not listed in `item_template` - skipped", store.GetName(), entry, itemid);
+                    Log.outError(LogFilter.Sql, "Table '{0}' entry {1} item {2}: item does not exist - skipped", store.GetName(), entry, itemid);
                     return false;
                 }
 
@@ -724,7 +727,7 @@ namespace Game.Loots
 
                 if (item.reference > 0)                            // References processing
                 {
-                    LootTemplate Referenced = LootManager.Reference.GetLootFor(item.reference);
+                    LootTemplate Referenced = LootStorage.Reference.GetLootFor(item.reference);
                     if (Referenced == null)
                         continue;                                       // Error message already printed at loading stage
 
@@ -841,7 +844,7 @@ namespace Game.Loots
             foreach (var group in Groups)
                     group.Value.Verify(lootstore, id, (byte)(group.Key + 1));
 
-            /// @todo References validity checks
+            // @todo References validity checks
         }
         public void CheckLootRefs(LootTemplateMap store, List<uint> ref_set)
         {
@@ -849,8 +852,8 @@ namespace Game.Loots
             {
                 if (item.reference > 0)
                 {
-                    if (LootManager.Reference.GetLootFor(item.reference) == null)
-                        LootManager.Reference.ReportNonExistingId(item.reference, item.itemid);
+                    if (LootStorage.Reference.GetLootFor(item.reference) == null)
+                        LootStorage.Reference.ReportNonExistingId(item.reference, item.itemid);
                     else if (ref_set != null)
                         ref_set.Remove(item.reference);
                 }
@@ -859,9 +862,9 @@ namespace Game.Loots
             foreach (var group in Groups.Values)
                 group.CheckLootRefs(store, ref_set);
         }
-        public bool addConditionItem(Condition cond)
+        public bool AddConditionItem(Condition cond)
         {
-            if (cond == null || !cond.isLoaded())//should never happen, checked at loading
+            if (cond == null || !cond.IsLoaded())//should never happen, checked at loading
             {
                 Log.outError(LogFilter.Loot, "LootTemplate.addConditionItem: condition is null");
                 return false;
@@ -915,7 +918,7 @@ namespace Game.Loots
             }
             return false;
         }
-        public bool isReference(uint id)
+        public bool IsReference(uint id)
         {
             foreach (var storeItem in Entries)
                 if (storeItem.itemid == id && storeItem.reference > 0)
@@ -992,7 +995,7 @@ namespace Game.Loots
             public void Verify(LootStore lootstore, uint id, byte group_id = 0)
             {
                 float chance = RawTotalChance();
-                if (chance > 101.0f)                                    /// @todo replace with 100% when DBs will be ready
+                if (chance > 101.0f)                                    // @todo replace with 100% when DBs will be ready
                     Log.outError(LogFilter.Sql, "Table '{0}' entry {1} group {2} has total chance > 100% ({3})", lootstore.GetName(), id, group_id, chance);
 
                 if (chance >= 100.0f && !EqualChanced.Empty())
@@ -1005,8 +1008,8 @@ namespace Game.Loots
                 {
                     if (item.reference > 0)
                     {
-                        if (LootManager.Reference.GetLootFor(item.reference) == null)
-                            LootManager.Reference.ReportNonExistingId(item.reference, item.itemid);
+                        if (LootStorage.Reference.GetLootFor(item.reference) == null)
+                            LootStorage.Reference.ReportNonExistingId(item.reference, item.itemid);
                         else if (ref_set != null)
                             ref_set.Remove(item.reference);
                     }
@@ -1016,8 +1019,8 @@ namespace Game.Loots
                 {
                     if (item.reference > 0)
                     {
-                        if (LootManager.Reference.GetLootFor(item.reference) == null)
-                            LootManager.Reference.ReportNonExistingId(item.reference, item.itemid);
+                        if (LootStorage.Reference.GetLootFor(item.reference) == null)
+                            LootStorage.Reference.ReportNonExistingId(item.reference, item.itemid);
                         else if (ref_set != null)
                             ref_set.Remove(item.reference);
                     }

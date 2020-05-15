@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Network.Packets;
 using Game.Spells;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.BattleFields
 {
@@ -62,27 +61,27 @@ namespace Game.BattleFields
             m_saveTimer = 60000;
 
             // Load from db
-            if ((Global.WorldMgr.getWorldState(WGWorldStates.Active) == 0) && (Global.WorldMgr.getWorldState(WGWorldStates.Defender) == 0) && (Global.WorldMgr.getWorldState(WGConst.ClockWorldState[0]) == 0))
+            if ((Global.WorldMgr.GetWorldState(WGWorldStates.Active) == 0) && (Global.WorldMgr.GetWorldState(WGWorldStates.Defender) == 0) && (Global.WorldMgr.GetWorldState(WGConst.ClockWorldState[0]) == 0))
             {
-                Global.WorldMgr.setWorldState(WGWorldStates.Active, 0);
-                Global.WorldMgr.setWorldState(WGWorldStates.Defender, RandomHelper.URand(0, 1));
-                Global.WorldMgr.setWorldState(WGConst.ClockWorldState[0], m_NoWarBattleTime);
+                Global.WorldMgr.SetWorldState(WGWorldStates.Active, 0);
+                Global.WorldMgr.SetWorldState(WGWorldStates.Defender, RandomHelper.URand(0, 1));
+                Global.WorldMgr.SetWorldState(WGConst.ClockWorldState[0], m_NoWarBattleTime);
             }
 
-            m_isActive = Global.WorldMgr.getWorldState(WGWorldStates.Active) != 0;
-            m_DefenderTeam = Global.WorldMgr.getWorldState(WGWorldStates.Defender);
+            m_isActive = Global.WorldMgr.GetWorldState(WGWorldStates.Active) != 0;
+            m_DefenderTeam = Global.WorldMgr.GetWorldState(WGWorldStates.Defender);
 
-            m_Timer = Global.WorldMgr.getWorldState(WGConst.ClockWorldState[0]);
+            m_Timer = Global.WorldMgr.GetWorldState(WGConst.ClockWorldState[0]);
             if (m_isActive)
             {
                 m_isActive = false;
                 m_Timer = m_RestartAfterCrash;
             }
 
-            SetData(WGData.WonA, Global.WorldMgr.getWorldState(WGWorldStates.AttackedA));
-            SetData(WGData.DefA, Global.WorldMgr.getWorldState(WGWorldStates.DefendedA));
-            SetData(WGData.WonH, Global.WorldMgr.getWorldState(WGWorldStates.AttackedH));
-            SetData(WGData.DefH, Global.WorldMgr.getWorldState(WGWorldStates.DefendedH));
+            SetData(WGData.WonA, Global.WorldMgr.GetWorldState(WGWorldStates.AttackedA));
+            SetData(WGData.DefA, Global.WorldMgr.GetWorldState(WGWorldStates.DefendedA));
+            SetData(WGData.WonH, Global.WorldMgr.GetWorldState(WGWorldStates.AttackedH));
+            SetData(WGData.DefH, Global.WorldMgr.GetWorldState(WGWorldStates.DefendedH));
 
             foreach (var gy in WGConst.WGGraveYard)
             {
@@ -164,13 +163,13 @@ namespace Game.BattleFields
             bool m_return = base.Update(diff);
             if (m_saveTimer <= diff)
             {
-                Global.WorldMgr.setWorldState(WGWorldStates.Active, m_isActive);
-                Global.WorldMgr.setWorldState(WGWorldStates.Defender, m_DefenderTeam);
-                Global.WorldMgr.setWorldState(WGConst.ClockWorldState[0], m_Timer);
-                Global.WorldMgr.setWorldState(WGWorldStates.AttackedA, GetData(WGData.WonA));
-                Global.WorldMgr.setWorldState(WGWorldStates.DefendedA, GetData(WGData.DefA));
-                Global.WorldMgr.setWorldState(WGWorldStates.AttackedH, GetData(WGData.WonH));
-                Global.WorldMgr.setWorldState(WGWorldStates.DefendedH, GetData(WGData.DefH));
+                Global.WorldMgr.SetWorldState(WGWorldStates.Active, m_isActive);
+                Global.WorldMgr.SetWorldState(WGWorldStates.Defender, m_DefenderTeam);
+                Global.WorldMgr.SetWorldState(WGConst.ClockWorldState[0], m_Timer);
+                Global.WorldMgr.SetWorldState(WGWorldStates.AttackedA, GetData(WGData.WonA));
+                Global.WorldMgr.SetWorldState(WGWorldStates.DefendedA, GetData(WGData.DefA));
+                Global.WorldMgr.SetWorldState(WGWorldStates.AttackedH, GetData(WGData.WonH));
+                Global.WorldMgr.SetWorldState(WGWorldStates.DefendedH, GetData(WGData.DefH));
                 m_saveTimer = 60 * Time.InMilliseconds;
             }
             else
@@ -188,7 +187,7 @@ namespace Game.BattleFields
                 // Update faction of relic, only attacker can click on
                 relic.SetFaction(WGConst.WintergraspFaction[GetAttackerTeam()]);
                 // Set in use (not allow to click on before last door is broken)
-                relic.SetFlag(GameObjectFields.Flags, GameObjectFlags.InUse | GameObjectFlags.NotSelectable);
+                relic.AddFlag(GameObjectFlags.InUse | GameObjectFlags.NotSelectable);
                 m_titansRelicGUID = relic.GetGUID();
             }
             else
@@ -528,7 +527,7 @@ namespace Game.BattleFields
 
         public override void OnGameObjectCreate(GameObject go)
         {
-            uint workshopId = 0;
+            uint workshopId;
 
             switch (go.GetEntry())
             {
@@ -568,7 +567,11 @@ namespace Game.BattleFields
                 return;
 
             if (victim.IsTypeId(TypeId.Player))
+            {
                 HandlePromotion(killer, victim);
+                // Allow to Skin non-released corpse
+                victim.AddUnitFlag(UnitFlags.Skinnable);
+            }
 
             // @todo Recent PvP activity worldstate
         }
@@ -694,7 +697,7 @@ namespace Game.BattleFields
 
         public override void OnPlayerLeaveWar(Player player)
         {
-            // Remove all aura from WG /// @todo false we can go out of this zone on retail and keep Rank buff, remove on end of WG
+            // Remove all aura from WG // @todo false we can go out of this zone on retail and keep Rank buff, remove on end of WG
             if (!player.GetSession().PlayerLogout())
             {
                 Creature vehicle = player.GetVehicleCreatureBase();
@@ -930,9 +933,9 @@ namespace Game.BattleFields
             if (alliancePlayers != 0 && hordePlayers != 0)
             {
                 if (alliancePlayers < hordePlayers)
-                    newStack = (int)(((float)(hordePlayers / alliancePlayers) - 1) * 4);  // positive, should cast on alliance
+                    newStack = (int)((((float)hordePlayers / alliancePlayers) - 1) * 4);  // positive, should cast on alliance
                 else if (alliancePlayers > hordePlayers)
-                    newStack = (int)((1 - (float)(alliancePlayers / hordePlayers)) * 4);  // negative, should cast on horde
+                    newStack = (int)((1 - ((float)alliancePlayers / hordePlayers)) * 4);  // negative, should cast on horde
             }
 
             if (newStack == m_tenacityStack)
@@ -946,7 +949,7 @@ namespace Game.BattleFields
                 {
                     Player player = Global.ObjAccessor.FindPlayer(guid);
                     if (player)
-                        if (player.getLevel() >= m_MinLevel)
+                        if (player.GetLevel() >= m_MinLevel)
                             player.RemoveAurasDueToSpell(WGSpells.Tenacity);
                 }
 
@@ -1158,7 +1161,7 @@ namespace Game.BattleFields
                     }
                     _wg.SetRelicInteractible(true);
                     if (_wg.GetRelic())
-                        _wg.GetRelic().RemoveFlag(GameObjectFields.Flags, GameObjectFlags.InUse | GameObjectFlags.NotSelectable);
+                        _wg.GetRelic().RemoveFlag(GameObjectFlags.InUse | GameObjectFlags.NotSelectable);
                     else
                         Log.outError(LogFilter.Server, "BattlefieldWG: Titan Relic not found.");
                     break;
@@ -1191,7 +1194,7 @@ namespace Game.BattleFields
                     break;
             }
 
-            _state = (WGGameObjectState)Global.WorldMgr.getWorldState(_worldState);
+            _state = (WGGameObjectState)Global.WorldMgr.GetWorldState(_worldState);
             switch (_state)
             {
                 case WGGameObjectState.NeutralIntact:
@@ -1446,7 +1449,7 @@ namespace Game.BattleFields
 
         public void Save()
         {
-            Global.WorldMgr.setWorldState(_worldState, (ulong)_state);
+            Global.WorldMgr.SetWorldState(_worldState, (ulong)_state);
         }
 
         public ObjectGuid GetGUID() { return _buildGUID; }
@@ -1565,7 +1568,7 @@ namespace Game.BattleFields
 
         public void Save()
         {
-            Global.WorldMgr.setWorldState(_staticInfo.WorldStateId, (uint)_state);
+            Global.WorldMgr.SetWorldState(_staticInfo.WorldStateId, (uint)_state);
         }
 
         public uint GetTeamControl()  { return _teamControl; }
@@ -1591,7 +1594,7 @@ namespace Game.BattleFields
 
         public override void ChangeTeam(uint oldteam)
         {
-            Contract.Assert(m_Workshop != null);
+            Cypher.Assert(m_Workshop != null);
             m_Workshop.GiveControlTo(m_team, false);
         }
         uint GetTeam() { return m_team; }

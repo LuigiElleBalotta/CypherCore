@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,8 @@ using Game.Network.Packets;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using Game;
+using Framework.Dynamic;
+using Game.Network;
 
 namespace Game.Entities
 {
@@ -35,12 +36,13 @@ namespace Game.Entities
             _previousCheckOrientation = float.PositiveInfinity;
             _reachedDestination = true;
 
-            objectTypeMask |= TypeMask.AreaTrigger;
-            objectTypeId = TypeId.AreaTrigger;
+            ObjectTypeMask |= TypeMask.AreaTrigger;
+            ObjectTypeId = TypeId.AreaTrigger;
 
-            m_updateFlag = UpdateFlag.StationaryPosition | UpdateFlag.Areatrigger;
+            m_updateFlag.Stationary = true;
+            m_updateFlag.AreaTrigger = true;
 
-            valuesCount = (int)AreaTriggerFields.End;
+            m_areaTriggerData = new AreaTriggerFieldData();
 
             _spline = new Spline();
         }
@@ -76,7 +78,7 @@ namespace Game.Entities
             }
         }
 
-        public static AreaTrigger CreateAreaTrigger(uint spellMiscId, Unit caster, Unit target, SpellInfo spell, Position pos, int duration, uint spellXSpellVisualId, ObjectGuid castId = default(ObjectGuid), AuraEffect aurEff = null)
+        public static AreaTrigger CreateAreaTrigger(uint spellMiscId, Unit caster, Unit target, SpellInfo spell, Position pos, int duration, uint spellXSpellVisualId, ObjectGuid castId = default, AuraEffect aurEff = null)
         {
             AreaTrigger at = new AreaTrigger();
             if (!at.Create(spellMiscId, caster, target, spell, pos, duration, spellXSpellVisualId, castId, aurEff))
@@ -85,7 +87,7 @@ namespace Game.Entities
             return at;
         }
 
-        bool Create(uint spellMiscId, Unit caster, Unit target, SpellInfo spell, Position pos, int duration, uint spellXSpellVisualId, ObjectGuid castId, AuraEffect aurEff)
+        unsafe bool Create(uint spellMiscId, Unit caster, Unit target, SpellInfo spell, Position pos, int duration, uint spellXSpellVisualId, ObjectGuid castId, AuraEffect aurEff)
         {
             _targetGuid = target ? target.GetGUID() : ObjectGuid.Empty;
             _aurEff = aurEff;
@@ -94,7 +96,7 @@ namespace Game.Entities
             Relocate(pos);
             if (!IsPositionValid())
             {
-                Log.outError(LogFilter.AreaTrigger, "AreaTrigger (spell {0}) not created. Invalid coordinates (X: {0} Y: {1})", spell.Id, GetPositionX(), GetPositionY());
+                Log.outError(LogFilter.AreaTrigger, $"AreaTrigger (spell {spell.Id}) not created. Invalid coordinates (X: {GetPositionX()} Y: {GetPositionY()})");
                 return false;
             }
 
@@ -112,19 +114,35 @@ namespace Game.Entities
 
             SetObjectScale(1.0f);
 
-            SetGuidValue(AreaTriggerFields.Caster, caster.GetGUID());
-            SetGuidValue(AreaTriggerFields.CreatingEffectGuid, castId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.Caster), caster.GetGUID());
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.CreatingEffectGUID), castId);
 
-            SetUInt32Value(AreaTriggerFields.SpellId, spell.Id);
-            SetUInt32Value(AreaTriggerFields.SpellForVisuals, spell.Id);
-            SetUInt32Value(AreaTriggerFields.SpellXSpellVisualId, spellXSpellVisualId);
-            SetUInt32Value(AreaTriggerFields.TimeToTargetScale, GetMiscTemplate().TimeToTargetScale != 0 ? GetMiscTemplate().TimeToTargetScale : GetUInt32Value(AreaTriggerFields.Duration));
-            SetFloatValue(AreaTriggerFields.BoundsRadius2d, GetTemplate().MaxSearchRadius);
-            SetUInt32Value(AreaTriggerFields.DecalPropertiesId, GetMiscTemplate().DecalPropertiesId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.SpellID), spell.Id);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.SpellForVisuals), spell.Id);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.SpellXSpellVisualID), spellXSpellVisualId);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.TimeToTargetScale), GetMiscTemplate().TimeToTargetScale != 0 ? GetMiscTemplate().TimeToTargetScale : m_areaTriggerData.Duration);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.BoundsRadius2D), GetTemplate().MaxSearchRadius);
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.DecalPropertiesID), GetMiscTemplate().DecalPropertiesId);
 
-            for (byte scaleCurveIndex = 0; scaleCurveIndex < SharedConst.MaxAreatriggerScale; ++scaleCurveIndex)
-                if (GetMiscTemplate().ScaleInfo.ExtraScale[scaleCurveIndex].AsInt32 != 0)
-                    SetUInt32Value(AreaTriggerFields.ExtraScaleCurve + scaleCurveIndex, (uint)GetMiscTemplate().ScaleInfo.ExtraScale[scaleCurveIndex].AsInt32);
+            ScaleCurve extraScaleCurve = m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.ExtraScaleCurve);
+
+            if (GetMiscTemplate().ExtraScale.Structured.StartTimeOffset != 0)
+                SetUpdateFieldValue(extraScaleCurve.ModifyValue(extraScaleCurve.StartTimeOffset), GetMiscTemplate().ExtraScale.Structured.StartTimeOffset);
+            if (GetMiscTemplate().ExtraScale.Structured.X != 0 || GetMiscTemplate().ExtraScale.Structured.Y != 0)
+            {
+                Vector2 point = new Vector2(GetMiscTemplate().ExtraScale.Structured.X, GetMiscTemplate().ExtraScale.Structured.Y);
+                SetUpdateFieldValue(ref extraScaleCurve.ModifyValue(extraScaleCurve.Points, 0), point);
+            }
+            if (GetMiscTemplate().ExtraScale.Structured.Z != 0 || GetMiscTemplate().ExtraScale.Structured.W != 0)
+            {
+                Vector2 point = new Vector2(GetMiscTemplate().ExtraScale.Structured.Z, GetMiscTemplate().ExtraScale.Structured.W);
+                SetUpdateFieldValue(ref extraScaleCurve.ModifyValue(extraScaleCurve.Points, 1), point);
+            }
+            if (GetMiscTemplate().ExtraScale.Raw.Data[5] != 0)
+                SetUpdateFieldValue(extraScaleCurve.ModifyValue(extraScaleCurve.ParameterCurve), GetMiscTemplate().ExtraScale.Raw.Data[5]);
+            if (GetMiscTemplate().ExtraScale.Structured.OverrideActive != 0)
+                SetUpdateFieldValue(extraScaleCurve.ModifyValue(extraScaleCurve.OverrideActive), GetMiscTemplate().ExtraScale.Structured.OverrideActive != 0 ? true : false);
+
 
             PhasingHandler.InheritPhaseShift(this, caster);
 
@@ -135,9 +153,20 @@ namespace Game.Entities
 
             UpdateShape();
 
-            if (GetMiscTemplate().HasSplines())
+            uint timeToTarget = GetMiscTemplate().TimeToTarget != 0 ? GetMiscTemplate().TimeToTarget : m_areaTriggerData.Duration;
+
+            if (GetTemplate().HasFlag(AreaTriggerFlags.HasCircularMovement))
             {
-                uint timeToTarget = GetMiscTemplate().TimeToTarget != 0 ? GetMiscTemplate().TimeToTarget : GetUInt32Value(AreaTriggerFields.Duration);
+                AreaTriggerCircularMovementInfo cmi = GetMiscTemplate().CircularMovementInfo;
+                if (target && GetTemplate().HasFlag(AreaTriggerFlags.HasAttached))
+                    cmi.PathTarget.Set(target.GetGUID());
+                else
+                    cmi.Center.Set(new Vector3(pos.posX, pos.posY, pos.posZ));
+
+                InitCircularMovement(cmi, timeToTarget);
+            }
+            else if (GetMiscTemplate().HasSplines())
+            {
                 InitSplineOffsets(GetMiscTemplate().SplinePoints, timeToTarget);
             }
 
@@ -155,6 +184,10 @@ namespace Game.Entities
             }
 
             AI_Initialize();
+
+            // Relocate areatriggers with circular movement again
+            if (HasCircularMovement())
+                Relocate(CalculateCircularMovementPosition());
 
             if (!GetMap().AddToMap(this))
             {         // Returning false will cause the object to be deleted - remove from transport
@@ -175,7 +208,12 @@ namespace Game.Entities
             base.Update(diff);
             _timeSinceCreated += diff;
 
-            if (GetTemplate().HasFlag(AreaTriggerFlags.HasAttached))
+            // "If" order matter here, Circular Movement > Attached > Splines
+            if (HasCircularMovement())
+            {
+                UpdateCircularMovementPosition(diff);
+            }
+            else if(GetTemplate().HasFlag(AreaTriggerFlags.HasAttached))
             {
                 Unit target = GetTarget();
                 if (target)
@@ -212,7 +250,7 @@ namespace Game.Entities
             _totalDuration = newDuration;
 
             // negative duration (permanent areatrigger) sent as 0
-            SetUInt32Value(AreaTriggerFields.Duration, (uint)Math.Max(newDuration, 0));
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.Duration), (uint)Math.Max(newDuration, 0));
         }
 
         void _UpdateDuration(int newDuration)
@@ -220,12 +258,13 @@ namespace Game.Entities
             _duration = newDuration;
 
             // should be sent in object create packets only
-            UpdateData[(int)AreaTriggerFields.Duration] = _duration;
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.Duration), (uint)_duration);
+            m_areaTriggerData.ClearChanged(m_areaTriggerData.Duration);
         }
 
         float GetProgress()
         {
-            return GetTimeSinceCreated() < GetTimeToTargetScale() ? GetTimeSinceCreated() / GetTimeToTargetScale() : 1.0f;
+            return GetTimeSinceCreated() < GetTimeToTargetScale() ? (float)GetTimeSinceCreated() / GetTimeToTargetScale() : 1.0f;
         }
 
         void UpdateTargetList()
@@ -275,12 +314,9 @@ namespace Game.Entities
 
             unsafe
             {
-                fixed (float* ptr = GetTemplate().BoxDatas.Extents)
-                {
-                    extentsX = ptr[0];
-                    extentsY = ptr[1];
-                    extentsZ = ptr[2];
-                }
+                extentsX = GetTemplate().BoxDatas.Extents[0];
+                extentsY = GetTemplate().BoxDatas.Extents[1];
+                extentsZ = GetTemplate().BoxDatas.Extents[2];
             }
 
             var check = new AnyUnitInObjectRangeCheck(this, GetTemplate().MaxSearchRadius, false);
@@ -302,10 +338,7 @@ namespace Game.Entities
 
             AxisAlignedBox box = new AxisAlignedBox(new Vector3(minX, minY, minZ), new Vector3(maxX, maxY, maxZ));
 
-            targetList.RemoveAll(unit =>
-            {
-                return !box.contains(new Vector3(unit.GetPositionX(), unit.GetPositionY(), unit.GetPositionZ()));
-            });
+            targetList.RemoveAll(unit => !box.contains(new Vector3(unit.GetPositionX(), unit.GetPositionY(), unit.GetPositionZ())));
         }
 
         void SearchUnitInPolygon(List<Unit> targetList)
@@ -319,11 +352,7 @@ namespace Game.Entities
             float maxZ = GetPositionZ() + height;
 
             targetList.RemoveAll(unit =>
-            {
-                return !CheckIsInPolygon2D(unit)
-                    || unit.GetPositionZ() < minZ
-                    || unit.GetPositionZ() > maxZ;
-            });
+                !CheckIsInPolygon2D(unit) || unit.GetPositionZ() < minZ || unit.GetPositionZ() > maxZ);
         }
 
         void SearchUnitInCylinder(List<Unit> targetList)
@@ -336,11 +365,8 @@ namespace Game.Entities
             float minZ = GetPositionZ() - height;
             float maxZ = GetPositionZ() + height;
 
-            targetList.RemoveAll(unit =>
-            {
-                return unit.GetPositionZ() < minZ
-                    || unit.GetPositionZ() > maxZ;
-            });
+            targetList.RemoveAll(unit => unit.GetPositionZ() < minZ
+                                         || unit.GetPositionZ() > maxZ);
         }
 
         void HandleUnitEnterExit(List<Unit> newTargetList)
@@ -363,7 +389,7 @@ namespace Game.Entities
             {
                 Player player = unit.ToPlayer();
                 if (player)
-                    if (player.isDebugAreaTriggers)
+                    if (player.IsDebugAreaTriggers)
                         player.SendSysMessage(CypherStrings.DebugAreatriggerEntered, GetTemplate().Id);
 
                 DoActions(unit);
@@ -378,7 +404,7 @@ namespace Game.Entities
                 {
                     Player player = leavingUnit.ToPlayer();
                     if (player)
-                        if (player.isDebugAreaTriggers)
+                        if (player.IsDebugAreaTriggers)
                             player.SendSysMessage(CypherStrings.DebugAreatriggerLeft, GetTemplate().Id);
 
                     UndoActions(leavingUnit);
@@ -603,22 +629,23 @@ namespace Game.Entities
 
             _movementTime = 0;
 
-            _spline.Init_Spline(splinePoints.ToArray(), splinePoints.Count, Spline.EvaluationMode.Linear);
-            _spline.initLengths();
+            _spline.InitSpline(splinePoints.ToArray(), splinePoints.Count, Spline.EvaluationMode.Linear);
+            _spline.InitLengths();
 
             // should be sent in object create packets only
-            UpdateData[(int)AreaTriggerFields.TimeToTarget] = timeToTarget;
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.TimeToTarget), timeToTarget);
+            m_areaTriggerData.ClearChanged(m_areaTriggerData.TimeToTarget);
 
             if (IsInWorld)
             {
                 if (_reachedDestination)
                 {
-                    AreaTriggerReShape reshapeDest = new AreaTriggerReShape();
+                    AreaTriggerRePath reshapeDest = new AreaTriggerRePath();
                     reshapeDest.TriggerGUID = GetGUID();
                     SendMessageToSet(reshapeDest, true);
                 }
 
-                AreaTriggerReShape reshape = new AreaTriggerReShape();
+                AreaTriggerRePath reshape = new AreaTriggerRePath();
                 reshape.TriggerGUID = GetGUID();
                 reshape.AreaTriggerSpline.HasValue = true;
                 reshape.AreaTriggerSpline.Value.ElapsedTimeForMovement = GetElapsedTimeForMovement();
@@ -628,6 +655,104 @@ namespace Game.Entities
             }
 
             _reachedDestination = false;
+        }
+
+        void InitCircularMovement(AreaTriggerCircularMovementInfo cmi, uint timeToTarget)
+        {
+            // Circular movement requires either a center position or an attached unit
+            Cypher.Assert(cmi.Center.HasValue || cmi.PathTarget.HasValue);
+
+            // should be sent in object create packets only
+            SetUpdateFieldValue(m_values.ModifyValue(m_areaTriggerData).ModifyValue(m_areaTriggerData.TimeToTarget), timeToTarget);
+            m_areaTriggerData.ClearChanged(m_areaTriggerData.TimeToTarget);
+
+            _circularMovementInfo.Set(cmi);
+
+            _circularMovementInfo.Value.TimeToTarget = timeToTarget;
+            _circularMovementInfo.Value.ElapsedTimeForMovement = 0;
+
+            if (IsInWorld)
+            {
+                AreaTriggerRePath reshape = new AreaTriggerRePath();
+                reshape.TriggerGUID = GetGUID();
+                reshape.AreaTriggerCircularMovement = _circularMovementInfo;
+
+                SendMessageToSet(reshape, true);
+            }
+        }
+
+        public bool HasCircularMovement()
+        {
+            return _circularMovementInfo.HasValue;
+        }
+
+        Position GetCircularMovementCenterPosition()
+        {
+            if (!_circularMovementInfo.HasValue)
+                return null;
+
+            if (_circularMovementInfo.Value.PathTarget.HasValue)
+            {
+                WorldObject center = Global.ObjAccessor.GetWorldObject(this, _circularMovementInfo.Value.PathTarget.Value);
+                if (center)
+                    return center;
+            }
+
+            if (_circularMovementInfo.Value.Center.HasValue)
+                return new Position(_circularMovementInfo.Value.Center.Value);
+
+            return null;
+        }
+
+        Position CalculateCircularMovementPosition()
+        {
+            Position centerPos = GetCircularMovementCenterPosition();
+            if (centerPos == null)
+                return GetPosition();
+
+            AreaTriggerCircularMovementInfo cmi = _circularMovementInfo.Value;
+
+            // AreaTrigger make exactly "Duration / TimeToTarget" loops during his life time
+            float pathProgress = (float)cmi.ElapsedTimeForMovement / cmi.TimeToTarget;
+
+            // We already made one circle and can't loop
+            if (!cmi.CanLoop)
+                pathProgress = Math.Min(1.0f, pathProgress);
+
+            float radius = cmi.Radius;
+            if (MathFunctions.fuzzyNe(cmi.BlendFromRadius, radius))
+            {
+                float blendCurve = (cmi.BlendFromRadius - radius) / radius;
+                // 4.f Defines four quarters
+                blendCurve = MathFunctions.RoundToInterval(ref blendCurve, 1.0f, 4.0f) / 4.0f;
+                float blendProgress = Math.Min(1.0f, pathProgress / blendCurve);
+                radius = MathFunctions.lerp(cmi.BlendFromRadius, cmi.Radius, blendProgress);
+            }
+
+            // Adapt Path progress depending of circle direction
+            if (!cmi.CounterClockwise)
+                pathProgress *= -1;
+
+            float angle = cmi.InitialAngle + 2.0f * (float)Math.PI * pathProgress;
+            float x = centerPos.GetPositionX() + (radius * (float)Math.Cos(angle));
+            float y = centerPos.GetPositionY() + (radius * (float)Math.Sin(angle));
+            float z = centerPos.GetPositionZ() + cmi.ZOffset;
+
+            return new Position(x, y, z, angle);
+        }
+
+        void UpdateCircularMovementPosition(uint diff)
+        {
+            if (_circularMovementInfo.Value.StartDelay > GetElapsedTimeForMovement())
+                return;
+
+            _circularMovementInfo.Value.ElapsedTimeForMovement = (int)(GetElapsedTimeForMovement() - _circularMovementInfo.Value.StartDelay);
+
+            Position pos = CalculateCircularMovementPosition();
+
+            GetMap().AreaTriggerRelocation(this, pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation());
+
+            DebugVisualizePosition();
         }
 
         void UpdateSplinePosition(uint diff)
@@ -643,9 +768,9 @@ namespace Game.Entities
             if (_movementTime >= GetTimeToTarget())
             {
                 _reachedDestination = true;
-                _lastSplineIndex = _spline.last();
+                _lastSplineIndex = _spline.Last();
 
-                Vector3 lastSplinePosition = _spline.getPoint(_lastSplineIndex);
+                Vector3 lastSplinePosition = _spline.GetPoint(_lastSplineIndex);
                 GetMap().AreaTriggerRelocation(this, lastSplinePosition.X, lastSplinePosition.Y, lastSplinePosition.Z, GetOrientation());
 
                 DebugVisualizePosition();
@@ -655,7 +780,7 @@ namespace Game.Entities
                 return;
             }
 
-            float currentTimePercent = _movementTime / GetTimeToTarget();
+            float currentTimePercent = (float)_movementTime / GetTimeToTarget();
 
             if (currentTimePercent <= 0.0f)
                 return;
@@ -674,7 +799,7 @@ namespace Game.Entities
 
             int lastPositionIndex = 0;
             float percentFromLastPoint = 0;
-            _spline.computeIndex(currentTimePercent, ref lastPositionIndex, ref percentFromLastPoint);
+            _spline.ComputeIndex(currentTimePercent, ref lastPositionIndex, ref percentFromLastPoint);
 
             Vector3 currentPosition;
             _spline.Evaluate_Percent(lastPositionIndex, percentFromLastPoint, out currentPosition);
@@ -682,7 +807,7 @@ namespace Game.Entities
             float orientation = GetOrientation();
             if (GetTemplate().HasFlag(AreaTriggerFlags.HasFaceMovementDir))
             {
-                Vector3 nextPoint = _spline.getPoint(lastPositionIndex + 1);
+                Vector3 nextPoint = _spline.GetPoint(lastPositionIndex + 1);
                 orientation = GetAngle(nextPoint.X, nextPoint.Y);
             }
 
@@ -713,6 +838,41 @@ namespace Game.Entities
             _ai = null;
         }
 
+        public override void BuildValuesCreate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
+
+            buffer.WriteUInt8((byte)flags);
+            m_objectData.WriteCreate(buffer, flags, this, target);
+            m_areaTriggerData.WriteCreate(buffer, flags, this, target);
+
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
+
+        public override void BuildValuesUpdate(WorldPacket data, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            WorldPacket buffer = new WorldPacket();
+
+            buffer.WriteUInt32(m_values.GetChangedObjectTypeMask());
+            if (m_values.HasChanged(TypeId.Object))
+                m_objectData.WriteUpdate(buffer, flags, this, target);
+
+            if (m_values.HasChanged(TypeId.AreaTrigger))
+                m_areaTriggerData.WriteUpdate(buffer, flags, this, target);
+
+            data.WriteUInt32(buffer.GetSize());
+            data.WriteBytes(buffer);
+        }
+
+        public override void ClearUpdateMask(bool remove)
+        {
+            m_values.ClearChangesMask(m_areaTriggerData);
+            base.ClearUpdateMask(remove);
+        }
+
         AreaTriggerAI GetAI() { return _ai; }
 
         [System.Diagnostics.Conditional("DEBUG")]
@@ -723,17 +883,17 @@ namespace Game.Entities
             {
                 Player player = caster.ToPlayer();
                 if (player)
-                    if (player.isDebugAreaTriggers)
+                    if (player.IsDebugAreaTriggers)
                         player.SummonCreature(1, this, TempSummonType.TimedDespawn, GetTimeToTarget());
             }
         }
 
         public bool IsRemoved() { return _isRemoved; }
-        public uint GetSpellId() { return GetUInt32Value(AreaTriggerFields.SpellId); }
+        public uint GetSpellId() { return m_areaTriggerData.SpellID; }
         public AuraEffect GetAuraEffect() { return _aurEff; }
         public uint GetTimeSinceCreated() { return _timeSinceCreated; }
-        public uint GetTimeToTarget() { return GetUInt32Value(AreaTriggerFields.TimeToTarget); }
-        public uint GetTimeToTargetScale() { return GetUInt32Value(AreaTriggerFields.TimeToTargetScale); }
+        public uint GetTimeToTarget() { return m_areaTriggerData.TimeToTarget; }
+        public uint GetTimeToTargetScale() { return m_areaTriggerData.TimeToTargetScale; }
         public int GetDuration() { return _duration; }
         public int GetTotalDuration() { return _totalDuration; }
 
@@ -743,14 +903,18 @@ namespace Game.Entities
 
         public AreaTriggerMiscTemplate GetMiscTemplate() { return _areaTriggerMiscTemplate; }
 
-        public ObjectGuid GetCasterGuid() { return GetGuidValue(AreaTriggerFields.Caster); }
+        public ObjectGuid GetCasterGuid() { return m_areaTriggerData.Caster; }
 
         public Vector3 GetRollPitchYaw() { return _rollPitchYaw; }
         public Vector3 GetTargetRollPitchYaw() { return _targetRollPitchYaw; }
 
-        public bool HasSplines() { return !_spline.empty(); }
+        public bool HasSplines() { return !_spline.Empty(); }
         public Spline GetSpline() { return _spline; }
-        public uint GetElapsedTimeForMovement() { return GetTimeSinceCreated(); } /// @todo: research the right value, in sniffs both timers are nearly identical
+        public uint GetElapsedTimeForMovement() { return GetTimeSinceCreated(); } // @todo: research the right value, in sniffs both timers are nearly identical
+
+        public Optional<AreaTriggerCircularMovementInfo> GetCircularMovementInfo() { return _circularMovementInfo; }
+
+        AreaTriggerFieldData m_areaTriggerData;
 
         ObjectGuid _targetGuid;
 
@@ -770,6 +934,8 @@ namespace Game.Entities
         bool _reachedDestination;
         int _lastSplineIndex;
         uint _movementTime;
+
+        Optional<AreaTriggerCircularMovementInfo> _circularMovementInfo;
 
         AreaTriggerMiscTemplate _areaTriggerMiscTemplate;
         List<ObjectGuid> _insideUnits = new List<ObjectGuid>();

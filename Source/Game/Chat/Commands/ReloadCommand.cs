@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -238,6 +238,7 @@ namespace Game.Chat
                 Global.ObjectMgr.CheckCreatureTemplate(cInfo);
             }
 
+            Global.ObjectMgr.InitializeQueriesData(QueryDataGroup.Creatures);
             handler.SendGlobalGMSysMessage("Creature template reloaded.");
             return true;
         }
@@ -395,12 +396,12 @@ namespace Game.Chat
             return true;
         }
 
-        [Command("item_enchantment_template", RBACPermissions.CommandReloadItemEnchantmentTemplate, true)]
-        static bool HandleReloadItemEnchantementsCommand(StringArguments args, CommandHandler handler)
+        [Command("item_random_bonus_list_template", RBACPermissions.CommandReloadItemRandomBonusListTemplate, true)]
+        static bool HandleReloadItemRandomBonusListTemplatesCommand(StringArguments args, CommandHandler handler)
         {
-            Log.outInfo(LogFilter.Server, "Re-Loading Item Random Enchantments Table...");
-            ItemEnchantment.LoadRandomEnchantmentsTable();
-            handler.SendGlobalGMSysMessage("DB table `item_enchantment_template` reloaded.");
+            Log.outInfo(LogFilter.Server, "Re-Loading Random item bonus list definitions...");
+            ItemEnchantmentManager.LoadItemRandomBonusListTemplates();
+            handler.SendGlobalGMSysMessage("DB table `item_random_bonus_list_template` reloaded.");
             return true;
         }
 
@@ -591,10 +592,12 @@ namespace Game.Chat
             Log.outInfo(LogFilter.Server, "Re-Loading Quest Locale ... ");
             Global.ObjectMgr.LoadQuestTemplateLocale();
             Global.ObjectMgr.LoadQuestObjectivesLocale();
+            Global.ObjectMgr.LoadQuestGreetingLocales();
             Global.ObjectMgr.LoadQuestOfferRewardLocale();
             Global.ObjectMgr.LoadQuestRequestItemsLocale();
             handler.SendGlobalGMSysMessage("DB table `quest_template_locale` reloaded.");
             handler.SendGlobalGMSysMessage("DB table `quest_objectives_locale` reloaded.");
+            handler.SendGlobalGMSysMessage("DB table `quest_greeting_locale` reloaded.");
             handler.SendGlobalGMSysMessage("DB table `quest_offer_reward_locale` reloaded.");
             handler.SendGlobalGMSysMessage("DB table `quest_request_items_locale` reloaded.");
             return true;
@@ -605,6 +608,7 @@ namespace Game.Chat
         {
             Log.outInfo(LogFilter.Server, "Re-Loading Quest POI ...");
             Global.ObjectMgr.LoadQuestPOI();
+            Global.ObjectMgr.InitializeQueriesData(QueryDataGroup.POIs);
             handler.SendGlobalGMSysMessage("DB Table `quest_poi` and `quest_poi_points` reloaded.");
             return true;
         }
@@ -614,9 +618,10 @@ namespace Game.Chat
         {
             Log.outInfo(LogFilter.Server, "Re-Loading Quest Templates...");
             Global.ObjectMgr.LoadQuests();
+            Global.ObjectMgr.InitializeQueriesData(QueryDataGroup.Quests);
             handler.SendGlobalGMSysMessage("DB table `quest_template` (quest definitions) reloaded.");
 
-            /// dependent also from `gameobject` but this table not reloaded anyway
+            // dependent also from `gameobject` but this table not reloaded anyway
             Log.outInfo(LogFilter.Server, "Re-Loading GameObjects for quests...");
             Global.ObjectMgr.LoadGameObjectForQuests();
             handler.SendGlobalGMSysMessage("Data GameObjects for quests reloaded.");
@@ -1013,7 +1018,7 @@ namespace Game.Chat
             static bool HandleReloadAllItemCommand(StringArguments args, CommandHandler handler)
             {
                 HandleReloadPageTextsCommand(null, handler);
-                HandleReloadItemEnchantementsCommand(null, handler);
+                HandleReloadItemRandomBonusListTemplatesCommand(null, handler);
                 return true;
             }
 

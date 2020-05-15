@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,8 @@ namespace Framework.Constants
         public static uint MinNewsItemLevel = 353;
 
         public static byte OldMaxLevel = 25;
+
+        public static uint MasterDethroneInactiveDays = 90;
     }
 
     public enum GuildRankRights
@@ -189,7 +191,7 @@ namespace Framework.Constants
         InvalidVendor = 5
     }
 
-    public enum GuildBankRights : int
+    public enum GuildBankRights
     {
         ViewTab = 0x01,
         PutItem = 0x02,

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Threading.Tasks;
 
 namespace Framework.Database
@@ -52,10 +51,9 @@ namespace Framework.Database
 
         public QueryCallbackStatus InvokeIfReady()
         {
-            QueryCallbackData callback = _callbacks.Dequeue();
+            QueryCallbackData callback = _callbacks.Peek();
 
-            bool hasNext = true;
-            while (hasNext)
+            while (true)
             {
                 if (_result != null && _result.Wait(0))
                 {
@@ -65,10 +63,11 @@ namespace Framework.Database
 
                     cb(this, f.Result);
 
-                    hasNext = _result != null;
+                    _callbacks.Dequeue();
+                    bool hasNext = _result != null;
                     if (_callbacks.Count == 0)
                     {
-                        Contract.Assert(!hasNext);
+                        Cypher.Assert(!hasNext);
                         return QueryCallbackStatus.Completed;
                     }
 
@@ -76,13 +75,11 @@ namespace Framework.Database
                     if (!hasNext)
                         return QueryCallbackStatus.Completed;
 
-                    callback = _callbacks.Dequeue();
+                    callback = _callbacks.Peek();
                 }
                 else
                     return QueryCallbackStatus.NotReady;
             }
-
-            return QueryCallbackStatus.Completed;
         }
 
         Task<SQLResult> _result;

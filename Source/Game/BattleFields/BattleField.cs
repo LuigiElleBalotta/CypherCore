@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@ using Game.Network;
 using Game.Network.Packets;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.BattleFields
 {
@@ -270,7 +269,7 @@ namespace Game.BattleFields
             }
 
             // If the player does not match minimal level requirements for the battlefield, kick him
-            if (player.getLevel() < m_MinLevel)
+            if (player.GetLevel() < m_MinLevel)
             {
                 if (!m_PlayersWillBeKick[player.GetTeamId()].ContainsKey(player.GetGUID()))
                     m_PlayersWillBeKick[player.GetTeamId()][player.GetGUID()] = Time.UnixTime + 10;
@@ -303,7 +302,7 @@ namespace Game.BattleFields
                 {
                     Player player = Global.ObjAccessor.FindPlayer(guid);
                     if (player)
-                        if (player.isAFK())
+                        if (player.IsAFK())
                             KickPlayerFromBattlefield(guid);
                 }
             }
@@ -402,7 +401,7 @@ namespace Game.BattleFields
                 m_PlayersInWar[player.GetTeamId()].Add(player.GetGUID());
                 m_InvitedPlayers[player.GetTeamId()].Remove(player.GetGUID());
 
-                if (player.isAFK())
+                if (player.IsAFK())
                     player.ToggleAFK();
 
                 OnPlayerJoinWar(player);                               //for scripting
@@ -501,7 +500,7 @@ namespace Game.BattleFields
         {
             creature.CombatStop();
             creature.SetReactState(ReactStates.Passive);
-            creature.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+            creature.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
             creature.DisappearAndDie();
             creature.SetVisible(false);
         }
@@ -509,14 +508,14 @@ namespace Game.BattleFields
         public void ShowNpc(Creature creature, bool aggressive)
         {
             creature.SetVisible(true);
-            creature.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+            creature.RemoveUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
             if (!creature.IsAlive())
                 creature.Respawn(true);
             if (aggressive)
                 creature.SetReactState(ReactStates.Aggressive);
             else
             {
-                creature.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                creature.AddUnitFlag(UnitFlags.NonAttackable);
                 creature.SetReactState(ReactStates.Passive);
             }
         }
@@ -597,7 +596,7 @@ namespace Game.BattleFields
             return null;
         }
 
-        public WorldSafeLocsRecord GetClosestGraveYard(Player player)
+        public WorldSafeLocsEntry GetClosestGraveYard(Player player)
         {
             BfGraveyard closestGY = null;
             float maxdist = -1;
@@ -618,7 +617,7 @@ namespace Game.BattleFields
             }
 
             if (closestGY != null)
-                return CliDB.WorldSafeLocsStorage.LookupByKey(closestGY.GetGraveyardId());
+                return Global.ObjectMgr.GetWorldSafeLoc(closestGY.GetGraveyardId());
 
             return null;
         }
@@ -689,7 +688,7 @@ namespace Game.BattleFields
 
             // Set creature in world
             map.AddToMap(creature);
-            creature.setActive(true);
+            creature.SetActive(true);
 
             return creature;
         }
@@ -718,7 +717,7 @@ namespace Game.BattleFields
 
             // Add to world
             map.AddToMap(go);
-            go.setActive(true);
+            go.SetActive(true);
 
             return go;
         }
@@ -892,8 +891,8 @@ namespace Game.BattleFields
 
         public float GetDistance(Player player)
         {
-            WorldSafeLocsRecord safeLoc = CliDB.WorldSafeLocsStorage.LookupByKey(m_GraveyardId);
-            return player.GetDistance2d(safeLoc.Loc.X, safeLoc.Loc.Y);
+            WorldSafeLocsEntry safeLoc = Global.ObjectMgr.GetWorldSafeLoc(m_GraveyardId);
+            return player.GetDistance2d(safeLoc.Loc.GetPositionX(), safeLoc.Loc.GetPositionY());
         }
 
         public void AddPlayer(ObjectGuid playerGuid)
@@ -965,7 +964,7 @@ namespace Game.BattleFields
 
         void RelocateDeadPlayers()
         {
-            WorldSafeLocsRecord closestGrave = null;
+            WorldSafeLocsEntry closestGrave = null;
             foreach (var guid in m_ResurrectQueue)
             {
                 Player player = Global.ObjAccessor.FindPlayer(guid);
@@ -973,12 +972,12 @@ namespace Game.BattleFields
                     continue;
 
                 if (closestGrave != null)
-                    player.TeleportTo(player.GetMapId(), closestGrave.Loc.X, closestGrave.Loc.Y, closestGrave.Loc.Z, player.GetOrientation());
+                    player.TeleportTo(closestGrave.Loc);
                 else
                 {
                     closestGrave = m_Bf.GetClosestGraveYard(player);
                     if (closestGrave != null)
-                        player.TeleportTo(player.GetMapId(), closestGrave.Loc.X, closestGrave.Loc.Y, closestGrave.Loc.Z, player.GetOrientation());
+                        player.TeleportTo(closestGrave.Loc);
                 }
             }
         }
@@ -1026,8 +1025,8 @@ namespace Game.BattleFields
             m_neutralValuePct = 0;
             m_maxSpeed = 0;
 
-            m_activePlayers[0] = new List<ObjectGuid>();
-            m_activePlayers[1] = new List<ObjectGuid>();
+            m_activePlayers[0] = new HashSet<ObjectGuid>();
+            m_activePlayers[1] = new HashSet<ObjectGuid>();
         }
 
         public virtual bool HandlePlayerEnter(Player player)
@@ -1043,12 +1042,10 @@ namespace Game.BattleFields
                 }
             }
 
-            m_activePlayers[player.GetTeamId()].Add(player.GetGUID());
-            return true;
+            return m_activePlayers[player.GetTeamId()].Add(player.GetGUID());
         }
 
-        //Index of place in for loop
-        public virtual int HandlePlayerLeave(Player player)
+        public virtual void HandlePlayerLeave(Player player)
         {
             if (!m_capturePointGUID.IsEmpty())
             {
@@ -1057,13 +1054,7 @@ namespace Game.BattleFields
                     player.SendUpdateWorldState(capturePoint.GetGoInfo().ControlZone.worldState1, 0);
             }
 
-            var index = m_activePlayers[player.GetTeamId()].IndexOf(player.GetGUID());
-
-            if (index == m_activePlayers[player.GetTeamId()].Count)
-                return m_activePlayers[player.GetTeamId()].Count; // return end()
-
             m_activePlayers[player.GetTeamId()].Remove(player.GetGUID());
-            return ++index;
         }
 
         public virtual void SendChangePhase()
@@ -1085,7 +1076,7 @@ namespace Game.BattleFields
 
         public bool SetCapturePointData(GameObject capturePoint)
         {
-            Contract.Assert(capturePoint);
+            Cypher.Assert(capturePoint);
 
             Log.outError(LogFilter.Battlefield, "Creating capture point {0}", capturePoint.GetEntry());
 
@@ -1134,7 +1125,7 @@ namespace Game.BattleFields
                 {
                     capturePoint.SetRespawnTime(0);                  // not save respawn time
                     capturePoint.Delete();
-                    capturePoint = null;
+                    capturePoint.Dispose();
                 }
                 m_capturePointGUID.Clear();
             }
@@ -1154,18 +1145,14 @@ namespace Game.BattleFields
 
                 for (byte team = 0; team < SharedConst.BGTeamsCount; ++team)
                 {
-                    for (int i = 0; i < m_activePlayers[team].Count; )
+                    foreach (var guid in m_activePlayers[team])
                     {
-                        Player player = Global.ObjAccessor.FindPlayer(m_activePlayers[team][i]);
+                        Player player = Global.ObjAccessor.FindPlayer(guid);
                         if (player)
                         {
                             if (!capturePoint.IsWithinDistInMap(player, radius) || !player.IsOutdoorPvPActive())
-                                i = HandlePlayerLeave(player);
-                            else
-                                ++i;
+                                HandlePlayerLeave(player);
                         }
-                        else
-                            ++i;
                     }
                 }
 
@@ -1178,18 +1165,18 @@ namespace Game.BattleFields
                 {
                     if (player.IsOutdoorPvPActive())
                     {
-                        m_activePlayers[player.GetTeamId()].Add(player.GetGUID());
-                        HandlePlayerEnter(player);
+                        if (m_activePlayers[player.GetTeamId()].Add(player.GetGUID()))
+                            HandlePlayerEnter(player);
                     }
                 }
             }
 
             // get the difference of numbers
-            float fact_diff = (m_activePlayers[TeamId.Alliance].Count - m_activePlayers[TeamId.Horde].Count) * diff / 1000;
+            float fact_diff = ((float)m_activePlayers[TeamId.Alliance].Count - m_activePlayers[TeamId.Horde].Count) * diff / 1000;
             if (MathFunctions.fuzzyEq(fact_diff, 0.0f))
                 return false;
 
-            Team Challenger = 0;
+            Team Challenger;
             float maxDiff = m_maxSpeed * diff;
 
             if (fact_diff < 0)
@@ -1317,7 +1304,7 @@ namespace Game.BattleFields
         uint GetTeamId() { return m_team; }
 
         // active Players in the area of the objective, 0 - alliance, 1 - horde
-        List<ObjectGuid>[] m_activePlayers = new List<ObjectGuid>[SharedConst.BGTeamsCount];
+        HashSet<ObjectGuid>[] m_activePlayers = new HashSet<ObjectGuid>[SharedConst.BGTeamsCount];
 
         // Total shift needed to capture the objective
         float m_maxValue;

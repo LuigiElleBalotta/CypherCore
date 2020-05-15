@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game;
 using Game.AI;
 using Game.Entities;
 using Game.Scripting;
-using Game.PvP;
 
 namespace Scripts.Outlands
 {
@@ -47,7 +46,7 @@ namespace Scripts.Outlands
             envelopingWinds_Timer = 9000;
             shock_Timer = 5000;
 
-            me.RemoveFlag64(UnitFields.NpcFlags, NPCFlags.QuestGiver);
+            me.RemoveNpcFlag(NPCFlags.QuestGiver);
             me.SetFaction(Aeranas.FactionFriendly);
 
             Talk(Aeranas.SaySummon);
@@ -72,7 +71,7 @@ namespace Scripts.Outlands
             if (HealthBelowPct(30))
             {
                 me.SetFaction(Aeranas.FactionFriendly);
-                me.SetFlag64(UnitFields.NpcFlags, NPCFlags.QuestGiver);
+                me.AddNpcFlag(NPCFlags.QuestGiver);
                 me.RemoveAllAuras();
                 me.DeleteThreatList();
                 me.CombatStop(true);
@@ -116,7 +115,7 @@ namespace Scripts.Outlands
     }
 
     [Script]
-    class npc_ancestral_wolf : npc_escortAI
+    class npc_ancestral_wolf : NpcEscortAI
     {
         public npc_ancestral_wolf(Creature creature) : base(creature)
         {
@@ -168,7 +167,7 @@ namespace Scripts.Outlands
     }
 
     [Script]
-    class npc_wounded_blood_elf : npc_escortAI
+    class npc_wounded_blood_elf : NpcEscortAI
     {
         public npc_wounded_blood_elf(Creature creature) : base(creature) { }
 
@@ -176,7 +175,7 @@ namespace Scripts.Outlands
 
         public override void EnterCombat(Unit who)
         {
-            if (HasEscortState(eEscortState.Escorting))
+            if (HasEscortState(EscortState.Escorting))
                 Talk(SAY_ELF_AGGRO);
         }
 
@@ -185,12 +184,12 @@ namespace Scripts.Outlands
             summoned.GetAI().AttackStart(me);
         }
 
-        public override void sQuestAccept(Player player, Quest quest)
+        public override void QuestAccept(Player player, Quest quest)
         {
             if (quest.Id == QUEST_ROAD_TO_FALCON_WATCH)
             {
                 me.SetFaction(FACTION_FALCON_WATCH_QUEST);
-                base.Start(true, false, player.GetGUID());
+                Start(true, false, player.GetGUID());
             }
         }
 
@@ -297,17 +296,6 @@ namespace Scripts.Outlands
 
         const uint SPELL_SUMMON_POO = 37688;
         const uint NPC_DERANGED_HELBOAR = 16863;
-    }
-
-    [Script]
-    class HellfirePeninsulaPvPScript : OutdoorPvPScript
-    {
-        public HellfirePeninsulaPvPScript() : base("outdoorpvp_hp") { }
-
-        public override OutdoorPvP GetOutdoorPvP()
-        {
-            return new HellfirePeninsulaPvP();
-        }
     }
 }
 

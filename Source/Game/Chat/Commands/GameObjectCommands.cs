@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            string id = handler.extractKeyFromLink(args, "Hgameobject");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -63,7 +63,7 @@ namespace Game.Chat
         static bool HandleGameObjectDeleteCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Hgameobject:go_guid|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hgameobject");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -103,7 +103,7 @@ namespace Game.Chat
         static bool HandleGameObjectMoveCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Hgameobject:go_guid|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hgameobject");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -145,11 +145,20 @@ namespace Game.Chat
                 }
             }
 
-            obj.DestroyForNearbyPlayers();
-            obj.RelocateStationaryPosition(x, y, z, obj.GetOrientation());
-            obj.GetMap().GameObjectRelocation(obj, x, y, z, obj.GetOrientation());
+            Map map = obj.GetMap();
 
+            obj.Relocate(x, y, z, obj.GetOrientation());
             obj.SaveToDB();
+
+            // Generate a completely new spawn with new guid
+            // client caches recently deleted objects and brings them back to life
+            // when CreateObject block for this guid is received again
+            // however it entirely skips parsing that block and only uses already known location
+            obj.Delete();
+
+            obj = GameObject.CreateGameObjectFromDB(guidLow, map);
+            if (!obj)
+                return false;
 
             handler.SendSysMessage(CypherStrings.CommandMoveobjmessage, obj.GetSpawnId(), obj.GetGoInfo().name, obj.GetGUID().ToString());
 
@@ -210,7 +219,7 @@ namespace Game.Chat
             if (!args.Empty())
             {
                 // number or [name] Shift-click form |color|Hgameobject_entry:go_id|h[name]|h|r
-                string idStr = handler.extractKeyFromLink(args, "Hgameobject_entry");
+                string idStr = handler.ExtractKeyFromLink(args, "Hgameobject_entry");
                 if (string.IsNullOrEmpty(idStr))
                     return false;
 
@@ -319,7 +328,7 @@ namespace Game.Chat
         static bool HandleGameObjectTurnCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Hgameobject:go_id|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hgameobject");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -360,13 +369,21 @@ namespace Game.Chat
                 oz = player.GetOrientation();
             }
 
-            obj.Relocate(obj.GetPositionX(), obj.GetPositionY(), obj.GetPositionZ());
-            obj.RelocateStationaryPosition(obj.GetPositionX(), obj.GetPositionY(), obj.GetPositionZ(), obj.GetOrientation());
-            obj.SetWorldRotationAngles(oz, oy, ox);
-            obj.DestroyForNearbyPlayers();
-            obj.UpdateObjectVisibility();
+            Map map = obj.GetMap();
 
+            obj.Relocate(obj.GetPositionX(), obj.GetPositionY(), obj.GetPositionZ());
+            obj.SetWorldRotationAngles(oz, oy, ox);
             obj.SaveToDB();
+
+            // Generate a completely new spawn with new guid
+            // client caches recently deleted objects and brings them back to life
+            // when CreateObject block for this guid is received again
+            // however it entirely skips parsing that block and only uses already known location
+            obj.Delete();
+
+            obj = GameObject.CreateGameObjectFromDB(guidLow, map);
+            if (!obj)
+                return false;
 
             handler.SendSysMessage(CypherStrings.CommandTurnobjmessage, obj.GetSpawnId(), obj.GetGoInfo().name, obj.GetGUID().ToString(), obj.GetOrientation());
 
@@ -376,22 +393,17 @@ namespace Game.Chat
         [Command("info", RBACPermissions.CommandGobjectInfo)]
         static bool HandleGameObjectInfoCommand(StringArguments args, CommandHandler handler)
         {
-            uint entry = 0;
-            GameObjectTypes type = 0;
-            uint displayId = 0;
-            string name;
-            uint lootId = 0;
-
             if (args.Empty())
                 return false;
 
-            string param1 = handler.extractKeyFromLink(args, "Hgameobject_entry");
+            string param1 = handler.ExtractKeyFromLink(args, "Hgameobject_entry");
             if (param1.IsEmpty())
                 return false;
 
+            uint entry;
             if (param1.Equals("guid"))
             {
-                string cValue = handler.extractKeyFromLink(args, "Hgameobject");
+                string cValue = handler.ExtractKeyFromLink(args, "Hgameobject");
                 if (cValue.IsEmpty())
                     return false;
 
@@ -413,10 +425,10 @@ namespace Game.Chat
             if (gameObjectInfo == null)
                 return false;
 
-            type = gameObjectInfo.type;
-            displayId = gameObjectInfo.displayId;
-            name = gameObjectInfo.name;
-            lootId = gameObjectInfo.GetLootId();
+            GameObjectTypes type = gameObjectInfo.type;
+            uint displayId = gameObjectInfo.displayId;
+            string name = gameObjectInfo.name;
+            uint lootId = gameObjectInfo.GetLootId();
 
             handler.SendSysMessage(CypherStrings.GoinfoEntry, entry);
             handler.SendSysMessage(CypherStrings.GoinfoType, type);
@@ -446,7 +458,7 @@ namespace Game.Chat
                     return false;
 
                 // number or [name] Shift-click form |color|Hgameobject_entry:go_id|h[name]|h|r
-                string idStr = handler.extractKeyFromLink(args, "Hgameobject_entry");
+                string idStr = handler.ExtractKeyFromLink(args, "Hgameobject_entry");
                 if (string.IsNullOrEmpty(idStr))
                     return false;
 
@@ -473,7 +485,7 @@ namespace Game.Chat
                 Player player = handler.GetPlayer();
                 Map map = player.GetMap();
 
-                GameObject obj = GameObject.CreateGameObject(objectInfo.entry, map, player, new Quaternion(Matrix3.fromEulerAnglesZYX(player.GetOrientation(), 0.0f, 0.0f)), 255, GameObjectState.Ready);
+                GameObject obj = GameObject.CreateGameObject(objectInfo.entry, map, player, Quaternion.fromEulerAnglesZYX(player.GetOrientation(), 0.0f, 0.0f), 255, GameObjectState.Ready);
                 if (!obj)
                     return false;
 
@@ -485,7 +497,7 @@ namespace Game.Chat
                 }
 
                 // fill the gameobject data and save to the db
-                obj.SaveToDB(map.GetId(), 1ul << (int)map.GetSpawnMode());
+                obj.SaveToDB(map.GetId(), new List<Difficulty>() { map.GetDifficultyID() });
                 ulong spawnId = obj.GetSpawnId();
 
                 // this will generate a new guid if the object is in an instance
@@ -517,7 +529,7 @@ namespace Game.Chat
                 if (spawntime != 0)
                     spawntm = spawntime;
 
-                Quaternion rotation = new Quaternion(Matrix3.fromEulerAnglesZYX(player.GetOrientation(), 0.0f, 0.0f));
+                Quaternion rotation = Quaternion.fromEulerAnglesZYX(player.GetOrientation(), 0.0f, 0.0f);
 
                 if (Global.ObjectMgr.GetGameObjectTemplate(id) == null)
                 {
@@ -575,7 +587,7 @@ namespace Game.Chat
             static bool HandleGameObjectSetStateCommand(StringArguments args, CommandHandler handler)
             {
                 // number or [name] Shift-click form |color|Hgameobject:go_id|h[name]|h|r
-                string id = handler.extractKeyFromLink(args, "Hgameobject");
+                string id = handler.ExtractKeyFromLink(args, "Hgameobject");
                 if (string.IsNullOrEmpty(id))
                     return false;
 
@@ -612,16 +624,31 @@ namespace Game.Chat
                 if (!uint.TryParse(state, out uint objectState))
                     return false;
 
-                if (objectType < 4)
-                    obj.SetByteValue(GameObjectFields.Bytes1, (byte)objectType, (byte)objectState);
-                else if (objectType == 4)
-                    obj.SendCustomAnim(objectState);
-                else if (objectType == 5)
+                switch (objectType)
                 {
-                    if (objectState < 0 || objectState > (uint)GameObjectDestructibleState.Rebuilding)
-                        return false;
+                    case 0:
+                        obj.SetGoState((GameObjectState)objectState);
+                        break;
+                    case 1:
+                        obj.SetGoType((GameObjectTypes)objectState);
+                        break;
+                    case 2:
+                        obj.SetGoArtKit((byte)objectState);
+                        break;
+                    case 3:
+                        obj.SetGoAnimProgress(objectState);
+                        break;
+                    case 4:
+                        obj.SendCustomAnim(objectState);
+                        break;
+                    case 5:
+                        if (objectState < 0 || objectState > (uint)GameObjectDestructibleState.Rebuilding)
+                            return false;
 
-                    obj.SetDestructibleState((GameObjectDestructibleState)objectState);
+                        obj.SetDestructibleState((GameObjectDestructibleState)objectState);
+                        break;
+                    default:
+                        break;
                 }
 
                 handler.SendSysMessage("Set gobject type {0} state {1}", objectType, objectState);

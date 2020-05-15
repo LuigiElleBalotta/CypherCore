@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ namespace Scripts.Northrend.DraktharonKeep
 
         class instance_drak_tharon_keep_InstanceScript : InstanceScript
         {
-            public instance_drak_tharon_keep_InstanceScript(Map map) : base(map)
+            public instance_drak_tharon_keep_InstanceScript(InstanceMap map) : base(map)
             {
                 SetHeaders("DTK");
                 SetBossNumber(4);

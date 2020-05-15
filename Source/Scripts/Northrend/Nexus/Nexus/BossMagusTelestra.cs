@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ namespace Scripts.Northrend.Nexus.Nexus
         {
             Initialize();
 
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.RemoveUnitFlag(UnitFlags.NotSelectable);
 
             instance.SetBossState(DataTypes.MagusTelestra, EncounterState.NotStarted);
 
@@ -135,7 +135,7 @@ namespace Scripts.Northrend.Nexus.Nexus
                 if (uiIsWaitingToAppearTimer <= diff)
                 {
                     me.CastSpell(me, 47714, true);
-                    me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                    me.RemoveUnitFlag(UnitFlags.NotSelectable);
                     bIsWaitingToAppear = false;
                     InVanish = false;
                     me.SendAIReaction(AiReaction.Hostile);
@@ -174,7 +174,7 @@ namespace Scripts.Northrend.Nexus.Nexus
                 me.CastStop();
                 me.RemoveAllAuras();
                 me.CastSpell(me, 47710, false);
-                me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                me.AddUnitFlag(UnitFlags.NotSelectable);
                 bFireMagusDead = false;
                 bFrostMagusDead = false;
                 bArcaneMagusDead = false;
@@ -188,7 +188,7 @@ namespace Scripts.Northrend.Nexus.Nexus
                 Phase = 3;
                 me.CastStop();
                 me.RemoveAllAuras();
-                me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                me.AddUnitFlag(UnitFlags.NotSelectable);
                 bFireMagusDead = false;
                 bFrostMagusDead = false;
                 bArcaneMagusDead = false;
@@ -269,7 +269,7 @@ namespace Scripts.Northrend.Nexus.Nexus
             while (time[i] != 0)
                 ++i;
 
-            time[i] = Global.WorldMgr.GetGameTime();
+            time[i] = GameTime.GetGameTime();
             if (i == 2 && (time[2] - time[1] < 5) && (time[1] - time[0] < 5))
                 ++splitPersonality;
         }

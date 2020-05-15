@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -177,7 +177,7 @@ namespace Game
                 if (playerCriteria.Entry.FailEvent != miscValue1 || (playerCriteria.Entry.FailAsset != 0 && playerCriteria.Entry.FailAsset != miscValue2))
                     continue;
 
-                var trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(playerCriteria.ID);
+                var trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(playerCriteria.Id);
                 bool allComplete = true;
                 foreach (CriteriaTree tree in trees)
                 {
@@ -239,19 +239,19 @@ namespace Game
 
             Log.outInfo(LogFilter.Player, "QuestObjectiveCriteriaMgr.CompletedObjective({questObjective.ID}). {GetOwnerInfo()}");
 
-            _completedObjectives.Add(questObjective.ID);
+            _completedObjectives.Add(questObjective.Id);
         }
 
         public bool HasCompletedObjective(QuestObjective questObjective)
         {
-            return _completedObjectives.Contains(questObjective.ID);
+            return _completedObjectives.Contains(questObjective.Id);
         }
 
         public override void SendCriteriaUpdate(Criteria criteria, CriteriaProgress progress, uint timeElapsed, bool timedCompleted)
         {
             CriteriaUpdate criteriaUpdate = new CriteriaUpdate();
 
-            criteriaUpdate.CriteriaID = criteria.ID;
+            criteriaUpdate.CriteriaID = criteria.Id;
             criteriaUpdate.Quantity = progress.Counter;
             criteriaUpdate.PlayerGUID = _owner.GetGUID();
             criteriaUpdate.Flags = 0;

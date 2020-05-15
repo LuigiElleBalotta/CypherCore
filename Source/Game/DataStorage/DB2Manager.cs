@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,7 @@ using Framework.Database;
 using Framework.GameMath;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace Game.DataStorage
 {
@@ -39,7 +37,7 @@ namespace Game.DataStorage
             }
 
             for (uint i = 0; i < (int)LocaleConstant.Total + 1; ++i)
-                _nameValidators[i] = new List<Regex>();
+                _nameValidators[i] = new List<string>();
         }
 
         public void LoadStores()
@@ -61,9 +59,50 @@ namespace Game.DataStorage
             CliDB.ArtifactPowerLinkStorage.Clear();
 
             foreach (ArtifactPowerRankRecord artifactPowerRank in CliDB.ArtifactPowerRankStorage.Values)
-                _artifactPowerRanks[Tuple.Create((uint)artifactPowerRank.ArtifactPowerID, artifactPowerRank.RankIndex)] = artifactPowerRank;
+                _artifactPowerRanks[Tuple.Create(artifactPowerRank.ArtifactPowerID, artifactPowerRank.RankIndex)] = artifactPowerRank;
 
             CliDB.ArtifactPowerRankStorage.Clear();
+
+            foreach (AzeriteEmpoweredItemRecord azeriteEmpoweredItem in CliDB.AzeriteEmpoweredItemStorage.Values)
+                _azeriteEmpoweredItems[azeriteEmpoweredItem.ItemID] = azeriteEmpoweredItem;
+
+            foreach (AzeriteEssencePowerRecord azeriteEssencePower in CliDB.AzeriteEssencePowerStorage.Values)
+                _azeriteEssencePowersByIdAndRank[((uint)azeriteEssencePower.AzeriteEssenceID, (uint)azeriteEssencePower.Tier)] = azeriteEssencePower;
+
+            foreach (AzeriteItemMilestonePowerRecord azeriteItemMilestonePower in CliDB.AzeriteItemMilestonePowerStorage.Values)
+                _azeriteItemMilestonePowers.Add(azeriteItemMilestonePower);
+
+            _azeriteItemMilestonePowers = _azeriteItemMilestonePowers.OrderBy(p => p.RequiredLevel).ToList();
+
+            uint azeriteEssenceSlot = 0;
+            foreach (AzeriteItemMilestonePowerRecord azeriteItemMilestonePower in _azeriteItemMilestonePowers)
+            {
+                AzeriteItemMilestoneType type = (AzeriteItemMilestoneType)azeriteItemMilestonePower.Type;
+                if (type == AzeriteItemMilestoneType.MajorEssence || type == AzeriteItemMilestoneType.MinorEssence)
+                {
+                    //ASSERT(azeriteEssenceSlot < MAX_AZERITE_ESSENCE_SLOT);
+                    _azeriteItemMilestonePowerByEssenceSlot[azeriteEssenceSlot] = azeriteItemMilestonePower;
+                    ++azeriteEssenceSlot;
+                }
+            }
+
+            foreach (AzeritePowerSetMemberRecord azeritePowerSetMember in CliDB.AzeritePowerSetMemberStorage.Values)
+                if (CliDB.AzeritePowerStorage.ContainsKey(azeritePowerSetMember.AzeritePowerID))
+                    _azeritePowers.Add(azeritePowerSetMember.AzeritePowerSetID, azeritePowerSetMember);
+
+            foreach (AzeriteTierUnlockRecord azeriteTierUnlock in CliDB.AzeriteTierUnlockStorage.Values)
+            {
+                var key = (azeriteTierUnlock.AzeriteTierUnlockSetID, (ItemContext)azeriteTierUnlock.ItemCreationContext);
+
+                if (!_azeriteTierUnlockLevels.ContainsKey(key))
+                    _azeriteTierUnlockLevels[key] = new byte[SharedConst.MaxAzeriteEmpoweredTier];
+
+                _azeriteTierUnlockLevels[key][azeriteTierUnlock.Tier] = azeriteTierUnlock.AzeriteLevel;
+            }
+
+            MultiMap<uint, AzeriteUnlockMappingRecord> azeriteUnlockMappings = new MultiMap<uint, AzeriteUnlockMappingRecord>();
+            foreach (AzeriteUnlockMappingRecord azeriteUnlockMapping in CliDB.AzeriteUnlockMappingStorage.Values)
+                azeriteUnlockMappings.Add(azeriteUnlockMapping.AzeriteUnlockMappingSetID, azeriteUnlockMapping);
 
             foreach (CharacterFacialHairStylesRecord characterFacialStyle in CliDB.CharacterFacialHairStylesStorage.Values)
                 _characterFacialHairStyles.Add(Tuple.Create(characterFacialStyle.RaceID, characterFacialStyle.SexID, (uint)characterFacialStyle.VariationID));
@@ -73,8 +112,8 @@ namespace Game.DataStorage
             CharBaseSectionVariation[] sectionToBase = new CharBaseSectionVariation[(int)CharSectionType.Max];
             foreach (CharBaseSectionRecord charBaseSection in CliDB.CharBaseSectionStorage.Values)
             {
-                Contract.Assert(charBaseSection.ResolutionVariationEnum < (byte)CharSectionType.Max, $"SECTION_TYPE_MAX ({(byte)CharSectionType.Max}) must be equal to or greater than {charBaseSection.ResolutionVariationEnum + 1}");
-                Contract.Assert(charBaseSection.VariationEnum < CharBaseSectionVariation.Max, $"CharBaseSectionVariation.Max {(byte)CharBaseSectionVariation.Max} must be equal to or greater than {charBaseSection.VariationEnum + 1}");
+                Cypher.Assert(charBaseSection.ResolutionVariationEnum < (byte)CharSectionType.Max, $"SECTION_TYPE_MAX ({(byte)CharSectionType.Max}) must be equal to or greater than {charBaseSection.ResolutionVariationEnum + 1}");
+                Cypher.Assert(charBaseSection.VariationEnum < CharBaseSectionVariation.Max, $"CharBaseSectionVariation.Max {(byte)CharBaseSectionVariation.Max} must be equal to or greater than {charBaseSection.VariationEnum + 1}");
 
                 sectionToBase[charBaseSection.ResolutionVariationEnum] = charBaseSection.VariationEnum;
             }
@@ -84,7 +123,7 @@ namespace Game.DataStorage
             MultiMap<Tuple<byte, byte, CharBaseSectionVariation>, Tuple<byte, byte>> addedSections = new MultiMap<Tuple<byte, byte, CharBaseSectionVariation>, Tuple<byte, byte>>();
             foreach (CharSectionsRecord charSection in CliDB.CharSectionsStorage.Values)
             {
-                Contract.Assert(charSection.BaseSection < (byte)CharSectionType.Max, $"SECTION_TYPE_MAX ({(byte)CharSectionType.Max}) must be equal to or greater than {charSection.BaseSection + 1}");
+                Cypher.Assert(charSection.BaseSection < (byte)CharSectionType.Max, $"SECTION_TYPE_MAX ({(byte)CharSectionType.Max}) must be equal to or greater than {charSection.BaseSection + 1}");
 
                 Tuple<byte, byte, CharBaseSectionVariation> sectionKey = Tuple.Create(charSection.RaceID, charSection.SexID, sectionToBase[charSection.BaseSection]);
                 Tuple<byte, byte> sectionCombination = Tuple.Create(charSection.VariationIndex, charSection.ColorIndex);
@@ -134,7 +173,14 @@ namespace Game.DataStorage
                 _chrSpecializationsByIndex[storageIndex][chrSpec.OrderIndex] = chrSpec;
 
                 if (chrSpec.Flags.HasAnyFlag(ChrSpecializationFlag.Recommended))
-                    _defaultChrSpecializationsByClass[chrSpec.ClassID] = chrSpec;
+                    _defaultChrSpecializationsByClass[(uint)chrSpec.ClassID] = chrSpec;
+            }
+
+            foreach (ContentTuningXExpectedRecord contentTuningXExpectedStat in CliDB.ContentTuningXExpectedStorage.Values)
+            {
+                ExpectedStatModRecord expectedStatMod = CliDB.ExpectedStatModStorage.LookupByKey(contentTuningXExpectedStat.ExpectedStatModID);
+                if (expectedStatMod != null)
+                    _expectedStatModsByContentTuning.Add(contentTuningXExpectedStat.ContentTuningID, expectedStatMod);
             }
 
             foreach (CurvePointRecord curvePoint in CliDB.CurvePointStorage.Values)
@@ -149,9 +195,14 @@ namespace Game.DataStorage
                 _curvePoints[key] = _curvePoints[key].OrderBy(point => point.OrderIndex).ToList();
 
             foreach (EmotesTextSoundRecord emoteTextSound in CliDB.EmotesTextSoundStorage.Values)
-                _emoteTextSounds[Tuple.Create(emoteTextSound.EmotesTextId, emoteTextSound.RaceId, emoteTextSound.SexId, emoteTextSound.ClassId)] = emoteTextSound;
+                _emoteTextSounds[Tuple.Create((uint)emoteTextSound.EmotesTextId, emoteTextSound.RaceId, emoteTextSound.SexId, emoteTextSound.ClassId)] = emoteTextSound;
 
             CliDB.EmotesTextSoundStorage.Clear();
+
+            foreach (ExpectedStatRecord expectedStat in CliDB.ExpectedStatStorage.Values)
+                _expectedStatsByLevel[Tuple.Create(expectedStat.Lvl, expectedStat.ExpansionID)] = expectedStat;
+
+            CliDB.ExpectedStatStorage.Clear();
 
             foreach (FactionRecord faction in CliDB.FactionStorage.Values)
                 if (faction.ParentFactionID != 0)
@@ -160,11 +211,11 @@ namespace Game.DataStorage
             foreach (GameObjectDisplayInfoRecord gameObjectDisplayInfo in CliDB.GameObjectDisplayInfoStorage.Values)
             {
                 if (gameObjectDisplayInfo.GeoBoxMax.X < gameObjectDisplayInfo.GeoBoxMin.X)
-                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBoxMax.X, ref gameObjectDisplayInfo.GeoBoxMin.X);
+                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBox[3], ref gameObjectDisplayInfo.GeoBox[0]);
                 if (gameObjectDisplayInfo.GeoBoxMax.Y < gameObjectDisplayInfo.GeoBoxMin.Y)
-                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBoxMax.Y, ref gameObjectDisplayInfo.GeoBoxMin.Y);
+                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBox[4], ref gameObjectDisplayInfo.GeoBox[1]);
                 if (gameObjectDisplayInfo.GeoBoxMax.Z < gameObjectDisplayInfo.GeoBoxMin.Z)
-                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBoxMax.Z, ref gameObjectDisplayInfo.GeoBoxMin.Z);
+                    Extensions.Swap(ref gameObjectDisplayInfo.GeoBox[5], ref gameObjectDisplayInfo.GeoBox[2]);
             }
 
             foreach (HeirloomRecord heirloom in CliDB.HeirloomStorage.Values)
@@ -173,7 +224,7 @@ namespace Game.DataStorage
             CliDB.HeirloomStorage.Clear();
 
             foreach (GlyphBindableSpellRecord glyphBindableSpell in CliDB.GlyphBindableSpellStorage.Values)
-                _glyphBindableSpells.Add(glyphBindableSpell.GlyphPropertiesID, glyphBindableSpell.SpellID);
+                _glyphBindableSpells.Add((uint)glyphBindableSpell.GlyphPropertiesID, (uint)glyphBindableSpell.SpellID);
 
             CliDB.GlyphBindableSpellStorage.Clear();
 
@@ -215,8 +266,8 @@ namespace Game.DataStorage
 
             foreach (ItemClassRecord itemClass in CliDB.ItemClassStorage.Values)
             {
-                //ASSERT(itemClass->ClassID < _itemClassByOldEnum.size());
-                //ASSERT(!_itemClassByOldEnum[itemClass->ClassID]);
+                //ASSERT(itemClass.ClassID < _itemClassByOldEnum.size());
+                //ASSERT(!_itemClassByOldEnum[itemClass.ClassID]);
                 _itemClassByOldEnum[itemClass.ClassID] = itemClass;
             }
 
@@ -228,10 +279,10 @@ namespace Game.DataStorage
             CliDB.ItemCurrencyCostStorage.Clear();
 
             foreach (ItemLimitCategoryConditionRecord condition in CliDB.ItemLimitCategoryConditionStorage.Values)
-                _itemCategoryConditions.Add((uint)condition.ParentItemLimitCategoryID, condition);
+                _itemCategoryConditions.Add(condition.ParentItemLimitCategoryID, condition);
 
             foreach (ItemLevelSelectorQualityRecord itemLevelSelectorQuality in CliDB.ItemLevelSelectorQualityStorage.Values)
-                _itemLevelQualitySelectorQualities.Add(itemLevelSelectorQuality.ParentILSQualitySetID, itemLevelSelectorQuality);
+                _itemLevelQualitySelectorQualities.Add((uint)itemLevelSelectorQuality.ParentILSQualitySetID, itemLevelSelectorQuality);
 
             CliDB.ItemLevelSelectorQualityStorage.Clear();
 
@@ -255,6 +306,9 @@ namespace Game.DataStorage
                 _itemToBonusTree.Add(itemBonusTreeAssignment.ItemID, itemBonusTreeAssignment.ItemBonusTreeID);
 
             CliDB.ItemXBonusTreeStorage.Clear();
+
+            foreach (var pair in _azeriteEmpoweredItems)
+                LoadAzeriteEmpoweredItemUnlockMappings(azeriteUnlockMappings, pair.Key);
 
             foreach (MapDifficultyRecord entry in CliDB.MapDifficultyStorage.Values)
             {
@@ -299,36 +353,36 @@ namespace Game.DataStorage
 
             foreach (var namesProfanity in CliDB.NamesProfanityStorage.Values)
             {
-                Contract.Assert(namesProfanity.Language < (int)LocaleConstant.Total || namesProfanity.Language == -1);
+                Cypher.Assert(namesProfanity.Language < (int)LocaleConstant.Total || namesProfanity.Language == -1);
                 if (namesProfanity.Language != -1)
-                    _nameValidators[namesProfanity.Language].Add(new Regex(namesProfanity.Name, RegexOptions.IgnoreCase | RegexOptions.Compiled));
+                    _nameValidators[namesProfanity.Language].Add(namesProfanity.Name);
                 else
                     for (uint i = 0; i < (int)LocaleConstant.Total; ++i)
                     {
                         if (i == (int)LocaleConstant.None)
                             continue;
 
-                        _nameValidators[i].Add(new Regex(namesProfanity.Name, RegexOptions.IgnoreCase | RegexOptions.Compiled));
+                        _nameValidators[i].Add(namesProfanity.Name);
                     }
             }
 
             CliDB.NamesProfanityStorage.Clear();
 
             foreach (var namesReserved in CliDB.NamesReservedStorage.Values)
-                _nameValidators[(int)LocaleConstant.Total].Add(new Regex(namesReserved.Name, RegexOptions.IgnoreCase | RegexOptions.Compiled));
+                _nameValidators[(int)LocaleConstant.Total].Add(namesReserved.Name);
 
             CliDB.NamesReservedStorage.Clear();
 
             foreach (var namesReserved in CliDB.NamesReservedLocaleStorage.Values)
             {
-                Contract.Assert(!Convert.ToBoolean(namesReserved.LocaleMask & ~((1 << (int)LocaleConstant.Total) - 1)));
+                Cypher.Assert(!Convert.ToBoolean(namesReserved.LocaleMask & ~((1 << (int)LocaleConstant.Total) - 1)));
                 for (int i = 0; i < (int)LocaleConstant.Total; ++i)
                 {
                     if (i == (int)LocaleConstant.None)
                         continue;
 
                     if (Convert.ToBoolean(namesReserved.LocaleMask & (1 << i)))
-                        _nameValidators[i].Add(new Regex(namesReserved.Name, RegexOptions.IgnoreCase | RegexOptions.Compiled));
+                        _nameValidators[i].Add(namesReserved.Name);
                 }
             }
             CliDB.NamesReservedLocaleStorage.Clear();
@@ -343,7 +397,7 @@ namespace Game.DataStorage
 
             foreach (PowerTypeRecord powerType in CliDB.PowerTypeStorage.Values)
             {
-                Contract.Assert(powerType.PowerTypeEnum < PowerType.Max);
+                Cypher.Assert(powerType.PowerTypeEnum < PowerType.Max);
 
                 _powerTypes[powerType.PowerTypeEnum] = powerType;
             }
@@ -351,44 +405,17 @@ namespace Game.DataStorage
             foreach (PvpItemRecord pvpItem in CliDB.PvpItemStorage.Values)
                 _pvpItemBonus[pvpItem.ItemID] = pvpItem.ItemLevelDelta;
 
-            foreach (PvpRewardRecord pvpReward in CliDB.PvpRewardStorage.Values)
-                _pvpRewardPack[Tuple.Create((uint)pvpReward.PrestigeLevel, (uint)pvpReward.HonorLevel)] = pvpReward.RewardPackID;
-
-            CliDB.PvpRewardStorage.Clear();
-
-            for (var x = 0; x < (int)Class.Max; ++x)
+            foreach (PvpTalentSlotUnlockRecord talentUnlock in CliDB.PvpTalentSlotUnlockStorage.Values)
             {
-                _pvpTalentsByPosition[x] = new List<PvpTalentRecord>[PlayerConst.MaxPvpTalentTiers][];
-                for (var y = 0; y < PlayerConst.MaxPvpTalentTiers; ++y)
+                Cypher.Assert(talentUnlock.Slot < (1 << PlayerConst.MaxPvpTalentSlots));
+                for (byte i = 0; i < PlayerConst.MaxPvpTalentSlots; ++i)
                 {
-                    _pvpTalentsByPosition[x][y] = new List<PvpTalentRecord>[PlayerConst.MaxPvpTalentColumns];
-                    for (var z = 0; z < PlayerConst.MaxPvpTalentColumns; ++z)
-                        _pvpTalentsByPosition[x][y][z] = new List<PvpTalentRecord>();
+                    if (Convert.ToBoolean(talentUnlock.Slot & (1 << i)))
+                    {
+                        Cypher.Assert(_pvpTalentSlotUnlock[i] == null);
+                        _pvpTalentSlotUnlock[i] = talentUnlock;
+                    }
                 }
-            }
-
-            for (var i = 0; i < PlayerConst.MaxPvpTalentTiers; ++i)
-                _pvpTalentUnlock[i] = new uint[PlayerConst.MaxPvpTalentColumns];
-
-            foreach (PvpTalentRecord talentInfo in CliDB.PvpTalentStorage.Values)
-            {
-                //ASSERT(talentInfo->ClassID < MAX_CLASSES);
-                //ASSERT(talentInfo->TierID < MAX_PVP_TALENT_TIERS, "MAX_PVP_TALENT_TIERS must be at least %u", talentInfo.TierID + 1);
-                //ASSERT(talentInfo->ColumnIndex < MAX_PVP_TALENT_COLUMNS, "MAX_PVP_TALENT_COLUMNS must be at least %u", talentInfo.ColumnIndex + 1);
-                if (talentInfo.ClassID == 0)
-                {
-                    for (uint i = 1; i < (int)Class.Max; ++i)
-                        _pvpTalentsByPosition[i][talentInfo.TierID][talentInfo.ColumnIndex].Add(talentInfo);
-                }
-                else
-                    _pvpTalentsByPosition[talentInfo.ClassID][talentInfo.TierID][talentInfo.ColumnIndex].Add(talentInfo);
-            }
-
-            foreach (PvpTalentUnlockRecord talentUnlock in CliDB.PvpTalentUnlockStorage.Values)
-            {
-                //ASSERT(talentUnlock->TierID < MAX_PVP_TALENT_TIERS, "MAX_PVP_TALENT_TIERS must be at least %u", talentUnlock->TierID + 1);
-                //ASSERT(talentUnlock->ColumnIndex < MAX_PVP_TALENT_COLUMNS, "MAX_PVP_TALENT_COLUMNS must be at least %u", talentUnlock->ColumnIndex + 1);
-                _pvpTalentUnlock[talentUnlock.TierID][talentUnlock.ColumnIndex] = (uint)talentUnlock.HonorLevel;
             }
 
             foreach (QuestPackageItemRecord questPackageItem in CliDB.QuestPackageItemStorage.Values)
@@ -414,21 +441,28 @@ namespace Game.DataStorage
 
             CliDB.RewardPackXItemStorage.Clear();
 
-            foreach (RulesetItemUpgradeRecord rulesetItemUpgrade in CliDB.RulesetItemUpgradeStorage.Values)
-                _rulesetItemUpgrade[rulesetItemUpgrade.ItemID] = rulesetItemUpgrade.ItemUpgradeID;
+            foreach (SkillLineRecord skill in CliDB.SkillLineStorage.Values)
+            {
+                if (skill.ParentSkillLineID != 0)
+                    _skillLinesByParentSkillLine.Add(skill.ParentSkillLineID, skill);
+            }
 
-            CliDB.RulesetItemUpgradeStorage.Clear();
+            foreach (SkillLineAbilityRecord skillLineAbility in CliDB.SkillLineAbilityStorage.Values)
+                _skillLineAbilitiesBySkillupSkill.Add(skillLineAbility.SkillupSkillLineID != 0 ? skillLineAbility.SkillupSkillLineID : skillLineAbility.SkillLine, skillLineAbility);
 
             foreach (SkillRaceClassInfoRecord entry in CliDB.SkillRaceClassInfoStorage.Values)
             {
                 if (CliDB.SkillLineStorage.ContainsKey(entry.SkillID))
-                    _skillRaceClassInfoBySkill.Add(entry.SkillID, entry);
+                    _skillRaceClassInfoBySkill.Add((uint)entry.SkillID, entry);
             }
 
             foreach (var specSpells in CliDB.SpecializationSpellsStorage.Values)
                 _specializationSpellsBySpec.Add(specSpells.SpecID, specSpells);
 
             CliDB.SpecializationSpellsStorage.Clear();
+
+            foreach (SpecSetMemberRecord specSetMember in CliDB.SpecSetMemberStorage.Values)
+                _specsBySpecSet.Add(Tuple.Create((int)specSetMember.SpecSetID, (uint)specSetMember.ChrSpecializationID));
 
             foreach (SpellClassOptionsRecord classOption in CliDB.SpellClassOptionsStorage.Values)
                 _spellFamilyNames.Add(classOption.SpellClassSet);
@@ -499,13 +533,115 @@ namespace Game.DataStorage
 
             CliDB.TransmogSetItemStorage.Clear();
 
+            for (var i = 0; i < (int)UiMapSystem.Max; ++i)
+            {
+                _uiMapAssignmentByMap[i] = new MultiMap<int, UiMapAssignmentRecord>();
+                _uiMapAssignmentByArea[i] = new MultiMap<int, UiMapAssignmentRecord>();
+                _uiMapAssignmentByWmoDoodadPlacement[i] = new MultiMap<int, UiMapAssignmentRecord>();
+                _uiMapAssignmentByWmoGroup[i] = new MultiMap<int, UiMapAssignmentRecord>();
+            }
+
+            MultiMap<int, UiMapAssignmentRecord> uiMapAssignmentByUiMap = new MultiMap<int, UiMapAssignmentRecord>();
+            foreach (UiMapAssignmentRecord uiMapAssignment in CliDB.UiMapAssignmentStorage.Values)
+            {
+                uiMapAssignmentByUiMap.Add(uiMapAssignment.UiMapID, uiMapAssignment);
+                UiMapRecord uiMap = CliDB.UiMapStorage.LookupByKey(uiMapAssignment.UiMapID);
+                if (uiMap != null)
+                {
+                    //ASSERT(uiMap.System < MAX_UI_MAP_SYSTEM, $"MAX_TALENT_TIERS must be at least {uiMap.System + 1}");
+                    if (uiMapAssignment.MapID >= 0)
+                        _uiMapAssignmentByMap[uiMap.System].Add(uiMapAssignment.MapID, uiMapAssignment);
+                    if (uiMapAssignment.AreaID != 0)
+                        _uiMapAssignmentByArea[uiMap.System].Add(uiMapAssignment.AreaID, uiMapAssignment);
+                    if (uiMapAssignment.WmoDoodadPlacementID != 0)
+                        _uiMapAssignmentByWmoDoodadPlacement[uiMap.System].Add(uiMapAssignment.WmoDoodadPlacementID, uiMapAssignment);
+                    if (uiMapAssignment.WmoGroupID != 0)
+                        _uiMapAssignmentByWmoGroup[uiMap.System].Add(uiMapAssignment.WmoGroupID, uiMapAssignment);
+                }
+            }
+
+            Dictionary<Tuple<int, uint>, UiMapLinkRecord> uiMapLinks = new Dictionary<Tuple<int, uint>, UiMapLinkRecord>();
+            foreach (UiMapLinkRecord uiMapLink in CliDB.UiMapLinkStorage.Values)
+                uiMapLinks[Tuple.Create(uiMapLink.ParentUiMapID, (uint)uiMapLink.ChildUiMapID)] = uiMapLink;
+
+            foreach (UiMapRecord uiMap in CliDB.UiMapStorage.Values)
+            {
+                UiMapBounds bounds = new UiMapBounds();
+                UiMapRecord parentUiMap = CliDB.UiMapStorage.LookupByKey(uiMap.ParentUiMapID);
+                if (parentUiMap != null)
+                {
+                    if (Convert.ToBoolean(parentUiMap.Flags & 0x80))
+                        continue;
+                    UiMapAssignmentRecord uiMapAssignment = null;
+                    UiMapAssignmentRecord parentUiMapAssignment = null;
+                    foreach (var uiMapAssignmentForMap in uiMapAssignmentByUiMap.LookupByKey(uiMap.Id))
+                    {
+                        if (uiMapAssignmentForMap.MapID >= 0 &&
+                            uiMapAssignmentForMap.Region[1].X - uiMapAssignmentForMap.Region[0].X > 0 &&
+                            uiMapAssignmentForMap.Region[1].Y - uiMapAssignmentForMap.Region[0].Y > 0)
+                        {
+                            uiMapAssignment = uiMapAssignmentForMap;
+                            break;
+                        }
+                    }
+                    if (uiMapAssignment == null)
+                        continue;
+
+                    foreach (var uiMapAssignmentForMap in uiMapAssignmentByUiMap.LookupByKey(uiMap.ParentUiMapID))
+                    {
+                        if (uiMapAssignmentForMap.MapID == uiMapAssignment.MapID &&
+                            uiMapAssignmentForMap.Region[1].X - uiMapAssignmentForMap.Region[0].X > 0 &&
+                            uiMapAssignmentForMap.Region[1].Y - uiMapAssignmentForMap.Region[0].Y > 0)
+                        {
+                            parentUiMapAssignment = uiMapAssignmentForMap;
+                            break;
+                        }
+                    }
+                    if (parentUiMapAssignment == null)
+                        continue;
+
+                    float parentXsize = parentUiMapAssignment.Region[1].X - parentUiMapAssignment.Region[0].X;
+                    float parentYsize = parentUiMapAssignment.Region[1].Y - parentUiMapAssignment.Region[0].Y;
+                    float bound0scale = (uiMapAssignment.Region[1].X - parentUiMapAssignment.Region[0].X) / parentXsize;
+                    float bound0 = ((1.0f - bound0scale) * parentUiMapAssignment.UiMax.Y) + (bound0scale * parentUiMapAssignment.UiMin.Y);
+                    float bound2scale = (uiMapAssignment.Region[0].X - parentUiMapAssignment.Region[0].X) / parentXsize;
+                    float bound2 = ((1.0f - bound2scale) * parentUiMapAssignment.UiMax.Y) + (bound2scale * parentUiMapAssignment.UiMin.Y);
+                    float bound1scale = (uiMapAssignment.Region[1].Y - parentUiMapAssignment.Region[0].Y) / parentYsize;
+                    float bound1 = ((1.0f - bound1scale) * parentUiMapAssignment.UiMax.X) + (bound1scale * parentUiMapAssignment.UiMin.X);
+                    float bound3scale = (uiMapAssignment.Region[0].Y - parentUiMapAssignment.Region[0].Y) / parentYsize;
+                    float bound3 = ((1.0f - bound3scale) * parentUiMapAssignment.UiMax.X) + (bound3scale * parentUiMapAssignment.UiMin.X);
+                    if ((bound3 - bound1) > 0.0f || (bound2 - bound0) > 0.0f)
+                    {
+                        bounds.Bounds[0] = bound0;
+                        bounds.Bounds[1] = bound1;
+                        bounds.Bounds[2] = bound2;
+                        bounds.Bounds[3] = bound3;
+                        bounds.IsUiAssignment = true;
+                    }
+                }
+
+                UiMapLinkRecord uiMapLink = uiMapLinks.LookupByKey(Tuple.Create(uiMap.ParentUiMapID, uiMap.Id));
+                if (uiMapLink != null)
+                {
+                    bounds.IsUiAssignment = false;
+                    bounds.IsUiLink = true;
+                    bounds.Bounds[0] = uiMapLink.UiMin.Y;
+                    bounds.Bounds[1] = uiMapLink.UiMin.X;
+                    bounds.Bounds[2] = uiMapLink.UiMax.Y;
+                    bounds.Bounds[3] = uiMapLink.UiMax.X;
+                }
+
+                _uiMapBounds[(int)uiMap.Id] = bounds;
+            }
+
+            foreach (UiMapXMapArtRecord uiMapArt in CliDB.UiMapXMapArtStorage.Values)
+                if (uiMapArt.PhaseID != 0)
+                    _uiMapPhases.Add(uiMapArt.PhaseID);
+
             foreach (WMOAreaTableRecord entry in CliDB.WMOAreaTableStorage.Values)
-                _wmoAreaTableLookup[Tuple.Create((short)entry.WmoID, entry.NameSetID, entry.WmoGroupID)] = entry;
+                _wmoAreaTableLookup[Tuple.Create((short)entry.WmoID, (sbyte)entry.NameSetID, entry.WmoGroupID)] = entry;
 
             CliDB.WMOAreaTableStorage.Clear();
-
-            foreach (WorldMapAreaRecord worldMapArea in CliDB.WorldMapAreaStorage.Values)
-                _worldMapAreaByAreaID[worldMapArea.AreaID] = worldMapArea;
         }
 
         public IDB2Storage GetStorage(uint type)
@@ -529,17 +665,18 @@ namespace Game.DataStorage
             uint count = 0;
             do
             {
-                uint id = result.Read<uint>(0);
+                int id = result.Read<int>(0);
                 uint tableHash = result.Read<uint>(1);
                 int recordId = result.Read<int>(2);
                 bool deleted = result.Read<bool>(3);
-                if (!_storage.ContainsKey(tableHash))
+                if (!_storage.ContainsKey(tableHash) && !_hotfixBlob.ContainsKey(Tuple.Create(tableHash, recordId)))
                 {
-                    Log.outError(LogFilter.Sql, "Table `hotfix_data` references unknown DB2 store by hash 0x{0:X} in hotfix id {1}", tableHash, id);
+                    Log.outError(LogFilter.Sql, "Table `hotfix_data` references unknown DB2 store by hash 0x{0:X} and has no reference to `hotfix_blob` in hotfix id {1}", tableHash, id);
                     continue;
                 }
 
-                _hotfixData[MathFunctions.MakePair64(id, tableHash)] = recordId;
+                _hotfixData.Add(id, Tuple.Create(tableHash, recordId));
+                ++_hotfixCount;
                 deletedRecords[Tuple.Create(tableHash, recordId)] = deleted;
 
                 ++count;
@@ -558,7 +695,42 @@ namespace Game.DataStorage
             Log.outInfo(LogFilter.Server, "Loaded {0} hotfix info entries in {1} ms", count, Time.GetMSTimeDiffToNow(oldMSTime));
         }
 
-        public Dictionary<ulong, int> GetHotfixData() { return _hotfixData; }
+        public void LoadHotfixBlob()
+        {
+            uint oldMSTime = Time.GetMSTime();
+            _hotfixBlob.Clear();
+
+            SQLResult result = DB.Hotfix.Query("SELECT TableHash, RecordId, `Blob` FROM hotfix_blob ORDER BY TableHash");
+            if (result.IsEmpty())
+            {
+                Log.outInfo(LogFilter.ServerLoading, "Loaded 0 hotfix blob entries.");
+                return;
+            }
+
+            do
+            {
+                uint tableHash = result.Read<uint>(0);
+                var storeItr = _storage.LookupByKey(tableHash);
+                if (storeItr != null)
+                {
+                    Log.outError(LogFilter.ServerLoading, $"Table hash 0x{tableHash:X} points to a loaded DB2 store {nameof(storeItr)}, fill related table instead of hotfix_blob");
+                    continue;
+                }
+
+                int recordId = result.Read<int>(1);
+                _hotfixBlob[Tuple.Create(tableHash, recordId)] = result.Read<byte[]>(2);
+            } while (result.NextRow());
+
+            Log.outInfo(LogFilter.ServerLoading, $"Loaded {_hotfixBlob.Count} hotfix blob records in {Time.GetMSTimeDiffToNow(oldMSTime)} ms");
+        }
+
+        public uint GetHotfixCount() { return _hotfixCount; }
+        public MultiMap<int, Tuple<uint, int>> GetHotfixData() { return _hotfixData; }
+
+        public byte[] GetHotfixBlobData(uint tableHash, int recordId)
+        {
+            return _hotfixBlob.LookupByKey(Tuple.Create(tableHash, recordId));
+        }
 
         public List<uint> GetAreasForGroup(uint areaGroupId)
         {
@@ -595,6 +767,59 @@ namespace Game.DataStorage
         public ArtifactPowerRankRecord GetArtifactPowerRank(uint artifactPowerId, byte rank)
         {
             return _artifactPowerRanks.LookupByKey(Tuple.Create(artifactPowerId, rank));
+        }
+
+        public AzeriteEmpoweredItemRecord GetAzeriteEmpoweredItem(uint itemId)
+        {
+            return _azeriteEmpoweredItems.LookupByKey(itemId);
+        }
+
+        public bool IsAzeriteItem(uint itemId)
+        {
+            return CliDB.AzeriteItemStorage.Any(pair => pair.Value.ItemID == itemId);
+        }
+
+        public AzeriteEssencePowerRecord GetAzeriteEssencePower(uint azeriteEssenceId, uint rank)
+        {
+            return _azeriteEssencePowersByIdAndRank.LookupByKey((azeriteEssenceId, rank));
+        }
+
+        public List<AzeriteItemMilestonePowerRecord> GetAzeriteItemMilestonePowers()
+        {
+            return _azeriteItemMilestonePowers;
+        }
+
+        public AzeriteItemMilestonePowerRecord GetAzeriteItemMilestonePower(int slot)
+        {
+            //ASSERT(slot < MAX_AZERITE_ESSENCE_SLOT, "Slot %u must be lower than MAX_AZERITE_ESSENCE_SLOT (%u)", uint32(slot), MAX_AZERITE_ESSENCE_SLOT);
+            return _azeriteItemMilestonePowerByEssenceSlot[slot];
+        }
+
+        public List<AzeritePowerSetMemberRecord> GetAzeritePowers(uint itemId)
+        {
+            AzeriteEmpoweredItemRecord azeriteEmpoweredItem = GetAzeriteEmpoweredItem(itemId);
+            if (azeriteEmpoweredItem != null)
+                return _azeritePowers.LookupByKey(azeriteEmpoweredItem.AzeritePowerSetID);
+
+            return null;
+        }
+
+        public uint GetRequiredAzeriteLevelForAzeritePowerTier(uint azeriteUnlockSetId, ItemContext context, uint tier)
+        {
+            //ASSERT(tier < MAX_AZERITE_EMPOWERED_TIER);
+            var levels = _azeriteTierUnlockLevels.LookupByKey((azeriteUnlockSetId, context));
+            if (levels != null)
+                return levels[tier];
+
+            AzeriteTierUnlockSetRecord azeriteTierUnlockSet = CliDB.AzeriteTierUnlockSetStorage.LookupByKey(azeriteUnlockSetId);
+            if (azeriteTierUnlockSet != null && azeriteTierUnlockSet.Flags.HasAnyFlag(AzeriteTierUnlockSetFlags.Default))
+            {
+                levels = _azeriteTierUnlockLevels.LookupByKey((azeriteUnlockSetId, ItemContext.None));
+                if (levels != null)
+                    return levels[tier];
+            }
+
+            return (uint)CliDB.AzeriteLevelInfoStorage.Count;
         }
 
         public string GetBroadcastTextValue(BroadcastTextRecord broadcastText, LocaleConstant locale = LocaleConstant.enUS, Gender gender = Gender.Male, bool forceGender = false)
@@ -843,6 +1068,108 @@ namespace Game.DataStorage
             return null;
         }
 
+        public float EvaluateExpectedStat(ExpectedStatType stat, uint level, int expansion, uint contentTuningId, Class unitClass)
+        {
+            var expectedStatRecord = _expectedStatsByLevel.LookupByKey(Tuple.Create(level, expansion));
+            if (expectedStatRecord == null)
+                expectedStatRecord = _expectedStatsByLevel.LookupByKey(Tuple.Create(level, -2));
+            if (expectedStatRecord == null)
+                return 1.0f;
+
+            ExpectedStatModRecord classMod = null;
+            switch (unitClass)
+            {
+                case Class.Warrior:
+                    classMod = CliDB.ExpectedStatModStorage.LookupByKey(4);
+                    break;
+                case Class.Paladin:
+                    classMod = CliDB.ExpectedStatModStorage.LookupByKey(2);
+                    break;
+                case Class.Rogue:
+                    classMod = CliDB.ExpectedStatModStorage.LookupByKey(3);
+                    break;
+                case Class.Mage:
+                    classMod = CliDB.ExpectedStatModStorage.LookupByKey(1);
+                    break;
+                default:
+                    break;
+            }
+
+            List<ExpectedStatModRecord> contentTuningMods = _expectedStatModsByContentTuning.LookupByKey(contentTuningId);
+            float value = 0.0f;
+            switch (stat)
+            {
+                case ExpectedStatType.CreatureHealth:
+                    value = expectedStatRecord.CreatureHealth;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.CreatureHealthMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.CreatureHealthMod;
+                    break;
+                case ExpectedStatType.PlayerHealth:
+                    value = expectedStatRecord.PlayerHealth;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.PlayerHealthMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.PlayerHealthMod;
+                    break;
+                case ExpectedStatType.CreatureAutoAttackDps:
+                    value = expectedStatRecord.CreatureAutoAttackDps;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.CreatureAutoAttackDPSMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.CreatureAutoAttackDPSMod;
+                    break;
+                case ExpectedStatType.CreatureArmor:
+                    value = expectedStatRecord.CreatureArmor;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.CreatureArmorMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.CreatureArmorMod;
+                    break;
+                case ExpectedStatType.PlayerMana:
+                    value = expectedStatRecord.PlayerMana;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.PlayerManaMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.PlayerManaMod;
+                    break;
+                case ExpectedStatType.PlayerPrimaryStat:
+                    value = expectedStatRecord.PlayerPrimaryStat;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.PlayerPrimaryStatMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.PlayerPrimaryStatMod;
+                    break;
+                case ExpectedStatType.PlayerSecondaryStat:
+                    value = expectedStatRecord.PlayerSecondaryStat;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.PlayerSecondaryStatMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.PlayerSecondaryStatMod;
+                    break;
+                case ExpectedStatType.ArmorConstant:
+                    value = expectedStatRecord.ArmorConstant;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.ArmorConstantMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.ArmorConstantMod;
+                    break;
+                case ExpectedStatType.None:
+                    break;
+                case ExpectedStatType.CreatureSpellDamage:
+                    value = expectedStatRecord.CreatureSpellDamage;
+                    if (contentTuningMods != null)
+                        value *= contentTuningMods.Sum(expectedStatMod => expectedStatMod != null ? expectedStatMod.CreatureSpellDamageMod : 1.0f);
+                    if (classMod != null)
+                        value *= classMod.CreatureSpellDamageMod;
+                    break;
+                default:
+                    break;
+            }
+            return value;
+        }
+
         public List<uint> GetFactionTeamList(uint faction)
         {
             return _factionTeams.LookupByKey(faction);
@@ -873,17 +1200,11 @@ namespace Game.DataStorage
             return _itemLevelDeltaToBonusListContainer.LookupByKey(delta);
         }
 
-        public List<uint> GetItemBonusTree(uint itemId, uint itemContext)
+        void VisitItemBonusTree(uint itemId, Action<ItemBonusTreeNodeRecord> visitor)
         {
-            List<uint> bonusListIDs = new List<uint>();
-
-            ItemSparseRecord proto = CliDB.ItemSparseStorage.LookupByKey(itemId);
-            if (proto == null)
-                return bonusListIDs;
-
             var itemIdRange = _itemToBonusTree.LookupByKey(itemId);
             if (itemIdRange.Empty())
-                return bonusListIDs;
+                return;
 
             foreach (var itemTreeId in itemIdRange)
             {
@@ -892,49 +1213,114 @@ namespace Game.DataStorage
                     continue;
 
                 foreach (ItemBonusTreeNodeRecord bonusTreeNode in treeList)
+                    visitor(bonusTreeNode);
+            }
+        }
+
+        public List<uint> GetItemBonusTree(uint itemId, ItemContext itemContext)
+        {
+            List<uint> bonusListIDs = new List<uint>();
+
+            ItemSparseRecord proto = CliDB.ItemSparseStorage.LookupByKey(itemId);
+            if (proto == null)
+                return bonusListIDs;
+
+            VisitItemBonusTree(itemId, bonusTreeNode =>
+            {
+                if ((ItemContext)bonusTreeNode.ItemContext != itemContext)
+                    return;
+
+                if (bonusTreeNode.ChildItemBonusListID != 0)
                 {
-                    if (bonusTreeNode.ItemContext != itemContext)
-                        continue;
+                    bonusListIDs.Add(bonusTreeNode.ChildItemBonusListID);
+                }
+                else if (bonusTreeNode.ChildItemLevelSelectorID != 0)
+                {
+                    ItemLevelSelectorRecord selector = CliDB.ItemLevelSelectorStorage.LookupByKey(bonusTreeNode.ChildItemLevelSelectorID);
+                    if (selector == null)
+                        return;
 
-                    if (bonusTreeNode.ChildItemBonusListID != 0)
+                    short delta = (short)(selector.MinItemLevel - proto.ItemLevel);
+
+                    uint bonus = GetItemBonusListForItemLevelDelta(delta);
+                    if (bonus != 0)
+                        bonusListIDs.Add(bonus);
+
+                    ItemLevelSelectorQualitySetRecord selectorQualitySet = CliDB.ItemLevelSelectorQualitySetStorage.LookupByKey(selector.ItemLevelSelectorQualitySetID);
+                    if (selectorQualitySet != null)
                     {
-                        bonusListIDs.Add(bonusTreeNode.ChildItemBonusListID);
-                    }
-                    else if (bonusTreeNode.ChildItemLevelSelectorID != 0)
-                    {
-                        ItemLevelSelectorRecord selector = CliDB.ItemLevelSelectorStorage.LookupByKey(bonusTreeNode.ChildItemLevelSelectorID);
-                        if (selector == null)
-                            continue;
-
-                        short delta = (short)(selector.MinItemLevel - proto.ItemLevel);
-
-                        uint bonus = GetItemBonusListForItemLevelDelta(delta);
-                        if (bonus != 0)
-                            bonusListIDs.Add(bonus);
-
-                        ItemLevelSelectorQualitySetRecord selectorQualitySet = CliDB.ItemLevelSelectorQualitySetStorage.LookupByKey(selector.ItemLevelSelectorQualitySetID);
-                        if (selectorQualitySet != null)
+                        var itemSelectorQualities = _itemLevelQualitySelectorQualities.LookupByKey(selector.ItemLevelSelectorQualitySetID);
+                        if (itemSelectorQualities != null)
                         {
-                            var itemSelectorQualities = _itemLevelQualitySelectorQualities.LookupByKey(selector.ItemLevelSelectorQualitySetID);
-                            if (itemSelectorQualities != null)
-                            {
-                                ItemQuality quality = ItemQuality.Uncommon;
-                                if (selector.MinItemLevel >= selectorQualitySet.IlvlEpic)
-                                    quality = ItemQuality.Epic;
-                                else if (selector.MinItemLevel >= selectorQualitySet.IlvlRare)
-                                    quality = ItemQuality.Rare;
+                            ItemQuality quality = ItemQuality.Uncommon;
+                            if (selector.MinItemLevel >= selectorQualitySet.IlvlEpic)
+                                quality = ItemQuality.Epic;
+                            else if (selector.MinItemLevel >= selectorQualitySet.IlvlRare)
+                                quality = ItemQuality.Rare;
 
-                                var itemSelectorQuality = itemSelectorQualities.FirstOrDefault(p => p.Quality < (byte)quality);
+                            var itemSelectorQuality = itemSelectorQualities.FirstOrDefault(p => p.Quality < (byte)quality);
 
-                                if (itemSelectorQuality != null)
-                                    bonusListIDs.Add(itemSelectorQuality.QualityItemBonusListID);
-                            }
+                            if (itemSelectorQuality != null)
+                                bonusListIDs.Add(itemSelectorQuality.QualityItemBonusListID);
                         }
                     }
+
+                    AzeriteUnlockMappingRecord azeriteUnlockMapping = _azeriteUnlockMappings.LookupByKey((proto.Id, itemContext));
+                    if (azeriteUnlockMapping != null)
+                    {
+                        switch (proto.inventoryType)
+                        {
+                            case InventoryType.Head:
+                                bonusListIDs.Add(azeriteUnlockMapping.ItemBonusListHead);
+                                break;
+                            case InventoryType.Shoulders:
+                                bonusListIDs.Add(azeriteUnlockMapping.ItemBonusListShoulders);
+                                break;
+                            case InventoryType.Chest:
+                            case InventoryType.Robe:
+                                bonusListIDs.Add(azeriteUnlockMapping.ItemBonusListChest);
+                                break;
+                        }
+                    }
+
                 }
-            }
+            });
 
             return bonusListIDs;
+        }
+
+        void LoadAzeriteEmpoweredItemUnlockMappings(MultiMap<uint, AzeriteUnlockMappingRecord> azeriteUnlockMappingsBySet, uint itemId)
+        {
+            ItemSparseRecord proto = CliDB.ItemSparseStorage.LookupByKey(itemId);
+            if (proto == null)
+                return;
+
+            VisitItemBonusTree(itemId, bonusTreeNode =>
+            {
+                if (bonusTreeNode.ChildItemBonusListID == 0 && bonusTreeNode.ChildItemLevelSelectorID != 0)
+                {
+                    ItemLevelSelectorRecord selector = CliDB.ItemLevelSelectorStorage.LookupByKey(bonusTreeNode.ChildItemLevelSelectorID);
+                    if (selector == null)
+                        return;
+
+                    var azeriteUnlockMappings = azeriteUnlockMappingsBySet.LookupByKey(selector.AzeriteUnlockMappingSet);
+                    if (azeriteUnlockMappings != null)
+                    {
+                        AzeriteUnlockMappingRecord selectedAzeriteUnlockMapping = null;
+                        foreach (AzeriteUnlockMappingRecord azeriteUnlockMapping in azeriteUnlockMappings)
+                        {
+                            if (azeriteUnlockMapping.ItemLevel > selector.MinItemLevel ||
+                                (selectedAzeriteUnlockMapping != null && selectedAzeriteUnlockMapping.ItemLevel > azeriteUnlockMapping.ItemLevel))
+                                continue;
+
+                            selectedAzeriteUnlockMapping = azeriteUnlockMapping;
+                        }
+
+                        if (selectedAzeriteUnlockMapping != null)
+                            _azeriteUnlockMappings[(proto.Id, (ItemContext)bonusTreeNode.ItemContext)] = selectedAzeriteUnlockMapping;
+                    }
+                }
+            });
         }
 
         public ItemChildEquipmentRecord GetItemChildEquipment(uint itemId)
@@ -1000,7 +1386,7 @@ namespace Game.DataStorage
         public LFGDungeonsRecord GetLfgDungeon(uint mapId, Difficulty difficulty)
         {
             foreach (LFGDungeonsRecord dungeon in CliDB.LFGDungeonsStorage.Values)
-                if (dungeon.MapID == mapId && (Difficulty)dungeon.DifficultyID == difficulty)
+                if (dungeon.MapID == mapId && dungeon.DifficultyID == difficulty)
                     return dungeon;
 
             return null;
@@ -1116,7 +1502,7 @@ namespace Game.DataStorage
 
         public string GetNameGenEntry(uint race, uint gender)
         {
-            Contract.Assert(gender < (int)Gender.None);
+            Cypher.Assert(gender < (int)Gender.None);
             var listNameGen = _nameGenData.LookupByKey(race);
             if (listNameGen == null)
                 return "";
@@ -1129,26 +1515,36 @@ namespace Game.DataStorage
 
         public ResponseCodes ValidateName(string name, LocaleConstant locale)
         {
-            foreach (var regex in _nameValidators[(int)locale])
-                if (regex.IsMatch(name))
+            foreach (var testName in _nameValidators[(int)locale])
+                if (testName.Equals(name, StringComparison.OrdinalIgnoreCase))
                     return ResponseCodes.CharNameProfane;
 
             // regexes at TOTAL_LOCALES are loaded from NamesReserved which is not locale specific
-            foreach (var regex in _nameValidators[(int)LocaleConstant.Total])
-                if (regex.IsMatch(name))
+            foreach (var testName in _nameValidators[(int)LocaleConstant.Total])
+                if (testName.Equals(name, StringComparison.OrdinalIgnoreCase))
                     return ResponseCodes.CharNameReserved;
 
             return ResponseCodes.CharNameSuccess;
         }
 
-        public byte GetMaxPrestige()
+        public uint GetNumTalentsAtLevel(uint level, Class playerClass)
         {
-            byte max = 0;
-            foreach (PrestigeLevelInfoRecord prestigeLevelInfo in CliDB.PrestigeLevelInfoStorage.Values)
-                if (!prestigeLevelInfo.IsDisabled())
-                    max = Math.Max(prestigeLevelInfo.PrestigeLevel, max);
-
-            return max;
+            NumTalentsAtLevelRecord numTalentsAtLevel = CliDB.NumTalentsAtLevelStorage.LookupByKey(level);
+            if (numTalentsAtLevel == null)
+                numTalentsAtLevel = CliDB.NumTalentsAtLevelStorage.LastOrDefault().Value;
+            if (numTalentsAtLevel != null)
+            {
+                switch (playerClass)
+                {
+                    case Class.Deathknight:
+                        return numTalentsAtLevel.NumTalentsDeathKnight;
+                    case Class.DemonHunter:
+                        return numTalentsAtLevel.NumTalentsDemonHunter;
+                    default:
+                        return numTalentsAtLevel.NumTalents;
+                }
+            }
+            return 0;
         }
 
         public PvpDifficultyRecord GetBattlegroundBracketByLevel(uint mapid, uint level)
@@ -1181,24 +1577,33 @@ namespace Game.DataStorage
             return null;
         }
 
-        public uint GetRewardPackIDForPvpRewardByHonorLevelAndPrestige(byte honorLevel, byte prestige)
+        public uint GetRequiredLevelForPvpTalentSlot(byte slot, Class class_)
         {
-            var value = _pvpRewardPack.LookupByKey(Tuple.Create<uint, uint>(prestige, honorLevel));
-            if (value == 0)
-                value = _pvpRewardPack.LookupByKey(Tuple.Create<uint, uint>(0, honorLevel));
+            Cypher.Assert(slot < PlayerConst.MaxPvpTalentSlots);
+            if (_pvpTalentSlotUnlock[slot] != null)
+            {
+                switch (class_)
+                {
+                    case Class.Deathknight:
+                        return _pvpTalentSlotUnlock[slot].DeathKnightLevelRequired;
+                    case Class.DemonHunter:
+                        return _pvpTalentSlotUnlock[slot].DemonHunterLevelRequired;
+                    default:
+                        break;
+                }
+                return _pvpTalentSlotUnlock[slot].LevelRequired;
+            }
 
-            return value;
+            return 0;
         }
 
-        public uint GetRequiredHonorLevelForPvpTalent(PvpTalentRecord talentInfo)
+        public int GetPvpTalentNumSlotsAtLevel(uint level, Class class_)
         {
-            //ASSERT(talentInfo);
-            return _pvpTalentUnlock[talentInfo.TierID][talentInfo.ColumnIndex];
-        }
-
-        public List<PvpTalentRecord> GetPvpTalentsByPosition(uint classId, uint tier, uint column)
-        {
-            return _pvpTalentsByPosition[classId][tier][column];
+            int slots = 0;
+            for (byte slot = 0; slot < PlayerConst.MaxPvpTalentSlots; ++slot)
+                if (level >= GetRequiredLevelForPvpTalentSlot(slot, class_))
+                    ++slots;
+            return slots;
         }
 
         public List<QuestPackageItemRecord> GetQuestPackageItems(uint questPackageID)
@@ -1267,9 +1672,14 @@ namespace Game.DataStorage
             return _rewardPackItems.LookupByKey(rewardPackID);
         }
 
-        public uint GetRulesetItemUpgrade(uint itemId)
+        public List<SkillLineRecord> GetSkillLinesForParentSkill(uint parentSkillId)
         {
-            return _rulesetItemUpgrade.LookupByKey(itemId);
+            return _skillLinesByParentSkillLine.LookupByKey(parentSkillId);
+        }
+
+        public List<SkillLineAbilityRecord> GetSkillLineAbilitiesBySkill(uint skillId)
+        {
+            return _skillLineAbilitiesBySkillupSkill.LookupByKey(skillId);
         }
 
         public SkillRaceClassInfoRecord GetSkillRaceClassInfo(uint skill, Race race, Class class_)
@@ -1291,6 +1701,11 @@ namespace Game.DataStorage
         public List<SpecializationSpellsRecord> GetSpecializationSpells(uint specId)
         {
             return _specializationSpellsBySpec.LookupByKey(specId);
+        }
+
+        public bool IsSpecSetMember(int specSetId, uint specId)
+        {
+            return _specsBySpecSet.Contains(Tuple.Create(specSetId, specId));
         }
 
         bool IsValidSpellFamiliyName(SpellFamilyNames family)
@@ -1391,6 +1806,270 @@ namespace Game.DataStorage
             return _transmogSetItemsByTransmogSet.LookupByKey(transmogSetId);
         }
 
+        static bool CheckUiMapAssignmentStatus(float x, float y, float z, int mapId, int areaId, int wmoDoodadPlacementId, int wmoGroupId, UiMapAssignmentRecord uiMapAssignment, out UiMapAssignmentStatus status)
+        {
+            status = new UiMapAssignmentStatus();
+            status.UiMapAssignment = uiMapAssignment;
+            // x,y not in region
+            if (x < uiMapAssignment.Region[0].X || x > uiMapAssignment.Region[1].X || y < uiMapAssignment.Region[0].Y || y > uiMapAssignment.Region[1].Y)
+            {
+                float xDiff, yDiff;
+                if (x >= uiMapAssignment.Region[0].X)
+                {
+                    xDiff = 0.0f;
+                    if (x > uiMapAssignment.Region[1].X)
+                        xDiff = x - uiMapAssignment.Region[0].X;
+                }
+                else
+                    xDiff = uiMapAssignment.Region[0].X - x;
+
+                if (y >= uiMapAssignment.Region[0].Y)
+                {
+                    yDiff = 0.0f;
+                    if (y > uiMapAssignment.Region[1].Y)
+                        yDiff = y - uiMapAssignment.Region[0].Y;
+                }
+                else
+                    yDiff = uiMapAssignment.Region[0].Y - y;
+
+                status.Outside.DistanceToRegionEdgeSquared = xDiff * xDiff + yDiff * yDiff;
+            }
+            else
+            {
+                status.Inside.DistanceToRegionCenterSquared =
+                    (x - (uiMapAssignment.Region[0].X + uiMapAssignment.Region[1].X) * 0.5f) * (x - (uiMapAssignment.Region[0].X + uiMapAssignment.Region[1].X) * 0.5f)
+                    + (y - (uiMapAssignment.Region[0].Y + uiMapAssignment.Region[1].Y) * 0.5f) * (y - (uiMapAssignment.Region[0].Y + uiMapAssignment.Region[1].Y) * 0.5f);
+                status.Outside.DistanceToRegionEdgeSquared = 0.0f;
+            }
+
+            // z not in region
+            if (z < uiMapAssignment.Region[0].Z || z > uiMapAssignment.Region[1].Z)
+            {
+                if (z < uiMapAssignment.Region[1].Z)
+                {
+                    if (z < uiMapAssignment.Region[0].Z)
+                        status.Outside.DistanceToRegionBottom = Math.Min(uiMapAssignment.Region[0].Z - z, 10000.0f);
+                }
+                else
+                    status.Outside.DistanceToRegionTop = Math.Min(z - uiMapAssignment.Region[1].Z, 10000.0f);
+            }
+            else
+            {
+                status.Outside.DistanceToRegionTop = 0.0f;
+                status.Outside.DistanceToRegionBottom = 0.0f;
+                status.Inside.DistanceToRegionBottom = Math.Min(uiMapAssignment.Region[0].Z - z, 10000.0f);
+            }
+
+            if (areaId != 0 && uiMapAssignment.AreaID != 0)
+            {
+                sbyte areaPriority = 0;
+                if (areaId != 0)
+                {
+                    while (areaId != uiMapAssignment.AreaID)
+                    {
+                        AreaTableRecord areaEntry = CliDB.AreaTableStorage.LookupByKey(areaId);
+                        if (areaEntry != null)
+                        {
+                            areaId = areaEntry.ParentAreaID;
+                            ++areaPriority;
+                        }
+                        else
+                            return false;
+                    }
+                }
+                else
+                    return false;
+
+                status.AreaPriority = areaPriority;
+            }
+
+            if (mapId >= 0 && uiMapAssignment.MapID >= 0)
+            {
+                if (mapId != uiMapAssignment.MapID)
+                {
+                    MapRecord mapEntry = CliDB.MapStorage.LookupByKey(mapId);
+                    if (mapEntry != null)
+                    {
+                        if (mapEntry.ParentMapID == uiMapAssignment.MapID)
+                            status.MapPriority = 1;
+                        else if (mapEntry.CosmeticParentMapID == uiMapAssignment.MapID)
+                            status.MapPriority = 2;
+                        else
+                            return false;
+                    }
+                    else
+                        return false;
+                }
+                else
+                    status.MapPriority = 0;
+            }
+
+            if (wmoGroupId != 0 || wmoDoodadPlacementId != 0)
+            {
+                if (uiMapAssignment.WmoGroupID != 0 || uiMapAssignment.WmoDoodadPlacementID != 0)
+                {
+                    bool hasDoodadPlacement = false;
+                    if (wmoDoodadPlacementId != 0 && uiMapAssignment.WmoDoodadPlacementID != 0)
+                    {
+                        if (wmoDoodadPlacementId != uiMapAssignment.WmoDoodadPlacementID)
+                            return false;
+
+                        hasDoodadPlacement = true;
+                    }
+
+                    if (wmoGroupId != 0 && uiMapAssignment.WmoGroupID != 0)
+                    {
+                        if (wmoGroupId != uiMapAssignment.WmoGroupID)
+                            return false;
+
+                        if (hasDoodadPlacement)
+                            status.WmoPriority = 0;
+                        else
+                            status.WmoPriority = 2;
+                    }
+                    else if (hasDoodadPlacement)
+                        status.WmoPriority = 1;
+                }
+            }
+
+            return true;
+        }
+
+        UiMapAssignmentRecord FindNearestMapAssignment(float x, float y, float z, int mapId, int areaId, int wmoDoodadPlacementId, int wmoGroupId, UiMapSystem system)
+        {
+            UiMapAssignmentStatus nearestMapAssignment = new UiMapAssignmentStatus();
+            var iterateUiMapAssignments = new Action<MultiMap<int, UiMapAssignmentRecord>, int>((assignments, id) =>
+            {
+                foreach (var assignment in assignments.LookupByKey(id))
+                {
+                    UiMapAssignmentStatus status;
+                    if (CheckUiMapAssignmentStatus(x, y, z, mapId, areaId, wmoDoodadPlacementId, wmoGroupId, assignment, out status))
+                        if (status < nearestMapAssignment)
+                            nearestMapAssignment = status;
+                }
+            });
+
+            iterateUiMapAssignments(_uiMapAssignmentByWmoGroup[(int)system], wmoGroupId);
+            iterateUiMapAssignments(_uiMapAssignmentByWmoDoodadPlacement[(int)system], wmoDoodadPlacementId);
+
+            AreaTableRecord areaEntry = CliDB.AreaTableStorage.LookupByKey(areaId);
+            while (areaEntry != null)
+            {
+                iterateUiMapAssignments(_uiMapAssignmentByArea[(int)system], (int)areaEntry.Id);
+                areaEntry = CliDB.AreaTableStorage.LookupByKey(areaEntry.ParentAreaID);
+            }
+
+            if (mapId > 0)
+            {
+                MapRecord mapEntry = CliDB.MapStorage.LookupByKey(mapId);
+                if (mapEntry != null)
+                {
+                    iterateUiMapAssignments(_uiMapAssignmentByMap[(int)system], (int)mapEntry.Id);
+                    if (mapEntry.ParentMapID >= 0)
+                        iterateUiMapAssignments(_uiMapAssignmentByMap[(int)system], mapEntry.ParentMapID);
+                    if (mapEntry.CosmeticParentMapID >= 0)
+                        iterateUiMapAssignments(_uiMapAssignmentByMap[(int)system], mapEntry.CosmeticParentMapID);
+                }
+            }
+
+            return nearestMapAssignment.UiMapAssignment;
+        }
+
+        Vector2 CalculateGlobalUiMapPosition(int uiMapID, Vector2 uiPosition)
+        {
+            UiMapRecord uiMap = CliDB.UiMapStorage.LookupByKey(uiMapID);
+            while (uiMap != null)
+            {
+                if (uiMap.Type <= UiMapType.Continent)
+                    break;
+
+                UiMapBounds bounds = _uiMapBounds.LookupByKey(uiMap.Id);
+                if (bounds == null || !bounds.IsUiAssignment)
+                    break;
+
+                uiPosition.X = ((1.0f - uiPosition.X) * bounds.Bounds[1]) + (bounds.Bounds[3] * uiPosition.X);
+                uiPosition.Y = ((1.0f - uiPosition.Y) * bounds.Bounds[0]) + (bounds.Bounds[2] * uiPosition.Y);
+
+                uiMap = CliDB.UiMapStorage.LookupByKey(uiMap.ParentUiMapID);
+            }
+
+            return uiPosition;
+        }
+
+        public bool GetUiMapPosition(float x, float y, float z, int mapId, int areaId, int wmoDoodadPlacementId, int wmoGroupId, UiMapSystem system, bool local, out Vector2 newPos)
+        {
+            int throwaway;
+            return GetUiMapPosition(x, y, z, mapId, areaId, wmoDoodadPlacementId, wmoGroupId, system, local, out throwaway, out newPos);
+        }
+
+        public bool GetUiMapPosition(float x, float y, float z, int mapId, int areaId, int wmoDoodadPlacementId, int wmoGroupId, UiMapSystem system, bool local, out int uiMapId)
+        {
+            Vector2 throwaway;
+            return GetUiMapPosition(x, y, z, mapId, areaId, wmoDoodadPlacementId, wmoGroupId, system, local, out uiMapId, out throwaway);
+        }
+
+        public bool GetUiMapPosition(float x, float y, float z, int mapId, int areaId, int wmoDoodadPlacementId, int wmoGroupId, UiMapSystem system, bool local, out int uiMapId, out Vector2 newPos)
+        {
+            uiMapId = -1;
+            newPos = new Vector2();
+
+            UiMapAssignmentRecord uiMapAssignment = FindNearestMapAssignment(x, y, z, mapId, areaId, wmoDoodadPlacementId, wmoGroupId, system);
+            if (uiMapAssignment == null)
+                return false;
+
+            uiMapId = uiMapAssignment.UiMapID;
+
+            Vector2 relativePosition = new Vector2(0.5f, 0.5f);
+            Vector2 regionSize = new Vector2(uiMapAssignment.Region[1].X - uiMapAssignment.Region[0].X, uiMapAssignment.Region[1].Y - uiMapAssignment.Region[0].Y);
+            if (regionSize.X > 0.0f)
+                relativePosition.X = (x - uiMapAssignment.Region[0].X) / regionSize.X;
+            if (regionSize.Y > 0.0f)
+                relativePosition.Y = (y - uiMapAssignment.Region[0].Y) / regionSize.Y;
+
+            // x any y are swapped
+            Vector2 uiPosition = new Vector2(((1.0f - (1.0f - relativePosition.Y)) * uiMapAssignment.UiMin.X) + ((1.0f - relativePosition.Y) * uiMapAssignment.UiMax.X), ((1.0f - (1.0f - relativePosition.X)) * uiMapAssignment.UiMin.Y) + ((1.0f - relativePosition.X) * uiMapAssignment.UiMax.Y));
+
+            if (!local)
+                uiPosition = CalculateGlobalUiMapPosition(uiMapAssignment.UiMapID, uiPosition);
+
+            newPos = uiPosition;
+            return true;
+        }
+
+        public void Zone2MapCoordinates(uint areaId, ref float x, ref float y)
+        {
+            AreaTableRecord areaEntry = CliDB.AreaTableStorage.LookupByKey(areaId);
+            if (areaEntry == null)
+                return;
+
+            foreach (var assignment in _uiMapAssignmentByArea[(int)UiMapSystem.World].LookupByKey(areaId))
+            {
+                if (assignment.MapID >= 0 && assignment.MapID != areaEntry.ContinentID)
+                    continue;
+
+                float tmpY = 1.0f - ((y - assignment.UiMin.Y) / (assignment.UiMax.Y - assignment.UiMin.Y));
+                float tmpX = 1.0f - ((x - assignment.UiMin.X) / (assignment.UiMax.X - assignment.UiMin.X));
+                y = ((1.0f - tmpY) * assignment.Region[0].X) + (tmpY * assignment.Region[1].X);
+                x = ((1.0f - tmpX) * assignment.Region[0].Y) + (tmpX * assignment.Region[1].Y);
+                break;
+            }
+        }
+
+        public void Map2ZoneCoordinates(int areaId, ref float x, ref float y)
+        {
+            Vector2 zoneCoords;
+            if (!GetUiMapPosition(x, y, 0.0f, -1, areaId, 0, 0, UiMapSystem.World, true, out zoneCoords))
+                return;
+
+            x = zoneCoords.Y * 100.0f;
+            y = zoneCoords.X * 100.0f;
+        }
+
+        public bool IsUiMapPhase(int phaseId)
+        {
+            return _uiMapPhases.Contains(phaseId);
+        }
+
         public WMOAreaTableRecord GetWMOAreaTable(int rootId, int adtId, int groupId)
         {
             var wmoAreaTable = _wmoAreaTableLookup.LookupByKey(Tuple.Create((short)rootId, (sbyte)adtId, groupId));
@@ -1398,91 +2077,6 @@ namespace Game.DataStorage
                 return wmoAreaTable;
 
             return null;
-        }
-
-        public uint GetVirtualMapForMapAndZone(uint mapId, uint zoneId)
-        {
-            if (mapId != 530 && mapId != 571 && mapId != 732)   // speed for most cases
-                return mapId;
-
-            var worldMapArea = _worldMapAreaByAreaID.LookupByKey(zoneId);
-            if (worldMapArea != null)
-                return worldMapArea.DisplayMapID >= 0 ? (uint)worldMapArea.DisplayMapID : worldMapArea.MapID;
-
-            return mapId;
-        }
-
-        public void Zone2MapCoordinates(uint areaId, ref float x, ref float y)
-        {
-            var record = _worldMapAreaByAreaID.LookupByKey(areaId);
-            if (record == null)
-                return;
-
-            Extensions.Swap(ref x, ref y);                                         // at client map coords swapped
-            x = x * ((record.LocBottom - record.LocTop) / 100) + record.LocTop;
-            y = y * ((record.LocRight - record.LocLeft) / 100) + record.LocLeft;        // client y coord from top to down
-        }
-
-        public void Map2ZoneCoordinates(uint areaId, ref float x, ref float y)
-        {
-            var record = _worldMapAreaByAreaID.LookupByKey(areaId);
-            if (record == null)
-                return;
-
-            x = (x - record.LocTop) / ((record.LocBottom - record.LocTop) / 100);
-            y = (y - record.LocLeft) / ((record.LocRight - record.LocLeft) / 100);    // client y coord from top to down
-            Extensions.Swap(ref x, ref y);                                         // client have map coords swapped
-        }
-
-        public void DeterminaAlternateMapPosition(uint mapId, float x, float y, float z, out uint newMapId)
-        {
-            Vector2 pos;
-            DeterminaAlternateMapPosition(mapId, x, y, z, out newMapId, out pos);
-        }
-        public void DeterminaAlternateMapPosition(uint mapId, float x, float y, float z, out uint newMapId, out Vector2 newPos)
-        {
-            newPos = new Vector2();
-
-            //Contract.Assert(newMapId != 0 || newPos != );
-            WorldMapTransformsRecord transformation = null;
-            foreach (WorldMapTransformsRecord transform in CliDB.WorldMapTransformsStorage.Values)
-            {
-                if (transform.MapID != mapId)
-                    continue;
-                if (transform.AreaID != 0)
-                    continue;
-                if (Convert.ToBoolean(transform.Flags & (byte)WorldMapTransformsFlags.Dungeon))
-                    continue;
-                if (transform.RegionMin.X > x || transform.RegionMax.X < x)
-                    continue;
-                if (transform.RegionMin.Y > y || transform.RegionMax.Y < y)
-                    continue;
-                if (transform.RegionMin.Z > z || transform.RegionMax.Z < z)
-                    continue;
-
-                if (transformation == null || transformation.Priority < transform.Priority)
-                    transformation = transform;
-            }
-
-            if (transformation == null)
-            {
-                newMapId = mapId;
-
-                newPos.X = x;
-                newPos.Y = y;
-                return;
-            }
-
-            newMapId = transformation.NewMapID;
-
-            if (Math.Abs(transformation.RegionScale - 1.0f) > 0.001f)
-            {
-                x = (x - transformation.RegionMin.X) * transformation.RegionScale + transformation.RegionMin.X;
-                y = (y - transformation.RegionMin.Y) * transformation.RegionScale + transformation.RegionMin.Y;
-            }
-
-            newPos.X = x + transformation.RegionOffset.X;
-            newPos.Y = y + transformation.RegionOffset.Y;
         }
 
         public bool HasItemCurrencyCost(uint itemId) { return _itemsWithCurrencyCost.Contains(itemId); }
@@ -1495,12 +2089,21 @@ namespace Game.DataStorage
         }
 
         Dictionary<uint, IDB2Storage> _storage = new Dictionary<uint, IDB2Storage>();
-        Dictionary<ulong, int> _hotfixData = new Dictionary<ulong, int>();
+        uint _hotfixCount = 0;
+        MultiMap<int, Tuple<uint, int>> _hotfixData = new MultiMap<int, Tuple<uint, int>>();
+        Dictionary<Tuple<uint, int>, byte[]> _hotfixBlob = new Dictionary<Tuple<uint, int>, byte[]>();
 
         MultiMap<uint, uint> _areaGroupMembers = new MultiMap<uint, uint>();
         MultiMap<uint, ArtifactPowerRecord> _artifactPowers = new MultiMap<uint, ArtifactPowerRecord>();
         MultiMap<uint, uint> _artifactPowerLinks = new MultiMap<uint, uint>();
         Dictionary<Tuple<uint, byte>, ArtifactPowerRankRecord> _artifactPowerRanks = new Dictionary<Tuple<uint, byte>, ArtifactPowerRankRecord>();
+        Dictionary<uint, AzeriteEmpoweredItemRecord> _azeriteEmpoweredItems = new Dictionary<uint, AzeriteEmpoweredItemRecord>();
+        Dictionary<(uint azeriteEssenceId, uint rank), AzeriteEssencePowerRecord> _azeriteEssencePowersByIdAndRank = new Dictionary<(uint azeriteEssenceId, uint rank), AzeriteEssencePowerRecord>();
+        List<AzeriteItemMilestonePowerRecord> _azeriteItemMilestonePowers = new List<AzeriteItemMilestonePowerRecord>();
+        AzeriteItemMilestonePowerRecord[] _azeriteItemMilestonePowerByEssenceSlot = new AzeriteItemMilestonePowerRecord[SharedConst.MaxAzeriteEssenceSlot];
+        MultiMap<uint, AzeritePowerSetMemberRecord> _azeritePowers = new MultiMap<uint, AzeritePowerSetMemberRecord>();
+        Dictionary<(uint azeriteUnlockSetId, ItemContext itemContext), byte[]> _azeriteTierUnlockLevels = new Dictionary<(uint azeriteUnlockSetId, ItemContext itemContext), byte[]>();
+        Dictionary<(uint itemId, ItemContext itemContext), AzeriteUnlockMappingRecord> _azeriteUnlockMappings = new Dictionary<(uint itemId, ItemContext itemContext), AzeriteUnlockMappingRecord>();
         List<Tuple<byte, byte, uint>> _characterFacialHairStyles = new List<Tuple<byte, byte, uint>>();
         MultiMap<Tuple<byte, byte, CharBaseSectionVariation>, CharSectionsRecord> _charSections = new MultiMap<Tuple<byte, byte, CharBaseSectionVariation>, CharSectionsRecord>();
         Dictionary<uint, CharStartOutfitRecord> _charStartOutfits = new Dictionary<uint, CharStartOutfitRecord>();
@@ -1509,6 +2112,8 @@ namespace Game.DataStorage
         Dictionary<uint, ChrSpecializationRecord> _defaultChrSpecializationsByClass = new Dictionary<uint, ChrSpecializationRecord>();
         MultiMap<uint, CurvePointRecord> _curvePoints = new MultiMap<uint, CurvePointRecord>();
         Dictionary<Tuple<uint, byte, byte, byte>, EmotesTextSoundRecord> _emoteTextSounds = new Dictionary<Tuple<uint, byte, byte, byte>, EmotesTextSoundRecord>();
+        Dictionary<Tuple<uint, int>, ExpectedStatRecord> _expectedStatsByLevel = new Dictionary<Tuple<uint, int>, ExpectedStatRecord>();
+        MultiMap<uint, ExpectedStatModRecord> _expectedStatModsByContentTuning = new MultiMap<uint, ExpectedStatModRecord>();
         MultiMap<uint, uint> _factionTeams = new MultiMap<uint, uint>();
         Dictionary<uint, HeirloomRecord> _heirlooms = new Dictionary<uint, HeirloomRecord>();
         MultiMap<uint, uint> _glyphBindableSpells = new MultiMap<uint, uint>();
@@ -1530,19 +2135,19 @@ namespace Game.DataStorage
         MultiMap<uint, MountTypeXCapabilityRecord> _mountCapabilitiesByType = new MultiMap<uint, MountTypeXCapabilityRecord>();
         MultiMap<uint, MountXDisplayRecord> _mountDisplays = new MultiMap<uint, MountXDisplayRecord>();
         Dictionary<uint, List<NameGenRecord>[]> _nameGenData = new Dictionary<uint, List<NameGenRecord>[]>();
-        List<Regex>[] _nameValidators = new List<Regex>[(int)LocaleConstant.Total + 1];
+        List<string>[] _nameValidators = new List<string>[(int)LocaleConstant.Total + 1];
         MultiMap<uint, uint> _phasesByGroup = new MultiMap<uint, uint>();
         Dictionary<PowerType, PowerTypeRecord> _powerTypes = new Dictionary<PowerType, PowerTypeRecord>();
         Dictionary<uint, byte> _pvpItemBonus = new Dictionary<uint, byte>();
-        Dictionary<Tuple<uint /*prestige level*/, uint /*honor level*/>, uint> _pvpRewardPack = new Dictionary<Tuple<uint, uint>, uint>();
-        List<PvpTalentRecord>[][][] _pvpTalentsByPosition = new List<PvpTalentRecord>[(int)Class.Max][][];
-        uint[][] _pvpTalentUnlock = new uint[PlayerConst.MaxPvpTalentTiers][];
+        PvpTalentSlotUnlockRecord[] _pvpTalentSlotUnlock = new PvpTalentSlotUnlockRecord[PlayerConst.MaxPvpTalentSlots];
         Dictionary<uint, Tuple<List<QuestPackageItemRecord>, List<QuestPackageItemRecord>>> _questPackages = new Dictionary<uint, Tuple<List<QuestPackageItemRecord>, List<QuestPackageItemRecord>>>();
         MultiMap<uint, RewardPackXCurrencyTypeRecord> _rewardPackCurrencyTypes = new MultiMap<uint, RewardPackXCurrencyTypeRecord>();
         MultiMap<uint, RewardPackXItemRecord> _rewardPackItems = new MultiMap<uint, RewardPackXItemRecord>();
-        Dictionary<uint, uint> _rulesetItemUpgrade = new Dictionary<uint, uint>();
+        MultiMap<uint, SkillLineRecord> _skillLinesByParentSkillLine = new MultiMap<uint, SkillLineRecord>();
+        MultiMap<uint, SkillLineAbilityRecord> _skillLineAbilitiesBySkillupSkill = new MultiMap<uint, SkillLineAbilityRecord>();
         MultiMap<uint, SkillRaceClassInfoRecord> _skillRaceClassInfoBySkill = new MultiMap<uint, SkillRaceClassInfoRecord>();
         MultiMap<uint, SpecializationSpellsRecord> _specializationSpellsBySpec = new MultiMap<uint, SpecializationSpellsRecord>();
+        List<Tuple<int, uint>> _specsBySpecSet = new List<Tuple<int, uint>>();
         List<byte> _spellFamilyNames = new List<byte>();
         Dictionary<uint, List<SpellPowerRecord>> _spellPowers = new Dictionary<uint, List<SpellPowerRecord>>();
         Dictionary<uint, Dictionary<uint, List<SpellPowerRecord>>> _spellPowerDifficulties = new Dictionary<uint, Dictionary<uint, List<SpellPowerRecord>>>();
@@ -1551,8 +2156,172 @@ namespace Game.DataStorage
         List<uint> _toys = new List<uint>();
         MultiMap<uint, TransmogSetRecord> _transmogSetsByItemModifiedAppearance = new MultiMap<uint, TransmogSetRecord>();
         MultiMap<uint, TransmogSetItemRecord> _transmogSetItemsByTransmogSet = new MultiMap<uint, TransmogSetItemRecord>();
+        Dictionary<int, UiMapBounds> _uiMapBounds = new Dictionary<int, UiMapBounds>();
+        MultiMap<int, UiMapAssignmentRecord>[] _uiMapAssignmentByMap = new MultiMap<int, UiMapAssignmentRecord>[(int)UiMapSystem.Max];
+        MultiMap<int, UiMapAssignmentRecord>[] _uiMapAssignmentByArea = new MultiMap<int, UiMapAssignmentRecord>[(int)UiMapSystem.Max];
+        MultiMap<int, UiMapAssignmentRecord>[] _uiMapAssignmentByWmoDoodadPlacement = new MultiMap<int, UiMapAssignmentRecord>[(int)UiMapSystem.Max];
+        MultiMap<int, UiMapAssignmentRecord>[] _uiMapAssignmentByWmoGroup = new MultiMap<int, UiMapAssignmentRecord>[(int)UiMapSystem.Max];
+        List<int> _uiMapPhases = new List<int>();
         Dictionary<Tuple<short, sbyte, int>, WMOAreaTableRecord> _wmoAreaTableLookup = new Dictionary<Tuple<short, sbyte, int>, WMOAreaTableRecord>();
-        Dictionary<uint, WorldMapAreaRecord> _worldMapAreaByAreaID = new Dictionary<uint, WorldMapAreaRecord>();
+    }
+
+    class UiMapBounds
+    {
+        // these coords are mixed when calculated and used... its a mess
+        public float[] Bounds = new float[4];
+        public bool IsUiAssignment;
+        public bool IsUiLink;
+    }
+
+    class UiMapAssignmentStatus
+    {
+        public UiMapAssignmentRecord UiMapAssignment;
+        public InsideStruct Inside;
+        public OutsideStruct Outside;
+        public sbyte MapPriority;
+        public sbyte AreaPriority;
+        public sbyte WmoPriority;
+
+        public UiMapAssignmentStatus()
+        {
+            Inside = new InsideStruct();
+            Outside = new OutsideStruct();
+            MapPriority = 3;
+            AreaPriority = -1;
+            WmoPriority = 3;
+        }
+
+        // distances if inside
+        public class InsideStruct
+        {
+            public float DistanceToRegionCenterSquared = float.MaxValue;
+            public float DistanceToRegionBottom = float.MaxValue;
+        }
+
+        // distances if outside
+        public class OutsideStruct
+        {
+            public float DistanceToRegionEdgeSquared = float.MaxValue;
+            public float DistanceToRegionTop = float.MaxValue;
+            public float DistanceToRegionBottom = float.MaxValue;
+        }
+
+        bool IsInside()
+        {
+            return Outside.DistanceToRegionEdgeSquared < float.Epsilon &&
+                Math.Abs(Outside.DistanceToRegionTop) < float.Epsilon &&
+                Math.Abs(Outside.DistanceToRegionBottom) < float.Epsilon;
+        }
+
+        public static bool operator <(UiMapAssignmentStatus left, UiMapAssignmentStatus right)
+        {
+            bool leftInside = left.IsInside();
+            bool rightInside = right.IsInside();
+            if (leftInside != rightInside)
+                return leftInside;
+
+            if (left.UiMapAssignment != null && right.UiMapAssignment != null &&
+                left.UiMapAssignment.UiMapID == right.UiMapAssignment.UiMapID &&
+                left.UiMapAssignment.OrderIndex != right.UiMapAssignment.OrderIndex)
+                return left.UiMapAssignment.OrderIndex < right.UiMapAssignment.OrderIndex;
+
+            if (left.WmoPriority != right.WmoPriority)
+                return left.WmoPriority < right.WmoPriority;
+
+            if (left.AreaPriority != right.AreaPriority)
+                return left.AreaPriority < right.AreaPriority;
+
+            if (left.MapPriority != right.MapPriority)
+                return left.MapPriority < right.MapPriority;
+
+            if (leftInside)
+            {
+                if (left.Inside.DistanceToRegionBottom != right.Inside.DistanceToRegionBottom)
+                    return left.Inside.DistanceToRegionBottom < right.Inside.DistanceToRegionBottom;
+
+                float leftUiSizeX = left.UiMapAssignment != null ? (left.UiMapAssignment.UiMax.X - left.UiMapAssignment.UiMin.X) : 0.0f;
+                float rightUiSizeX = right.UiMapAssignment != null ? (right.UiMapAssignment.UiMax.X - right.UiMapAssignment.UiMin.X) : 0.0f;
+
+                if (leftUiSizeX > float.Epsilon && rightUiSizeX > float.Epsilon)
+                {
+                    float leftScale = (left.UiMapAssignment.Region[1].X - left.UiMapAssignment.Region[0].X) / leftUiSizeX;
+                    float rightScale = (right.UiMapAssignment.Region[1].X - right.UiMapAssignment.Region[0].X) / rightUiSizeX;
+                    if (leftScale != rightScale)
+                        return leftScale < rightScale;
+                }
+
+                if (left.Inside.DistanceToRegionCenterSquared != right.Inside.DistanceToRegionCenterSquared)
+                    return left.Inside.DistanceToRegionCenterSquared < right.Inside.DistanceToRegionCenterSquared;
+            }
+            else
+            {
+                if (left.Outside.DistanceToRegionTop != right.Outside.DistanceToRegionTop)
+                    return left.Outside.DistanceToRegionTop < right.Outside.DistanceToRegionTop;
+
+                if (left.Outside.DistanceToRegionBottom != right.Outside.DistanceToRegionBottom)
+                    return left.Outside.DistanceToRegionBottom < right.Outside.DistanceToRegionBottom;
+
+                if (left.Outside.DistanceToRegionEdgeSquared != right.Outside.DistanceToRegionEdgeSquared)
+                    return left.Outside.DistanceToRegionEdgeSquared < right.Outside.DistanceToRegionEdgeSquared;
+            }
+
+            return true;
+        }
+
+        public static bool operator >(UiMapAssignmentStatus left, UiMapAssignmentStatus right)
+        {
+            bool leftInside = left.IsInside();
+            bool rightInside = right.IsInside();
+            if (leftInside != rightInside)
+                return leftInside;
+
+            if (left.UiMapAssignment != null && right.UiMapAssignment != null &&
+                left.UiMapAssignment.UiMapID == right.UiMapAssignment.UiMapID &&
+                left.UiMapAssignment.OrderIndex != right.UiMapAssignment.OrderIndex)
+                return left.UiMapAssignment.OrderIndex > right.UiMapAssignment.OrderIndex;
+
+            if (left.WmoPriority != right.WmoPriority)
+                return left.WmoPriority > right.WmoPriority;
+
+            if (left.AreaPriority != right.AreaPriority)
+                return left.AreaPriority > right.AreaPriority;
+
+            if (left.MapPriority != right.MapPriority)
+                return left.MapPriority > right.MapPriority;
+
+            if (leftInside)
+            {
+                if (left.Inside.DistanceToRegionBottom != right.Inside.DistanceToRegionBottom)
+                    return left.Inside.DistanceToRegionBottom > right.Inside.DistanceToRegionBottom;
+
+                float leftUiSizeX = left.UiMapAssignment != null ? (left.UiMapAssignment.UiMax.X - left.UiMapAssignment.UiMin.X) : 0.0f;
+                float rightUiSizeX = right.UiMapAssignment != null ? (right.UiMapAssignment.UiMax.X - right.UiMapAssignment.UiMin.X) : 0.0f;
+
+                if (leftUiSizeX > float.Epsilon && rightUiSizeX > float.Epsilon)
+                {
+                    float leftScale = (left.UiMapAssignment.Region[1].X - left.UiMapAssignment.Region[0].X) / leftUiSizeX;
+                    float rightScale = (right.UiMapAssignment.Region[1].X - right.UiMapAssignment.Region[0].X) / rightUiSizeX;
+                    if (leftScale != rightScale)
+                        return leftScale > rightScale;
+                }
+
+                if (left.Inside.DistanceToRegionCenterSquared != right.Inside.DistanceToRegionCenterSquared)
+                    return left.Inside.DistanceToRegionCenterSquared > right.Inside.DistanceToRegionCenterSquared;
+            }
+            else
+            {
+                if (left.Outside.DistanceToRegionTop != right.Outside.DistanceToRegionTop)
+                    return left.Outside.DistanceToRegionTop > right.Outside.DistanceToRegionTop;
+
+                if (left.Outside.DistanceToRegionBottom != right.Outside.DistanceToRegionBottom)
+                    return left.Outside.DistanceToRegionBottom > right.Outside.DistanceToRegionBottom;
+
+                if (left.Outside.DistanceToRegionEdgeSquared != right.Outside.DistanceToRegionEdgeSquared)
+                    return left.Outside.DistanceToRegionEdgeSquared > right.Outside.DistanceToRegionEdgeSquared;
+            }
+
+            return true;
+        }
     }
 
     class ChrClassesXPowerTypesRecordComparer : IComparer<ChrClassesXPowerTypesRecord>
@@ -1575,7 +2344,7 @@ namespace Game.DataStorage
         }
     }
 
-    struct ItemLevelSelectorQualityEntryComparator : IComparer<ItemLevelSelectorQualityRecord>
+    class ItemLevelSelectorQualityRecordComparator : IComparer<ItemLevelSelectorQualityRecord>
     {
         public bool Compare(ItemLevelSelectorQualityRecord left, ItemQuality quality)
         {

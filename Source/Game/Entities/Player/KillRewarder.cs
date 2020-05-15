@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,19 @@ namespace Game.Entities
 {
     public class KillRewarder
     {
+        Player _killer;
+        Unit _victim;
+        Group _group;
+        float _groupRate;
+        Player _maxNotGrayMember;
+        uint _count;
+        uint _sumLevel;
+        uint _xp;
+        bool _isFullXP;
+        byte _maxLevel;
+        bool _isBattleground;
+        bool _isPvP;
+
         public KillRewarder(Player killer, Unit victim, bool isBattleground)
         {
             _killer = killer;
@@ -99,14 +112,14 @@ namespace Game.Entities
             if (_group)
             {
                 // 2. In case when player is in group, initialize variables necessary for group calculations:
-                for (GroupReference refe = _group.GetFirstMember(); refe != null; refe = refe.next())
+                for (GroupReference refe = _group.GetFirstMember(); refe != null; refe = refe.Next())
                 {
                     Player member = refe.GetSource();
                     if (member)
                     {
-                        if (member.IsAlive() && member.IsAtGroupRewardDistance(_victim))
+                        if (_killer == member || (member.IsAtGroupRewardDistance(_victim) && member.IsAlive()))
                         {
-                            uint lvl = member.getLevel();
+                            uint lvl = member.GetLevel();
                             // 2.1. _count - number of alive group members within reward distance;
                             ++_count;
                             // 2.2. _sumLevel - sum of levels of alive group members within reward distance;
@@ -117,14 +130,14 @@ namespace Game.Entities
                             // 2.4. _maxNotGrayMember - maximum level of alive group member within reward distance,
                             //      for whom victim is not gray;
                             uint grayLevel = Formulas.GetGrayLevel(lvl);
-                            if (_victim.GetLevelForTarget(member) > grayLevel && (!_maxNotGrayMember || _maxNotGrayMember.getLevel() < lvl))
+                            if (_victim.GetLevelForTarget(member) > grayLevel && (!_maxNotGrayMember || _maxNotGrayMember.GetLevel() < lvl))
                                 _maxNotGrayMember = member;
                         }
                     }
                 }
                 // 2.5. _isFullXP - flag identifying that for all group members victim is not gray,
                 //      so 100% XP will be rewarded (50% otherwise).
-                _isFullXP = _maxNotGrayMember && (_maxLevel == _maxNotGrayMember.getLevel());
+                _isFullXP = _maxNotGrayMember && (_maxLevel == _maxNotGrayMember.GetLevel());
             }
             else
                 _count = 1;
@@ -157,7 +170,7 @@ namespace Game.Entities
                 //        * set to 0 if player's level is more than maximum level of not gray member;
                 //        * cut XP in half if _isFullXP is false.
                 if (_maxNotGrayMember != null && player.IsAlive() &&
-                    _maxNotGrayMember.getLevel() >= player.getLevel())
+                    _maxNotGrayMember.GetLevel() >= player.GetLevel())
                     xp = _isFullXP ?
                         (uint)(xp * rate) :             // Reward FULL XP if all group members are not gray.
                         (uint)(xp * rate / 2) + 1;      // Reward only HALF of XP if some of group members are gray.
@@ -215,7 +228,7 @@ namespace Game.Entities
             // Give reputation and kill credit only in PvE.
             if (!_isPvP || _isBattleground)
             {
-                float rate = _group ? _groupRate * player.getLevel() / _sumLevel : 1.0f;
+                float rate = _group ? _groupRate * player.GetLevel() / _sumLevel : 1.0f;
                 if (_xp != 0)
                     // 4.2. Give XP.
                     _RewardXP(player, rate);
@@ -245,16 +258,17 @@ namespace Game.Entities
                     if (!_isBattleground)
                     {
                         // 3.1.2. Alter group rate if group is in raid (not for Battlegrounds).
-                        bool isRaid = !_isPvP && CliDB.MapStorage.LookupByKey(_killer.GetMapId()).IsRaid() && _group.isRaidGroup();
+                        bool isRaid = !_isPvP && CliDB.MapStorage.LookupByKey(_killer.GetMapId()).IsRaid() && _group.IsRaidGroup();
                         _groupRate = Formulas.XPInGroupRate(_count, isRaid);
                     }
                     // 3.1.3. Reward each group member (even dead or corpse) within reward distance.
-                    for (GroupReference refe = _group.GetFirstMember(); refe != null; refe = refe.next())
+                    for (GroupReference refe = _group.GetFirstMember(); refe != null; refe = refe.Next())
                     {
                         Player member = refe.GetSource();
                         if (member)
                         {
-                            if (member.IsAtGroupRewardDistance(_victim))
+                            // Killer may not be at reward distance, check directly
+                            if (_killer == member || member.IsAtGroupRewardDistance(_victim))
                             {
                                 _RewardPlayer(member, isDungeon);
                                 member.UpdateCriteria(CriteriaTypes.SpecialPvpKill, 1, 0, 0, _victim);
@@ -264,18 +278,5 @@ namespace Game.Entities
                 }
             }
         }
-
-        Player _killer;
-        Unit _victim;
-        Group _group;
-        float _groupRate;
-        Player _maxNotGrayMember;
-        uint _count;
-        uint _sumLevel;
-        uint _xp;
-        bool _isFullXP;
-        byte _maxLevel;
-        bool _isBattleground;
-        bool _isPvP;
     }
 }

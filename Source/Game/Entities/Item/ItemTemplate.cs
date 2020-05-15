@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game.DataStorage;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.Entities
 {
@@ -31,9 +30,9 @@ namespace Game.Entities
             BasicData = item;
             ExtendedData = sparse;
 
-            Specializations[0] = new BitArray((int)Class.Max * PlayerConst.MaxSpecializations);
-            Specializations[1] = new BitArray((int)Class.Max * PlayerConst.MaxSpecializations);
-            Specializations[2] = new BitArray((int)Class.Max * PlayerConst.MaxSpecializations);
+            Specializations[0] = new BitSet((int)Class.Max * PlayerConst.MaxSpecializations);
+            Specializations[1] = new BitSet((int)Class.Max * PlayerConst.MaxSpecializations);
+            Specializations[2] = new BitSet((int)Class.Max * PlayerConst.MaxSpecializations);
         }
 
         public string GetName(LocaleConstant locale = SharedConst.DefaultLocale)
@@ -224,9 +223,9 @@ namespace Game.Entities
             if (GetFlags().HasAnyFlag(ItemFlags.IsBoundToAccount) && alwaysAllowBoundToAccount)
                 return true;
 
-            uint spec = player.GetUInt32Value(PlayerFields.LootSpecId);
+            uint spec = player.GetLootSpecId();
             if (spec == 0)
-                spec = player.GetUInt32Value(PlayerFields.CurrentSpecId);
+                spec = player.GetPrimarySpecialization();
             if (spec == 0)
                 spec = player.GetDefaultSpecId();
 
@@ -235,9 +234,9 @@ namespace Game.Entities
                 return false;
 
             int levelIndex = 0;
-            if (player.getLevel() >= 110)
+            if (player.GetLevel() >= 110)
                 levelIndex = 2;
-            else if (player.getLevel() > 40)
+            else if (player.GetLevel() > 40)
                 levelIndex = 1;
 
             return Specializations[levelIndex].Get(CalculateItemSpecBit(chrSpecialization));
@@ -255,7 +254,7 @@ namespace Game.Entities
         public ItemFlags GetFlags() { return (ItemFlags)ExtendedData.Flags[0]; }
         public ItemFlags2 GetFlags2() { return (ItemFlags2)ExtendedData.Flags[1]; }
         public ItemFlags3 GetFlags3() { return (ItemFlags3)ExtendedData.Flags[2]; }
-        public uint GetFlags4() { return ExtendedData.Flags[3]; }
+        public ItemFlags4 GetFlags4() { return (ItemFlags4)ExtendedData.Flags[3]; }
         public float GetPriceRandomValue() { return ExtendedData.PriceRandomValue; }
         public float GetPriceVariance() { return ExtendedData.PriceVariance; }
         public uint GetBuyCount() { return Math.Max(ExtendedData.VendorStackCount, 1u); }
@@ -275,22 +274,17 @@ namespace Game.Entities
         public uint GetContainerSlots() { return ExtendedData.ContainerSlots; }
         public int GetItemStatType(uint index)
         {
-            Contract.Assert(index < ItemConst.MaxStats);
+            Cypher.Assert(index < ItemConst.MaxStats);
             return ExtendedData.StatModifierBonusStat[index];
-        }
-        public int GetItemStatValue(uint index)
-        {
-            Contract.Assert(index < ItemConst.MaxStats);
-            return ExtendedData.ItemStatValue[index];
         }
         public int GetItemStatAllocation(uint index)
         {
-            Contract.Assert(index < ItemConst.MaxStats);
+            Cypher.Assert(index < ItemConst.MaxStats);
             return ExtendedData.StatPercentEditor[index];
         }
         public float GetItemStatSocketCostMultiplier(uint index)
         {
-            Contract.Assert(index < ItemConst.MaxStats);
+            Cypher.Assert(index < ItemConst.MaxStats);
             return ExtendedData.StatPercentageOfSocket[index];
         }
         public uint GetScalingStatDistribution() { return ExtendedData.ScalingStatDistributionID; }
@@ -301,16 +295,14 @@ namespace Game.Entities
         public uint GetPageText() { return ExtendedData.PageID; }
         public uint GetStartQuest() { return ExtendedData.StartQuestID; }
         public uint GetLockID() { return ExtendedData.LockID; }
-        public uint GetRandomProperty() { return ExtendedData.RandomSelect; }
-        public uint GetRandomSuffix() { return ExtendedData.ItemRandomSuffixGroupID; }
         public uint GetItemSet() { return ExtendedData.ItemSet; }
-        public uint GetArea() { return ExtendedData.ZoneBound; }
+        public uint GetArea(int index) { return ExtendedData.ZoneBound[index]; }
         public uint GetMap() { return ExtendedData.InstanceBound; }
         public BagFamilyMask GetBagFamily() { return (BagFamilyMask)ExtendedData.BagFamily; }
         public uint GetTotemCategory() { return ExtendedData.TotemCategoryID; }
         public SocketColor GetSocketColor(uint index)
         {
-            Contract.Assert(index < ItemConst.MaxGemSockets);
+            Cypher.Assert(index < ItemConst.MaxGemSockets);
             return (SocketColor)ExtendedData.SocketType[index];
         }
         public uint GetSocketBonus() { return ExtendedData.SocketMatchEnchantmentId; }
@@ -331,7 +323,7 @@ namespace Game.Entities
         }
 
         public bool IsPotion() { return GetClass() == ItemClass.Consumable && GetSubClass() == (uint)ItemSubClassConsumable.Potion; }
-        public bool IsVellum() { return GetClass() == ItemClass.TradeGoods && GetSubClass() == (uint)ItemSubClassTradeGoods.Enchantment; }
+        public bool IsVellum() { return GetFlags3().HasAnyFlag(ItemFlags3.CanStoreEnchants); }
         public bool IsConjuredConsumable() { return GetClass() == ItemClass.Consumable && GetFlags().HasAnyFlag(ItemFlags.Conjured); }
         public bool IsCraftingReagent() { return GetFlags2().HasAnyFlag(ItemFlags2.UsedInATradeskill); }
 
@@ -351,7 +343,8 @@ namespace Game.Entities
         public uint MaxMoneyLoot;
         public ItemFlagsCustom FlagsCu;
         public float SpellPPMRate;
-        public BitArray[] Specializations = new BitArray[3];
+        public uint RandomBonusListTemplateId;
+        public BitSet[] Specializations = new BitSet[3];
         public uint ItemSpecClassMask;
 
         protected ItemRecord BasicData;

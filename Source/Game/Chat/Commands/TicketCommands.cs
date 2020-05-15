@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -257,8 +257,8 @@ namespace Game.Chat.Commands
                 return true;
             }
 
-            ObjectGuid targetGuid = ObjectManager.GetPlayerGUIDByName(target);
-            uint accountId = ObjectManager.GetPlayerAccountIdByGUID(targetGuid);
+            ObjectGuid targetGuid = Global.CharacterCacheStorage.GetCharacterGuidByName(target);
+            uint accountId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(targetGuid);
             // Target must exist and have administrative rights
             if (!Global.AccountMgr.HasPermission(accountId, RBACPermissions.CommandsBeAssignedTicket, Global.WorldMgr.GetRealm().Id.Realm))
             {
@@ -440,14 +440,14 @@ namespace Game.Chat.Commands
             }
 
             // Get security level of player, whom this ticket is assigned to
-            AccountTypes security = AccountTypes.Player;
+            AccountTypes security;
             Player assignedPlayer = ticket.GetAssignedPlayer();
             if (assignedPlayer && assignedPlayer.IsInWorld)
                 security = assignedPlayer.GetSession().GetSecurity();
             else
             {
                 ObjectGuid guid = ticket.GetAssignedToGUID();
-                uint accountId = ObjectManager.GetPlayerAccountIdByGUID(guid);
+                uint accountId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(guid);
                 security = Global.AccountMgr.GetSecurity(accountId, (int)Global.WorldMgr.GetRealm().Id.Realm);
             }
 

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,8 +42,6 @@ namespace Game.DataStorage
                     return storage;
                 }
 
-                var columnDefs = new StringArray(headers, '\t');
-
                 List<T> data = new List<T>();
                 data.Add(new T()); // row id 0, unused
 
@@ -51,7 +49,7 @@ namespace Game.DataStorage
                 while (!(line = reader.ReadLine()).IsEmpty())
                 {
                     var values = new StringArray(line, '\t');
-                    if (values.Length == 0)
+                    if (values.IsEmpty())
                         break;
 
                     var obj = new T();
@@ -85,7 +83,7 @@ namespace Game.DataStorage
         public T GetRow(uint row)
         {
             if (row >= _data.Count)
-                return default(T);
+                return default;
 
             return _data[(int)row];
         }

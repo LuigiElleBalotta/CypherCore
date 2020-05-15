@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
 
         class instance_trial_of_the_crusader_InstanceMapScript : InstanceScript
         {
-            public instance_trial_of_the_crusader_InstanceMapScript(Map map) : base(map)
+            public instance_trial_of_the_crusader_InstanceMapScript(InstanceMap map) : base(map)
             {
                 SetHeaders("TCR");
                 SetBossNumber(DataTypes.MaxEncounters);
@@ -166,19 +166,19 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 switch (go.GetEntry())
                 {
                     case GameObjectIds.CrusadersCache10:
-                        if (instance.GetSpawnMode() == Difficulty.Raid10N)
+                        if (instance.GetDifficultyID() == Difficulty.Raid10N)
                             CrusadersCacheGUID = go.GetGUID();
                         break;
                     case GameObjectIds.CrusadersCache25:
-                        if (instance.GetSpawnMode() == Difficulty.Raid25N)
+                        if (instance.GetDifficultyID() == Difficulty.Raid25N)
                             CrusadersCacheGUID = go.GetGUID();
                         break;
                     case GameObjectIds.CrusadersCache10H:
-                        if (instance.GetSpawnMode() == Difficulty.Raid10HC)
+                        if (instance.GetDifficultyID() == Difficulty.Raid10HC)
                             CrusadersCacheGUID = go.GetGUID();
                         break;
                     case GameObjectIds.CrusadersCache25H:
-                        if (instance.GetSpawnMode() == Difficulty.Raid25HC)
+                        if (instance.GetDifficultyID() == Difficulty.Raid25HC)
                             CrusadersCacheGUID = go.GetGUID();
                         break;
                     case GameObjectIds.ArgentColiseumFloor:
@@ -254,7 +254,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
 
                                     GameObject cache = instance.GetGameObject(CrusadersCacheGUID);
                                     if (cache)
-                                        cache.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                        cache.RemoveFlag(GameObjectFlags.NotSelectable);
                                     EventStage = 3100;
                                     break;
                                 default:
@@ -298,7 +298,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                 {
                                     EventStage = 6000;
                                     uint tributeChest = 0;
-                                    if (instance.GetSpawnMode() == Difficulty.Raid10HC)
+                                    if (instance.GetDifficultyID() == Difficulty.Raid10HC)
                                     {
                                         if (TrialCounter >= 50)
                                             tributeChest = GameObjectIds.TributeChest10h99;
@@ -315,7 +315,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                             }
                                         }
                                     }
-                                    else if (instance.GetSpawnMode() == Difficulty.Raid25HC)
+                                    else if (instance.GetDifficultyID() == Difficulty.Raid25HC)
                                     {
                                         if (TrialCounter >= 50)
                                             tributeChest = GameObjectIds.TributeChest25h99;
@@ -338,7 +338,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                         Creature tirion = instance.GetCreature(TirionGUID);
                                         if (tirion)
                                         {
-                                            GameObject chest = tirion.SummonGameObject(tributeChest, 805.62f, 134.87f, 142.16f, 3.27f, Quaternion.WAxis, Time.Week);
+                                            GameObject chest = tirion.SummonGameObject(tributeChest, 805.62f, 134.87f, 142.16f, 3.27f, Quaternion.fromEulerAnglesZYX(3.27f, 0.0f, 0.0f), Time.Week);
                                             if (chest)
                                                 chest.SetRespawnTime((int)chest.GetRespawnDelay());
                                         }
@@ -398,7 +398,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                     {
                         Unit announcer = instance.GetCreature(GetGuidData(CreatureIds.Barrent));
                         if (announcer)
-                            announcer.SetFlag64(UnitFields.NpcFlags, NPCFlags.Gossip);
+                            announcer.AddNpcFlag(NPCFlags.Gossip);
                         Save();
                     }
                 }
@@ -615,7 +615,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                 return CreatureIds.Fizzlebang;
                             default:
                                 return CreatureIds.Tirion;
-                        };
+                        }
                     default:
                         break;
                 }
@@ -770,12 +770,6 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
         {
             return new instance_trial_of_the_crusader_InstanceMapScript(map);
         }
-
-        public static T GetTrialOfTheCrusaderAI<T>(Creature creature) where T : CreatureAI
-        {
-            return GetInstanceAI<T>(creature, "instance_trial_of_the_crusader");
-        }
-
     }
 
     [Script]
@@ -789,14 +783,14 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
 
             public override void Reset()
             {
-                me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                me.AddUnitFlag(UnitFlags.NonAttackable);
                 Creature pAlly = GetClosestCreatureWithEntry(me, CreatureIds.Thrall, 300.0f);
                 if (pAlly)
-                    pAlly.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                    pAlly.AddUnitFlag(UnitFlags.NonAttackable);
 
                 pAlly = GetClosestCreatureWithEntry(me, CreatureIds.Proudmoore, 300.0f);
                 if (pAlly)
-                    pAlly.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                    pAlly.AddUnitFlag(UnitFlags.NonAttackable);
             }
 
             public override void AttackStart(Unit who) { }
@@ -852,7 +846,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 if (jaraxxus)
                 {
                     jaraxxus.RemoveAurasDueToSpell(Spells.JaraxxusChains);
-                    jaraxxus.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                    jaraxxus.RemoveUnitFlag(UnitFlags.NonAttackable);
                     jaraxxus.SetReactState(ReactStates.Defensive);
                     jaraxxus.SetInCombatWithZone();
                 }
@@ -893,13 +887,13 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 if (creature.IsVisible())
                     creature.SetVisible(false);
             }
-            creature.RemoveFlag64(UnitFields.NpcFlags, NPCFlags.Gossip);
+            creature.RemoveNpcFlag(NPCFlags.Gossip);
             return true;
         }
 
         public override CreatureAI GetAI(Creature creature)
         {
-            return instance_trial_of_the_crusader.GetTrialOfTheCrusaderAI<npc_announcer_toc10AI>(creature);
+            return GetInstanceAI<npc_announcer_toc10AI>(creature);
         }
     }
 
@@ -919,7 +913,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
             if (summoned)
             {
                 summoned.CastSpell(summoned, 51807, false);
-                summoned.SetDisplayId(summoned.GetCreatureTemplate().ModelId2);
+                summoned.SetDisplayFromModel(1);
             }
 
             _instance.SetBossState(DataTypes.BossLichKing, EncounterState.InProgress);
@@ -965,12 +959,12 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                         break;
                     case 5030:
                         Talk(Texts.Stage_4_04);
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.StateTalk);
+                        me.SetEmoteState(Emote.StateTalk);
                         _updateTimer = 10 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 5040);
                         break;
                     case 5040:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotNone);
+                        me.SetEmoteState(Emote.OneshotNone);
                         me.GetMotionMaster().MovePoint(1, MiscData.LichKingLoc[1]);
                         _updateTimer = 1 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 0);
@@ -997,7 +991,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                             if (go)
                             {
                                 go.SetDisplayId(MiscData.DisplayIdDestroyedFloor);
-                                go.SetFlag(GameObjectFields.Flags, GameObjectFlags.Damaged | GameObjectFlags.NoDespawn);
+                                go.AddFlag(GameObjectFlags.Damaged | GameObjectFlags.NoDespawn);
                                 go.SetGoState(GameObjectState.Active);
                             }
 
@@ -1045,7 +1039,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
             Creature temp = ObjectAccessor.GetCreature(me, _instance.GetGuidData(CreatureIds.Jaraxxus));
             if (temp)
             {
-                temp.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                temp.RemoveUnitFlag(UnitFlags.NonAttackable);
                 temp.SetReactState(ReactStates.Aggressive);
                 temp.SetInCombatWithZone();
             }
@@ -1108,12 +1102,12 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                             me.GetMotionMaster().MovementExpired();
                             Talk(Texts.Stage_1_03);
                             me.HandleEmoteCommand(Emote.OneshotSpellCastOmni);
-                            Unit pTrigger = me.SummonCreature(CreatureIds.Trigger, MiscData.ToCCommonLoc[1].GetPositionX(), MiscData.ToCCommonLoc[1].GetPositionY(), MiscData.ToCCommonLoc[1].GetPositionZ(), 4.69494f, TempSummonType.ManualDespawn);
+                            Creature pTrigger = me.SummonCreature(CreatureIds.Trigger, MiscData.ToCCommonLoc[1].GetPositionX(), MiscData.ToCCommonLoc[1].GetPositionY(), MiscData.ToCCommonLoc[1].GetPositionZ(), 4.69494f, TempSummonType.ManualDespawn);
                             if (pTrigger)
                             {
                                 _triggerGUID = pTrigger.GetGUID();
                                 pTrigger.SetObjectScale(2.0f);
-                                pTrigger.SetDisplayId(pTrigger.ToCreature().GetCreatureTemplate().ModelId1);
+                                pTrigger.SetDisplayFromModel(0);
                                 pTrigger.CastSpell(pTrigger, Spells.WilfredPortal, false);
                             }
                             _instance.SetData(DataTypes.Event, 1132);
@@ -1150,7 +1144,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                             Creature temp = me.SummonCreature(CreatureIds.Jaraxxus, MiscData.ToCCommonLoc[1].GetPositionX(), MiscData.ToCCommonLoc[1].GetPositionY(), MiscData.ToCCommonLoc[1].GetPositionZ(), 5.0f, TempSummonType.CorpseTimedDespawn, MiscData.DespawnTime);
                             if (temp)
                             {
-                                temp.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                                temp.AddUnitFlag(UnitFlags.NonAttackable);
                                 temp.SetReactState(ReactStates.Passive);
                                 temp.GetMotionMaster().MovePoint(0, MiscData.ToCCommonLoc[1].GetPositionX(), MiscData.ToCCommonLoc[1].GetPositionY() - 10, MiscData.ToCCommonLoc[1].GetPositionZ());
                             }
@@ -1239,20 +1233,20 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 switch (_instance.GetData(DataTypes.Event))
                 {
                     case 110:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotTalk);
+                        me.SetEmoteState(Emote.OneshotTalk);
                         Talk(Texts.Stage_0_01);
                         _updateTimer = 22 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 120);
                         break;
                     case 140:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotTalk);
+                        me.SetEmoteState(Emote.OneshotTalk);
                         Talk(Texts.Stage_0_02);
                         _updateTimer = 5 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 150);
                         break;
                     case 150:
                         {
-                            me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotNone);
+                            me.SetEmoteState(Emote.OneshotNone);
                             if (_instance.GetBossState(DataTypes.BossBeasts) != EncounterState.Done)
                             {
                                 _instance.DoUseDoorOrButton(_instance.GetGuidData(GameObjectIds.MainGateDoor));
@@ -1261,7 +1255,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                 if (temp)
                                 {
                                     temp.GetMotionMaster().MovePoint(0, MiscData.ToCCommonLoc[5].GetPositionX(), MiscData.ToCCommonLoc[5].GetPositionY(), MiscData.ToCCommonLoc[5].GetPositionZ());
-                                    temp.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+                                    temp.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
                                     temp.SetReactState(ReactStates.Passive);
                                 }
                             }
@@ -1285,7 +1279,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                 if (temp)
                                 {
                                     temp.GetMotionMaster().MovePoint(0, MiscData.ToCCommonLoc[5].GetPositionX(), MiscData.ToCCommonLoc[5].GetPositionY(), MiscData.ToCCommonLoc[5].GetPositionZ());
-                                    temp.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+                                    temp.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
                                     temp.SetReactState(ReactStates.Passive);
                                 }
                             }
@@ -1306,7 +1300,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                                 if (temp)
                                 {
                                     temp.GetMotionMaster().MovePoint(2, MiscData.ToCCommonLoc[5].GetPositionX(), MiscData.ToCCommonLoc[5].GetPositionY(), MiscData.ToCCommonLoc[5].GetPositionZ());
-                                    me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+                                    me.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
                                     me.SetReactState(ReactStates.Passive);
                                 }
                             }
@@ -1319,7 +1313,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                         break;
                     case 400:
                         Talk(Texts.Stage_0_06);
-                        me.GetThreatManager().clearReferences();
+                        me.GetThreatManager().ClearReferences();
                         _updateTimer = 5 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 0);
                         break;
@@ -1479,7 +1473,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                     case 6000:
                         me.SummonCreature(CreatureIds.TirionFordring, MiscData.EndSpawnLoc[0]);
                         me.SummonCreature(CreatureIds.ArgentMage, MiscData.EndSpawnLoc[1]);
-                        me.SummonGameObject(GameObjectIds.PortalToDalaran, MiscData.EndSpawnLoc[2], Quaternion.WAxis, 0);
+                        me.SummonGameObject(GameObjectIds.PortalToDalaran, MiscData.EndSpawnLoc[2], Quaternion.fromEulerAnglesZYX(MiscData.EndSpawnLoc[2].GetOrientation(), 0.0f, 0.0f), 0);
                         _updateTimer = 20 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 6005);
                         break;
@@ -1549,13 +1543,13 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 switch (_instance.GetData(DataTypes.Event))
                 {
                     case 130:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotTalk);
+                        me.SetEmoteState(Emote.OneshotTalk);
                         Talk(Texts.Stage_0_03h);
                         _updateTimer = 3 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 132);
                         break;
                     case 132:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotNone);
+                        me.SetEmoteState(Emote.OneshotNone);
                         _updateTimer = 5 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 140);
                         break;
@@ -1623,13 +1617,13 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheCrusader
                 switch (_instance.GetData(DataTypes.Event))
                 {
                     case 120:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotTalk);
+                        me.SetEmoteState(Emote.OneshotTalk);
                         Talk(Texts.Stage_0_03a);
                         _updateTimer = 2 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 122);
                         break;
                     case 122:
-                        me.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotNone);
+                        me.SetEmoteState(Emote.OneshotNone);
                         _updateTimer = 3 * Time.InMilliseconds;
                         _instance.SetData(DataTypes.Event, 130);
                         break;

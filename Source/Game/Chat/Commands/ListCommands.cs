@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace Game.Chat.Commands
         [Command("auras", RBACPermissions.CommandListAuras)]
         static bool HandleListAurasCommand(StringArguments args, CommandHandler handler)
         {
-            Unit unit = handler.getSelectedUnit();
+            Unit unit = handler.GetSelectedUnit();
             if (!unit)
             {
                 handler.SendSysMessage(CypherStrings.SelectCharOrCreature);
@@ -81,7 +81,7 @@ namespace Game.Chat.Commands
                 return false;
 
             // number or [name] Shift-click form |color|Hcreature_entry:creature_id|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hcreature_entry");
+            string id = handler.ExtractKeyFromLink(args, "Hcreature_entry");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -98,7 +98,6 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            string countStr = args.NextString();
             if (!uint.TryParse(args.NextString(), out uint count))
                 count = 10;
 
@@ -149,7 +148,7 @@ namespace Game.Chat.Commands
             if (args.Empty())
                 return false;
 
-            string id = handler.extractKeyFromLink(args, "Hitem");
+            string id = handler.ExtractKeyFromLink(args, "Hitem");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -172,14 +171,12 @@ namespace Game.Chat.Commands
             if (count == 0)
                 return false;
 
-            SQLResult result;
-
             // inventory case
             uint inventoryCount = 0;
 
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_CHAR_INVENTORY_COUNT_ITEM);
             stmt.AddValue(0, itemId);
-            result = DB.Characters.Query(stmt);
+            SQLResult result = DB.Characters.Query(stmt);
 
             if (!result.IsEmpty())
                 inventoryCount = result.Read<uint>(0);
@@ -200,7 +197,7 @@ namespace Game.Chat.Commands
                     uint ownerAccountId = result.Read<uint>(4);
                     string ownerName = result.Read<string>(5);
 
-                    string itemPos = "";
+                    string itemPos;
                     if (Player.IsEquipmentPos((byte)itemBag, itemSlot))
                         itemPos = "[equipped]";
                     else if (Player.IsInventoryPos((byte)itemBag, itemSlot))
@@ -211,15 +208,10 @@ namespace Game.Chat.Commands
                         itemPos = "";
 
                     handler.SendSysMessage(CypherStrings.ItemlistSlot, itemGuid.ToString(), ownerName, ownerGuid.ToString(), ownerAccountId, itemPos);
+
+                    count--;
                 }
                 while (result.NextRow());
-
-                uint resultCount = (uint)result.GetRowCount();
-
-                if (count > resultCount)
-                    count -= resultCount;
-                else if (count != 0)
-                    count = 0;
             }
 
             // mail case
@@ -257,15 +249,10 @@ namespace Game.Chat.Commands
                     string itemPos = "[in mail]";
 
                     handler.SendSysMessage(CypherStrings.ItemlistMail, itemGuid, itemSenderName, itemSender, itemSenderAccountId, itemReceiverName, itemReceiver, itemReceiverAccount, itemPos);
+
+                    count--;
                 }
                 while (result.NextRow());
-
-                uint resultCount = (uint)result.GetRowCount();
-
-                if (count > resultCount)
-                    count -= resultCount;
-                else if (count != 0)
-                    count = 0;
             }
 
             // auction case
@@ -330,15 +317,10 @@ namespace Game.Chat.Commands
                     string itemPos = "[in guild bank]";
 
                     handler.SendSysMessage(CypherStrings.ItemlistGuild, itemGuid.ToString(), guildName, guildGuid.ToString(), itemPos);
+
+                    count--;
                 }
                 while (result.NextRow());
-
-                uint resultCount = (uint)result.GetRowCount();
-
-                if (count > resultCount)
-                    count -= resultCount;
-                else if (count != 0)
-                    count = 0;
             }
 
             if (inventoryCount + mailCount + auctionCount + guildCount == 0)
@@ -360,25 +342,24 @@ namespace Game.Chat.Commands
             Player target;
             ObjectGuid targetGuid;
             string targetName;
-            PreparedStatement stmt = null;
 
             ObjectGuid parseGUID = ObjectGuid.Create(HighGuid.Player, args.NextUInt64());
-            if (ObjectManager.GetPlayerNameByGUID(parseGUID, out targetName))
+            if (Global.CharacterCacheStorage.GetCharacterNameByGuid(parseGUID, out targetName))
             {
                 target = Global.ObjAccessor.FindPlayer(parseGUID);
                 targetGuid = parseGUID;
             }
-            else if (!handler.extractPlayerTarget(args, out target, out targetGuid, out targetName))
+            else if (!handler.ExtractPlayerTarget(args, out target, out targetGuid, out targetName))
                 return false;
 
-            stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_MAIL_LIST_COUNT);
+            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_MAIL_LIST_COUNT);
             stmt.AddValue(0, targetGuid.GetCounter());
             SQLResult result = DB.Characters.Query(stmt);
             if (!result.IsEmpty())
             {
                 uint countMail = result.Read<uint>(0);
 
-                string nameLink = handler.playerLink(targetName);
+                string nameLink = handler.PlayerLink(targetName);
                 handler.SendSysMessage(CypherStrings.ListMailHeader, countMail, nameLink, targetGuid.ToString());
                 handler.SendSysMessage(CypherStrings.AccountListBar);
 
@@ -403,8 +384,8 @@ namespace Game.Chat.Commands
                         uint gold = (uint)(money / MoneyConstants.Gold);
                         uint silv = (uint)(money % MoneyConstants.Gold) / MoneyConstants.Silver;
                         uint copp = (uint)(money % MoneyConstants.Gold) % MoneyConstants.Silver;
-                        string receiverStr = handler.playerLink(receiver);
-                        string senderStr = handler.playerLink(sender);
+                        string receiverStr = handler.PlayerLink(receiver);
+                        string senderStr = handler.PlayerLink(sender);
                         handler.SendSysMessage(CypherStrings.ListMailInfo1, messageId, subject, gold, silv, copp);
                         handler.SendSysMessage(CypherStrings.ListMailInfo2, senderStr, senderId, receiverStr, receiverId);
                         handler.SendSysMessage(CypherStrings.ListMailInfo3, Time.UnixTimeToDateTime(deliverTime).ToLongDateString(), Time.UnixTimeToDateTime(expireTime).ToLongDateString());
@@ -426,18 +407,19 @@ namespace Game.Chat.Commands
                                         {
                                             uint item_entry = result3.Read<uint>(0);
                                             uint item_count = result3.Read<uint>(1);
-                                            SQLResult result4 = DB.World.Query("SELECT name, quality FROM item_template WHERE entry = '{0}'", item_entry);
 
-                                            string item_name = result4.Read<string>(0);
-                                            int item_quality = result4.Read<byte>(1);
+                                            ItemTemplate itemTemplate = Global.ObjectMgr.GetItemTemplate(item_entry);
+                                            if (itemTemplate == null)
+                                                continue;
+
                                             if (handler.GetSession() != null)
                                             {
-                                                uint color = ItemConst.ItemQualityColors[item_quality];
-                                                string itemStr = "|c" + color + "|Hitem:" + item_entry + ":0:0:0:0:0:0:0:0:0|h[" + item_name + "]|h|r";
+                                                uint color = ItemConst.ItemQualityColors[(int)itemTemplate.GetQuality()];
+                                                string itemStr = $"|c{color}|Hitem:{item_entry}:0:0:0:0:0:0:0:{handler.GetSession().GetPlayer().GetLevel()}:0:0:0:0:0|h[{itemTemplate.GetName(handler.GetSessionDbcLocale())}]|h|r";
                                                 handler.SendSysMessage(CypherStrings.ListMailInfoItem, itemStr, item_entry, item_guid, item_count);
                                             }
                                             else
-                                                handler.SendSysMessage(CypherStrings.ListMailInfoItem, item_name, item_entry, item_guid, item_count);
+                                                handler.SendSysMessage(CypherStrings.ListMailInfoItem, itemTemplate.GetName(handler.GetSessionDbcLocale()), item_entry, item_guid, item_count);
                                         }
                                         while (result3.NextRow());
                                     }
@@ -465,7 +447,7 @@ namespace Game.Chat.Commands
                 return false;
 
             // number or [name] Shift-click form |color|Hgameobject_entry:go_id|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hgameobject_entry");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject_entry");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -530,7 +512,7 @@ namespace Game.Chat.Commands
         [Command("scenes", RBACPermissions.CommandListScenes)]
         static bool HandleListScenesCommand(StringArguments args, CommandHandler handler)
         {
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (!target)
                 target = handler.GetSession().GetPlayer();
 

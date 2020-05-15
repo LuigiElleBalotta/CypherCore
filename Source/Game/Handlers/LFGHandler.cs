@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,9 +32,9 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.DfJoin)]
         void HandleLfgJoin(DFJoin dfJoin)
         {
-            if (!Global.LFGMgr.isOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser) ||
+            if (!Global.LFGMgr.IsOptionEnabled(LfgOptions.EnableDungeonFinder | LfgOptions.EnableRaidBrowser) ||
                 (GetPlayer().GetGroup() && GetPlayer().GetGroup().GetLeaderGUID() != GetPlayer().GetGUID() &&
-                (GetPlayer().GetGroup().GetMembersCount() == MapConst.MaxGroupSize || !GetPlayer().GetGroup().isLFGGroup())))
+                (GetPlayer().GetGroup().GetMembersCount() == MapConst.MaxGroupSize || !GetPlayer().GetGroup().IsLFGGroup())))
                 return;
 
             if (dfJoin.Slots.Empty())
@@ -120,7 +120,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.DfGetJoinStatus, Processing = PacketProcessing.ThreadSafe)]
         void HandleDfGetJoinStatus(DFGetJoinStatus packet)
         {
-            if (!GetPlayer().isUsingLfg())
+            if (!GetPlayer().IsUsingLfg())
                 return;
 
             ObjectGuid guid = GetPlayer().GetGUID();
@@ -143,7 +143,7 @@ namespace Game
         public void SendLfgPlayerLockInfo()
         {
             // Get Random dungeons that can be done at a certain level and expansion
-            uint level = GetPlayer().getLevel();
+            uint level = GetPlayer().GetLevel();
             List<uint> randomDungeons = Global.LFGMgr.GetRandomAndSeasonalDungeons(level, (uint)GetExpansion());
 
             LfgPlayerInfo lfgPlayerInfo = new LfgPlayerInfo();
@@ -218,7 +218,7 @@ namespace Game
             LfgPartyInfo lfgPartyInfo = new LfgPartyInfo();
 
             // Get the Locked dungeons of the other party members
-            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
             {
                 Player plrg = refe.GetSource();
                 if (!plrg)
@@ -285,6 +285,7 @@ namespace Game
             lfgUpdateStatus.Joined = join;
             lfgUpdateStatus.LfgJoined = updateData.updateType != LfgUpdateType.RemovedFromQueue;
             lfgUpdateStatus.Queued = queued;
+            lfgUpdateStatus.QueueMapID = Global.LFGMgr.GetDungeonMapId(_player.GetGUID());
 
             SendPacket(lfgUpdateStatus);
         }
@@ -316,13 +317,12 @@ namespace Game
             foreach (var dungeonId in dungeons)
                 lfgRoleCheckUpdate.JoinSlots.Add(Global.LFGMgr.GetLFGDungeonEntry(dungeonId));
 
-            lfgRoleCheckUpdate.BgQueueID = 0;
             lfgRoleCheckUpdate.GroupFinderActivityID = 0;
             if (!roleCheck.roles.Empty())
             {
                 // Leader info MUST be sent 1st :S
                 byte roles = (byte)roleCheck.roles.Find(roleCheck.leader).Value;
-                lfgRoleCheckUpdate.Members.Add(new LFGRoleCheckUpdateMember(roleCheck.leader, roles, Global.WorldMgr.GetCharacterInfo(roleCheck.leader).Level, roles > 0));
+                lfgRoleCheckUpdate.Members.Add(new LFGRoleCheckUpdateMember(roleCheck.leader, roles, Global.CharacterCacheStorage.GetCharacterCacheByGuid(roleCheck.leader).Level, roles > 0));
 
                 foreach (var it in roleCheck.roles)
                 {
@@ -330,7 +330,7 @@ namespace Game
                         continue;
 
                     roles = (byte)it.Value;
-                    lfgRoleCheckUpdate.Members.Add(new LFGRoleCheckUpdateMember(it.Key, roles, Global.WorldMgr.GetCharacterInfo(it.Key).Level, roles > 0));
+                    lfgRoleCheckUpdate.Members.Add(new LFGRoleCheckUpdateMember(it.Key, roles, Global.CharacterCacheStorage.GetCharacterCacheByGuid(it.Key).Level, roles > 0));
                 }
             }
 
@@ -348,6 +348,8 @@ namespace Game
             lfgJoinResult.Result = (byte)joinData.result;
             if (joinData.result == LfgJoinResult.RoleCheckFailed)
                 lfgJoinResult.ResultDetail = (byte)joinData.state;
+            else if (joinData.result == LfgJoinResult.NoSlots)
+                lfgJoinResult.BlackListNames = joinData.playersMissingRequirement;
 
             foreach (var it in joinData.lockmap)
             {

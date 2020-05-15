@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Game
         void HandlePetitionBuy(PetitionBuy packet)
         {
             // prevent cheating
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Petitioner);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Petitioner, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandlePetitionBuyOpcode - {0} not found or you can't interact with him.", packet.Unit.ToString());
@@ -88,9 +88,7 @@ namespace Game
             if (!charter)
                 return;
 
-            charter.SetUInt32Value(ItemFields.Enchantment, (uint)charter.GetGUID().GetCounter());
-            // ITEM_FIELD_ENCHANTMENT_1_1 is guild/arenateam id
-            // ITEM_FIELD_ENCHANTMENT_1_1+1 is current signatures count (showed on item)
+            charter.SetPetitionId((uint)charter.GetGUID().GetCounter());
             charter.SetState(ItemUpdateState.Changed, GetPlayer());
             GetPlayer().SendNewItem(charter, 1, true, false);
 
@@ -133,8 +131,6 @@ namespace Game
         {
             Log.outDebug(LogFilter.Network, "Received opcode CMSG_PETITION_SHOW_SIGNATURES");
 
-            byte signs = 0;
-
             // if has guild => error, return;
             if (GetPlayer().GetGuildId() != 0)
                 return;
@@ -143,17 +139,13 @@ namespace Game
             stmt.AddValue(0, packet.Item.GetCounter());
             SQLResult result = DB.Characters.Query(stmt);
 
-            // result == NULL also correct in case no sign yet
-            if (!result.IsEmpty())
-                signs = (byte)result.GetRowCount();
-
             ServerPetitionShowSignatures signaturesPacket = new ServerPetitionShowSignatures();
             signaturesPacket.Item = packet.Item;
             signaturesPacket.Owner = GetPlayer().GetGUID();
-            signaturesPacket.OwnerAccountID = ObjectGuid.Create(HighGuid.WowAccount, ObjectManager.GetPlayerAccountIdByGUID(GetPlayer().GetGUID()));
+            signaturesPacket.OwnerAccountID = ObjectGuid.Create(HighGuid.WowAccount, Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(GetPlayer().GetGUID()));
             signaturesPacket.PetitionID = (int)packet.Item.GetCounter();  // @todo verify that...
 
-            for (byte i = 1; i <= signs; ++i)
+            do
             {
                 ObjectGuid signerGUID = ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0));
 
@@ -161,9 +153,9 @@ namespace Game
                 signature.Signer = signerGUID;
                 signature.Choice = 0;
                 signaturesPacket.Signatures.Add(signature);
-
-                result.NextRow();
             }
+            while (result.NextRow());
+
             SendPacket(signaturesPacket);
         }
 
@@ -261,12 +253,11 @@ namespace Game
                 return;
 
             // not let enemies sign guild charter
-            if (!WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideInteractionGuild) && GetPlayer().GetTeam() != ObjectManager.GetPlayerTeamByGUID(ownerGuid))
+            if (!WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideInteractionGuild) && GetPlayer().GetTeam() != Global.CharacterCacheStorage.GetCharacterTeamByGuid(ownerGuid))
             {
                 Guild.SendCommandResult(this, GuildCommandType.CreateGuild, GuildCommandError.NotAllied);
                 return;
             }
-
 
             if (GetPlayer().GetGuildId() != 0)
             {
@@ -312,6 +303,13 @@ namespace Game
 
             // close at signer side
             SendPacket(signResult);
+
+            Item item = _player.GetItemByGuid(packet.PetitionGUID);
+            if (item != null)
+            {
+                item.SetPetitionNumSignatures((uint)signs);
+                item.SetState(ItemUpdateState.Changed, _player);
+            }
 
             // update for owner if online
             Player owner = Global.ObjAccessor.FindPlayer(ownerGuid);
@@ -372,18 +370,13 @@ namespace Game
             stmt.AddValue(0, packet.ItemGUID.GetCounter());
             SQLResult result = DB.Characters.Query(stmt);
 
-            byte signs = 0;
-            // result == NULL also correct charter without signs
-            if (!result.IsEmpty())
-                signs = (byte)result.GetRowCount();
-
             ServerPetitionShowSignatures signaturesPacket = new ServerPetitionShowSignatures();
             signaturesPacket.Item = packet.ItemGUID;
             signaturesPacket.Owner = GetPlayer().GetGUID();
             signaturesPacket.OwnerAccountID = ObjectGuid.Create(HighGuid.WowAccount, player.GetSession().GetAccountId());
             signaturesPacket.PetitionID = (int)packet.ItemGUID.GetCounter();  // @todo verify that...
 
-            for (byte i = 1; i <= signs; ++i)
+            do
             {
                 ObjectGuid signerGUID = ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0));
 
@@ -391,9 +384,8 @@ namespace Game
                 signature.Signer = signerGUID;
                 signature.Choice = 0;
                 signaturesPacket.Signatures.Add(signature);
-
-                result.NextRow();
             }
+            while (result.NextRow());
 
             player.SendPacket(signaturesPacket);
         }
@@ -447,21 +439,24 @@ namespace Game
             }
 
             // Get petition signatures from db
-            byte signatures;
-
             stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_PETITION_SIGNATURE);
             stmt.AddValue(0, packet.Item.GetCounter());
             result = DB.Characters.Query(stmt);
 
+            List<ObjectGuid> guids = new List<ObjectGuid>();
             if (!result.IsEmpty())
-                signatures = (byte)result.GetRowCount();
-            else
-                signatures = 0;
+            {
+                do
+                {
+                    guids.Add(ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0)));
+                }
+                while (result.NextRow());
+            }
 
             uint requiredSignatures = WorldConfig.GetUIntValue(WorldCfg.MinPetitionSigns);
 
             // Notify player if signatures are missing
-            if (signatures < requiredSignatures)
+            if (guids.Count < requiredSignatures)
             {
                 resultPacket.Result = PetitionTurns.NeedMoreSignatures;
                 SendPacket(resultPacket);
@@ -485,14 +480,8 @@ namespace Game
             SQLTransaction trans = new SQLTransaction();
 
             // Add members from signatures
-            for (byte i = 0; i < signatures; ++i)
-            {
-                guild.AddMember(trans, ObjectGuid.Create(HighGuid.Player, result.Read<ulong>(0)));
-
-                // Checking the return value just to be double safe
-                if (!result.NextRow())
-                    break;
-            }
+            foreach (var guid in guids)
+                guild.AddMember(trans, guid);
 
             stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_PETITION_BY_GUID);
             stmt.AddValue(0, packet.Item.GetCounter());
@@ -519,7 +508,7 @@ namespace Game
 
         public void SendPetitionShowList(ObjectGuid guid)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(guid, NPCFlags.Petitioner);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(guid, NPCFlags.Petitioner, NPCFlags2.None);
             if (!creature)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandlePetitionShowListOpcode - {0} not found or you can't interact with him.", guid.ToString());

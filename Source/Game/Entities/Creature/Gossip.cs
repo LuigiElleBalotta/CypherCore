@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,8 @@ using Game.Conditions;
 using Game.DataStorage;
 using Game.Entities;
 using Game.Network.Packets;
+using Game.Spells;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Linq;
 
 namespace Game.Misc
 {
@@ -32,7 +31,7 @@ namespace Game.Misc
     {
         public uint AddMenuItem(int optionIndex, GossipOptionIcon icon, string message, uint sender, uint action, string boxMessage, uint boxMoney, bool coded = false)
         {
-            Contract.Assert(_menuItems.Count <= SharedConst.MaxGossipMenuItems);
+            Cypher.Assert(_menuItems.Count <= SharedConst.MaxGossipMenuItems);
 
             // Find a free new id - script case
             if (optionIndex == -1)
@@ -73,20 +72,20 @@ namespace Game.Misc
         /// <param name="action">action Custom action given to OnGossipHello.</param>
         public void AddMenuItem(uint menuId, uint optionIndex, uint sender, uint action)
         {
-            /// Find items for given menu id.
+            // Find items for given menu id.
             var bounds = Global.ObjectMgr.GetGossipMenuItemsMapBounds(menuId);
-            /// Return if there are none.
+            // Return if there are none.
             if (bounds.Empty())
                 return;
 
-            /// Iterate over each of them.
+            // Iterate over each of them.
             foreach (var item in bounds)
             {
                 // Find the one with the given menu item id.
                 if (item.OptionIndex != optionIndex)
                     continue;
 
-                /// Store texts for localization.
+                // Store texts for localization.
                 string strOptionText = "", strBoxText = "";
                 BroadcastTextRecord optionBroadcastText = CliDB.BroadcastTextStorage.LookupByKey(item.OptionBroadcastTextId);
                 BroadcastTextRecord boxBroadcastText = CliDB.BroadcastTextStorage.LookupByKey(item.BoxBroadcastTextId);
@@ -254,7 +253,6 @@ namespace Game.Misc
             packet.GossipID = (int)_gossipMenu.GetMenuId();
             packet.TextID = (int)titleTextId;
 
-            uint count = 0;
             foreach (var pair in _gossipMenu.GetMenuItems())
             {
                 ClientGossipOptions opt = new ClientGossipOptions();
@@ -267,10 +265,8 @@ namespace Game.Misc
                 opt.Confirm = item.BoxMessage;      // accept text (related to money) pop up box, 2.0.3
                 packet.GossipOptions.Add(opt);
 
-                ++count;
             }
 
-            count = 0;
             for (byte i = 0; i < _questMenu.GetMenuItemCount(); ++i)
             {
                 QuestMenuItem item = _questMenu.GetItem(i);
@@ -297,7 +293,6 @@ namespace Game.Misc
                     }
 
                     packet.GossipText.Add(text);
-                    ++count;
                 }
             }
 
@@ -321,6 +316,7 @@ namespace Game.Misc
             }
 
             GossipPOI packet = new GossipPOI();
+            packet.Id = pointOfInterest.Id;
             packet.Name = pointOfInterest.Name;
 
             LocaleConstant locale = _session.GetSessionDbLocaleIndex();
@@ -339,20 +335,28 @@ namespace Game.Misc
             _session.SendPacket(packet);
         }
 
-        public void SendQuestGiverQuestListMessage(ObjectGuid guid)
+        public void SendQuestGiverQuestListMessage(WorldObject questgiver)
         {
+            ObjectGuid guid = questgiver.GetGUID();
+            LocaleConstant localeConstant = _session.GetSessionDbLocaleIndex();
+
             QuestGiverQuestListMessage questList = new QuestGiverQuestListMessage();
             questList.QuestGiverGUID = guid;
 
-            QuestGreeting questGreeting = Global.ObjectMgr.GetQuestGreeting(guid);
+            QuestGreeting questGreeting = Global.ObjectMgr.GetQuestGreeting(questgiver.GetTypeId(), questgiver.GetEntry());
             if (questGreeting != null)
             {
-                questList.GreetEmoteDelay = questGreeting.greetEmoteDelay;
-                questList.GreetEmoteType = questGreeting.greetEmoteType;
-                questList.Greeting = questGreeting.greeting;
+                questList.GreetEmoteDelay = questGreeting.EmoteDelay;
+                questList.GreetEmoteType = questGreeting.EmoteType;
+                questList.Greeting = questGreeting.Text;
+
+                if (localeConstant != LocaleConstant.enUS)
+                {
+                    QuestGreetingLocale questGreetingLocale = Global.ObjectMgr.GetQuestGreetingLocale(questgiver.GetTypeId(), questgiver.GetEntry());
+                    if (questGreetingLocale != null)
+                        ObjectManager.GetLocaleString(questGreetingLocale.Greeting, localeConstant, ref questList.Greeting);
+                }
             }
-            else
-                Log.outError(LogFilter.Server, "Guid: {0} - No quest greeting found.", guid.ToString());
 
             for (var i = 0; i < _questMenu.GetMenuItemCount(); ++i)
             {
@@ -364,12 +368,11 @@ namespace Game.Misc
                 {
                     string title = quest.LogTitle;
 
-                    LocaleConstant locale = _session.GetSessionDbLocaleIndex();
-                    if (locale != LocaleConstant.enUS)
+                    if (localeConstant != LocaleConstant.enUS)
                     {
                         QuestTemplateLocale localeData = Global.ObjectMgr.GetQuestLocale(quest.Id);
                         if (localeData != null)
-                            ObjectManager.GetLocaleString(localeData.LogTitle, locale, ref title);
+                            ObjectManager.GetLocaleString(localeData.LogTitle, localeConstant, ref title);
                     }
 
                     GossipText text = new GossipText();
@@ -429,15 +432,29 @@ namespace Game.Misc
             packet.InformUnit = _session.GetPlayer().GetDivider();
             packet.QuestID = quest.Id;
             packet.PortraitGiver = quest.QuestGiverPortrait;
+            packet.PortraitGiverMount = quest.QuestGiverPortraitMount;
             packet.PortraitTurnIn = quest.QuestTurnInPortrait;
+            packet.QuestSessionBonus = 0; //quest.GetQuestSessionBonus(); // this is only sent while quest session is active
             packet.AutoLaunched = autoLaunched;
             packet.DisplayPopup = displayPopup;
-            packet.QuestFlags[0] = (uint)quest.Flags;
+            packet.QuestFlags[0] = (uint)(quest.Flags & (WorldConfig.GetBoolValue(WorldCfg.QuestIgnoreAutoAccept) ? ~QuestFlags.AutoAccept : ~QuestFlags.None));
             packet.QuestFlags[1] = (uint)quest.FlagsEx;
             packet.SuggestedPartyMembers = quest.SuggestedPlayers;
 
-            if (quest.SourceSpellID != 0)
-                packet.LearnSpells.Add(quest.SourceSpellID);
+            // RewardSpell can teach multiple spells in trigger spell effects. But not all effects must be SPELL_EFFECT_LEARN_SPELL. See example spell 33950
+            if (quest.RewardSpell != 0)
+            {
+                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(quest.RewardSpell);
+                if (spellInfo.HasEffect(SpellEffectName.LearnSpell))
+                {
+                    var effects = spellInfo.GetEffectsForDifficulty(Difficulty.None);
+                    foreach (var spellEffectInfo in effects)
+                    {
+                        if (spellEffectInfo.IsEffect(SpellEffectName.LearnSpell))
+                            packet.LearnSpells.Add(spellEffectInfo.TriggerSpell);
+                    }
+                }
+            }
 
             quest.BuildQuestRewards(packet.Rewards, _session.GetPlayer());
 
@@ -451,7 +468,7 @@ namespace Game.Misc
             for (int i = 0; i < objs.Count; ++i)
             {
                 var obj = new QuestObjectiveSimple();
-                obj.ID = objs[i].ID;
+                obj.Id = objs[i].Id;
                 obj.ObjectID = objs[i].ObjectID;
                 obj.Amount = objs[i].Amount;
                 obj.Type = (byte)objs[i].Type;
@@ -463,142 +480,38 @@ namespace Game.Misc
 
         public void SendQuestQueryResponse(Quest quest)
         {
-            QueryQuestInfoResponse packet = new QueryQuestInfoResponse();
+            if (!WorldConfig.GetBoolValue(WorldCfg.CacheDataQueries))
+                quest.InitializeQueryData();
 
-            packet.Allow = true;
-            packet.QuestID = quest.Id;
+            QueryQuestInfoResponse queryQuestInfoResponse = quest.QueryData;
 
-            packet.Info.LogTitle = quest.LogTitle;
-            packet.Info.LogDescription = quest.LogDescription;
-            packet.Info.QuestDescription = quest.QuestDescription;
-            packet.Info.AreaDescription = quest.AreaDescription;
-            packet.Info.QuestCompletionLog = quest.QuestCompletionLog;
-            packet.Info.PortraitGiverText = quest.PortraitGiverText;
-            packet.Info.PortraitGiverName = quest.PortraitGiverName;
-            packet.Info.PortraitTurnInText = quest.PortraitTurnInText;
-            packet.Info.PortraitTurnInName = quest.PortraitTurnInName;
-
-            LocaleConstant locale = _session.GetSessionDbLocaleIndex();
-            if (locale != LocaleConstant.enUS)
+            LocaleConstant loc = _session.GetSessionDbLocaleIndex();
+            if (loc != LocaleConstant.enUS)
             {
-                QuestTemplateLocale questTemplateLocale = Global.ObjectMgr.GetQuestLocale(quest.Id);
+                QuestTemplateLocale questTemplateLocale = Global.ObjectMgr.GetQuestLocale(queryQuestInfoResponse.QuestID);
                 if (questTemplateLocale != null)
                 {
-                    ObjectManager.GetLocaleString(questTemplateLocale.LogTitle, locale, ref packet.Info.LogTitle);
-                    ObjectManager.GetLocaleString(questTemplateLocale.LogDescription, locale, ref packet.Info.LogDescription);
-                    ObjectManager.GetLocaleString(questTemplateLocale.QuestDescription, locale, ref packet.Info.QuestDescription);
-                    ObjectManager.GetLocaleString(questTemplateLocale.AreaDescription, locale, ref packet.Info.AreaDescription);
-                    ObjectManager.GetLocaleString(questTemplateLocale.QuestCompletionLog, locale, ref packet.Info.QuestCompletionLog);
-                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitGiverText, locale, ref packet.Info.PortraitGiverText);
-                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitGiverName, locale, ref packet.Info.PortraitGiverName);
-                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitTurnInText, locale, ref packet.Info.PortraitTurnInText);
-                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitTurnInName, locale, ref packet.Info.PortraitTurnInName);
+                    ObjectManager.GetLocaleString(questTemplateLocale.LogTitle, loc, ref queryQuestInfoResponse.Info.LogTitle);
+                    ObjectManager.GetLocaleString(questTemplateLocale.LogDescription, loc, ref queryQuestInfoResponse.Info.LogDescription);
+                    ObjectManager.GetLocaleString(questTemplateLocale.QuestDescription, loc, ref queryQuestInfoResponse.Info.QuestDescription);
+                    ObjectManager.GetLocaleString(questTemplateLocale.AreaDescription, loc, ref queryQuestInfoResponse.Info.AreaDescription);
+                    ObjectManager.GetLocaleString(questTemplateLocale.QuestCompletionLog, loc, ref queryQuestInfoResponse.Info.QuestCompletionLog);
+                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitGiverText, loc, ref queryQuestInfoResponse.Info.PortraitGiverText);
+                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitGiverName, loc, ref queryQuestInfoResponse.Info.PortraitGiverName);
+                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitTurnInText, loc, ref queryQuestInfoResponse.Info.PortraitTurnInText);
+                    ObjectManager.GetLocaleString(questTemplateLocale.PortraitTurnInName, loc, ref queryQuestInfoResponse.Info.PortraitTurnInName);
                 }
-            }
 
-            packet.Info.QuestID = quest.Id;
-            packet.Info.QuestType = (int)quest.Type;
-            packet.Info.QuestLevel = quest.Level;
-            packet.Info.QuestMaxScalingLevel = quest.MaxScalingLevel;
-            packet.Info.QuestPackageID = quest.PackageID;
-            packet.Info.QuestMinLevel = quest.MinLevel;
-            packet.Info.QuestSortID = quest.QuestSortID;
-            packet.Info.QuestInfoID = quest.QuestInfoID;
-            packet.Info.SuggestedGroupNum = quest.SuggestedPlayers;
-            packet.Info.RewardNextQuest = quest.NextQuestInChain;
-            packet.Info.RewardXPDifficulty = quest.RewardXPDifficulty;
-            packet.Info.RewardXPMultiplier = quest.RewardXPMultiplier;
-
-            if (!quest.HasFlag(QuestFlags.HiddenRewards))
-                packet.Info.RewardMoney = quest.RewardMoney < 0 ? quest.RewardMoney : (int)_session.GetPlayer().GetQuestMoneyReward(quest);
-
-            packet.Info.RewardMoneyDifficulty = quest.RewardMoneyDifficulty;
-            packet.Info.RewardMoneyMultiplier = quest.RewardMoneyMultiplier;
-            packet.Info.RewardBonusMoney = quest.RewardBonusMoney;
-            for (byte i = 0; i < SharedConst.QuestRewardDisplaySpellCount; ++i)
-                packet.Info.RewardDisplaySpell[i] = quest.RewardDisplaySpell[i];
-
-            packet.Info.RewardSpell = quest.RewardSpell;
-
-            packet.Info.RewardHonor = quest.RewardHonor;
-            packet.Info.RewardKillHonor = quest.RewardKillHonor;
-
-            packet.Info.RewardArtifactXPDifficulty = (int)quest.RewardArtifactXPDifficulty;
-            packet.Info.RewardArtifactXPMultiplier = quest.RewardArtifactXPMultiplier;
-            packet.Info.RewardArtifactCategoryID = (int)quest.RewardArtifactCategoryID;
-
-            packet.Info.StartItem = quest.SourceItemId;
-            packet.Info.Flags = (uint)quest.Flags;
-            packet.Info.FlagsEx = (uint)quest.FlagsEx;
-            packet.Info.RewardTitle = quest.RewardTitleId;
-            packet.Info.RewardArenaPoints = quest.RewardArenaPoints;
-            packet.Info.RewardSkillLineID = quest.RewardSkillId;
-            packet.Info.RewardNumSkillUps = quest.RewardSkillPoints;
-            packet.Info.RewardFactionFlags = quest.RewardReputationMask;
-            packet.Info.PortraitGiver = quest.QuestGiverPortrait;
-            packet.Info.PortraitTurnIn = quest.QuestTurnInPortrait;
-
-            for (byte i = 0; i < SharedConst.QuestItemDropCount; ++i)
-            {
-                packet.Info.ItemDrop[i] = (int)quest.ItemDrop[i];
-                packet.Info.ItemDropQuantity[i] = (int)quest.ItemDropQuantity[i];
-            }
-
-            if (!quest.HasFlag(QuestFlags.HiddenRewards))
-            {
-                for (byte i = 0; i < SharedConst.QuestRewardItemCount; ++i)
+                foreach (QuestObjective questObjective in queryQuestInfoResponse.Info.Objectives)
                 {
-                    packet.Info.RewardItems[i] = quest.RewardItemId[i];
-                    packet.Info.RewardAmount[i] = quest.RewardItemCount[i];
-                }
-                for (byte i = 0; i < SharedConst.QuestRewardChoicesCount; ++i)
-                {
-                    packet.Info.UnfilteredChoiceItems[i].ItemID = quest.RewardChoiceItemId[i];
-                    packet.Info.UnfilteredChoiceItems[i].Quantity = quest.RewardChoiceItemCount[i];
-                }
-            }
-
-            for (byte i = 0; i < SharedConst.QuestRewardReputationsCount; ++i)
-            {
-                packet.Info.RewardFactionID[i] = quest.RewardFactionId[i];
-                packet.Info.RewardFactionValue[i] = quest.RewardFactionValue[i];
-                packet.Info.RewardFactionOverride[i] = quest.RewardFactionOverride[i];
-                packet.Info.RewardFactionCapIn[i] = (int)quest.RewardFactionCapIn[i];
-            }
-
-            packet.Info.POIContinent = quest.POIContinent;
-            packet.Info.POIx = quest.POIx;
-            packet.Info.POIy = quest.POIy;
-            packet.Info.POIPriority = quest.POIPriority;
-
-            packet.Info.AllowableRaces = quest.AllowableRaces;
-            packet.Info.QuestRewardID = (int)quest.QuestRewardID;
-            packet.Info.Expansion = quest.Expansion;
-
-            foreach (QuestObjective questObjective in quest.Objectives)
-            {
-                if (locale != LocaleConstant.enUS)
-                {
-                    QuestObjectivesLocale questObjectivesLocaleData = Global.ObjectMgr.GetQuestObjectivesLocale(questObjective.ID);
+                    QuestObjectivesLocale questObjectivesLocaleData = Global.ObjectMgr.GetQuestObjectivesLocale(questObjective.Id);
                     if (questObjectivesLocaleData != null)
-                        ObjectManager.GetLocaleString(questObjectivesLocaleData.Description, locale, ref questObjective.Description);
+                        ObjectManager.GetLocaleString(questObjectivesLocaleData.Description, loc, ref questObjective.Description);
                 }
 
-                packet.Info.Objectives.Add(questObjective);
             }
 
-            for (int i = 0; i < SharedConst.QuestRewardCurrencyCount; ++i)
-            {
-                packet.Info.RewardCurrencyID[i] = quest.RewardCurrencyId[i];
-                packet.Info.RewardCurrencyQty[i] = quest.RewardCurrencyCount[i];
-            }
-
-            packet.Info.AcceptedSoundKitID = quest.SoundAccept;
-            packet.Info.CompleteSoundKitID = quest.SoundTurnIn;
-            packet.Info.AreaGroupID = quest.AreaGroupID;
-            packet.Info.TimeAllowed = quest.LimitTime;
-
-            _session.SendPacket(packet);
+            _session.SendPacket(queryQuestInfoResponse);
         }
 
         public void SendQuestGiverOfferReward(Quest quest, ObjectGuid npcGUID, bool autoLaunched)
@@ -652,6 +565,7 @@ namespace Game.Misc
 
             packet.PortraitTurnIn = quest.QuestTurnInPortrait;
             packet.PortraitGiver = quest.QuestGiverPortrait;
+            packet.PortraitGiverMount = quest.QuestGiverPortraitMount;
             packet.QuestPackageID = quest.PackageID;
 
             packet.QuestData = offer;
@@ -757,8 +671,6 @@ namespace Game.Misc
 
     public class QuestMenu
     {
-        public QuestMenu() { }
-
         public void AddMenuItem(uint QuestId, byte Icon)
         {
             if (Global.ObjectMgr.GetQuestTemplate(QuestId) == null)
@@ -788,7 +700,7 @@ namespace Game.Misc
 
         public int GetMenuItemCount()
         {
-            return _questMenuItems.Count();
+            return _questMenuItems.Count;
         }
 
         public bool IsEmpty()
@@ -865,7 +777,7 @@ namespace Game.Misc
 
     public class PointOfInterest
     {
-        public uint ID;
+        public uint Id;
         public Vector2 Pos;
         public uint Icon;
         public uint Flags;

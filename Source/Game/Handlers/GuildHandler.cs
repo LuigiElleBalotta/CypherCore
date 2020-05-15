@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game.Entities;
 using Game.Guilds;
 using Game.Network;
 using Game.Network.Packets;
-using System.Collections.Generic;
 
 namespace Game
 {
@@ -34,13 +33,14 @@ namespace Game
             {
                 if (guild.IsMember(query.PlayerGuid))
                 {
-                    guild.SendQueryResponse(this);
+                    guild.SendQueryResponse(this, query.PlayerGuid);
                     return;
                 }
             }
 
             QueryGuildInfoResponse response = new QueryGuildInfoResponse();
             response.GuildGUID = query.GuildGuid;
+            response.PlayerGuid = query.PlayerGuid;
             SendPacket(response);
         }
 
@@ -188,7 +188,7 @@ namespace Game
             Guild.EmblemInfo emblemInfo = new Guild.EmblemInfo();
             emblemInfo.ReadPacket(packet);
 
-            if (GetPlayer().GetNPCIfCanInteractWith(packet.Vendor, NPCFlags.TabardDesigner))
+            if (GetPlayer().GetNPCIfCanInteractWith(packet.Vendor, NPCFlags.TabardDesigner, NPCFlags2.None))
             {
                 // Remove fake death
                 if (GetPlayer().HasUnitState(UnitState.Died))
@@ -287,7 +287,7 @@ namespace Game
             }
         }
 
-        [WorldPacketHandler(ClientOpcodes.GuildBankSwapItems)]
+        //[WorldPacketHandler(ClientOpcodes.GuildBankSwapItems)]
         void HandleGuildBankSwapItems(GuildBankSwapItems packet)
         {
             if (!GetPlayer().GetGameObjectIfCanInteractWith(packet.Banker, GameObjectTypes.GuildBank))
@@ -368,11 +368,11 @@ namespace Game
             if (!guild)
                 return;
 
-            List<Guild.GuildBankRightsAndSlots> rightsAndSlots = new List<Guild.GuildBankRightsAndSlots>(GuildConst.MaxBankTabs);
+            Guild.GuildBankRightsAndSlots[] rightsAndSlots = new Guild.GuildBankRightsAndSlots[GuildConst.MaxBankTabs];
             for (byte tabId = 0; tabId < GuildConst.MaxBankTabs; ++tabId)
-                rightsAndSlots[tabId] = new Guild.GuildBankRightsAndSlots(tabId, (sbyte)packet.TabFlags[tabId], packet.TabWithdrawItemLimit[tabId]);
+                rightsAndSlots[tabId] = new Guild.GuildBankRightsAndSlots(tabId, (sbyte)packet.TabFlags[tabId], (int)packet.TabWithdrawItemLimit[tabId]);
 
-            guild.HandleSetRankInfo(this, (byte)packet.RankOrder, packet.RankName, (GuildRankRights)packet.Flags, (uint)packet.WithdrawGoldLimit, rightsAndSlots);
+            guild.HandleSetRankInfo(this, (byte)packet.RankOrder, packet.RankName, (GuildRankRights)packet.Flags, packet.WithdrawGoldLimit, rightsAndSlots);
         }
 
         [WorldPacketHandler(ClientOpcodes.RequestGuildPartyState)]
@@ -394,7 +394,10 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.DeclineGuildInvites)]
         void HandleDeclineGuildInvites(DeclineGuildInvites packet)
         {
-            GetPlayer().ApplyModFlag(PlayerFields.Flags, PlayerFlags.AutoDeclineGuild, packet.Allow);
+            if (packet.Allow)
+                GetPlayer().AddPlayerFlag(PlayerFlags.AutoDeclineGuild);
+            else
+                GetPlayer().RemovePlayerFlag(PlayerFlags.AutoDeclineGuild);
         }
 
         [WorldPacketHandler(ClientOpcodes.RequestGuildRewardsList, Processing = PacketProcessing.Inplace)]
@@ -440,12 +443,20 @@ namespace Game
                 guild.HandleNewsSetSticky(this, (uint)packet.NewsID, packet.Sticky);
         }
 
+        [WorldPacketHandler(ClientOpcodes.GuildReplaceGuildMaster)]
+        void HandleGuildReplaceGuildMaster(GuildReplaceGuildMaster replaceGuildMaster)
+        {
+            Guild guild = GetPlayer().GetGuild();
+            if (guild)
+                guild.HandleSetNewGuildMaster(this, "", true);
+        }
+
         [WorldPacketHandler(ClientOpcodes.GuildSetGuildMaster)]
         void HandleGuildSetGuildMaster(GuildSetGuildMaster packet)
         {
             Guild guild = GetPlayer().GetGuild();
             if (guild)
-                guild.HandleSetNewGuildMaster(this, packet.NewMasterName);
+                guild.HandleSetNewGuildMaster(this, packet.NewMasterName, false);
         }
 
         [WorldPacketHandler(ClientOpcodes.GuildSetAchievementTracking)]

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,10 +32,10 @@ namespace Game.Chat
                 return false;
 
             Player target;
-            if (!handler.extractPlayerTarget(args[0] != '"' ? args : null, out target))
+            if (!handler.ExtractPlayerTarget(args[0] != '"' ? args : null, out target))
                 return false;
 
-            string guildname = handler.extractQuotedArg(args.NextString());
+            string guildname = handler.ExtractQuotedArg(args.NextString());
             if (string.IsNullOrEmpty(guildname))
                 return false;
 
@@ -60,7 +60,7 @@ namespace Game.Chat
         [Command("delete", RBACPermissions.CommandGuildDelete, true)]
         static bool HandleGuildDeleteCommand(StringArguments args, CommandHandler handler)
         {
-            string guildName = handler.extractQuotedArg(args.NextString());
+            string guildName = handler.ExtractQuotedArg(args.NextString());
             if (string.IsNullOrEmpty(guildName))
                 return false;
 
@@ -79,10 +79,10 @@ namespace Game.Chat
                 return false;
 
             Player target;
-            if (!handler.extractPlayerTarget(args[0] != '"' ? args : null, out target))
+            if (!handler.ExtractPlayerTarget(args[0] != '"' ? args : null, out target))
                 return false;
 
-            string guildName = handler.extractQuotedArg(args.NextString());
+            string guildName = handler.ExtractQuotedArg(args.NextString());
             if (string.IsNullOrEmpty(guildName))
                 return false;
 
@@ -99,11 +99,11 @@ namespace Game.Chat
         static bool HandleGuildUninviteCommand(StringArguments args, CommandHandler handler)
         {
             Player target;
-            ObjectGuid targetGuid = ObjectGuid.Empty;
-            if (!handler.extractPlayerTarget(args, out target, out targetGuid))
+            ObjectGuid targetGuid;
+            if (!handler.ExtractPlayerTarget(args, out target, out targetGuid))
                 return false;
 
-            uint guildId = target != null ? target.GetGuildId() : Player.GetGuildIdFromDB(targetGuid);
+            ulong guildId = target != null ? target.GetGuildId() : Global.CharacterCacheStorage.GetCharacterGuildIdByGuid(targetGuid);
             if (guildId == 0)
                 return false;
 
@@ -120,17 +120,16 @@ namespace Game.Chat
         {
             string nameStr;
             string rankStr;
-            handler.extractOptFirstArg(args, out nameStr, out rankStr);
+            handler.ExtractOptFirstArg(args, out nameStr, out rankStr);
             if (string.IsNullOrEmpty(rankStr))
                 return false;
 
             Player target;
             ObjectGuid targetGuid;
-            string target_name;
-            if (!handler.extractPlayerTarget(new StringArguments(nameStr), out target, out targetGuid, out target_name))
+            if (!handler.ExtractPlayerTarget(new StringArguments(nameStr), out target, out targetGuid, out _))
                 return false;
 
-            ulong guildId = target ? target.GetGuildId() : Player.GetGuildIdFromDB(targetGuid);
+            ulong guildId = target ? target.GetGuildId() : Global.CharacterCacheStorage.GetCharacterGuildIdByGuid(targetGuid);
             if (guildId == 0)
                 return false;
 
@@ -150,14 +149,14 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            string oldGuildStr = handler.extractQuotedArg(args.NextString());
+            string oldGuildStr = handler.ExtractQuotedArg(args.NextString());
             if (string.IsNullOrEmpty(oldGuildStr))
             {
                 handler.SendSysMessage(CypherStrings.BadValue);
                 return false;
             }
 
-            string newGuildStr = handler.extractQuotedArg(args.NextString());
+            string newGuildStr = handler.ExtractQuotedArg(args.NextString());
             if (string.IsNullOrEmpty(newGuildStr))
             {
                 handler.SendSysMessage(CypherStrings.InsertGuildName);
@@ -191,7 +190,7 @@ namespace Game.Chat
         static bool HandleGuildInfoCommand(StringArguments args, CommandHandler handler)
         {
             Guild guild = null;
-            Player target = handler.getSelectedPlayerOrSelf();
+            Player target = handler.GetSelectedPlayerOrSelf();
 
             if (!args.Empty() && args[0] != '\0')
             {
@@ -210,7 +209,7 @@ namespace Game.Chat
             handler.SendSysMessage(CypherStrings.GuildInfoName, guild.GetName(), guild.GetId()); // Guild Id + Name
 
             string guildMasterName;
-            if (ObjectManager.GetPlayerNameByGUID(guild.GetLeaderGUID(), out guildMasterName))
+            if (Global.CharacterCacheStorage.GetCharacterNameByGuid(guild.GetLeaderGUID(), out guildMasterName))
                 handler.SendSysMessage(CypherStrings.GuildInfoGuildMaster, guildMasterName, guild.GetLeaderGUID().ToString()); // Guild Master
 
             // Format creation date

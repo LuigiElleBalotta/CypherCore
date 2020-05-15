@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ namespace Game.Movement
                 return true;
             }
 
-            if (creature.moveSpline.Finalized())
+            if (creature.MoveSpline.Finalized())
             {
                 i_nextMoveTime.Update((int)diff);
                 if (i_nextMoveTime.Passed())
@@ -84,7 +84,7 @@ namespace Game.Movement
             return true;
         }
 
-        public void _setRandomLocation(Creature creature)
+        void _setRandomLocation(Creature creature)
         {
             if (creature.IsMovementPreventedByCasting())
             {
@@ -92,7 +92,7 @@ namespace Game.Movement
                 return;
             }
 
-            float respX, respY, respZ, respO, destX, destY, destZ, travelDistZ;
+            float respX, respY, respZ, respO, destZ;
             creature.GetHomePosition(out respX, out respY, out respZ, out respO);
             Map map = creature.GetMap();
 
@@ -103,14 +103,14 @@ namespace Game.Movement
             float distanceX = (float)(range * Math.Cos(angle));
             float distanceY = (float)(range * Math.Sin(angle));
 
-            destX = respX + distanceX;
-            destY = respY + distanceY;
+            float destX = respX + distanceX;
+            float destY = respY + distanceY;
 
             // prevent invalid coordinates generation
             GridDefines.NormalizeMapCoord(ref destX);
             GridDefines.NormalizeMapCoord(ref destY);
 
-            travelDistZ = range;   // sin^2+cos^2=1, so travelDistZ=range^2; no need for sqrt below
+            float travelDistZ = range;   // sin^2+cos^2=1, so travelDistZ=range^2; no need for sqrt below
 
             if (is_air_ok)                                          // 3D system above ground and above water (flying mode)
             {
@@ -167,7 +167,7 @@ namespace Game.Movement
             init.Launch();
 
             //Call for creature group update
-            if (creature.GetFormation() != null && creature.GetFormation().getLeader() == creature)
+            if (creature.GetFormation() != null && creature.GetFormation().GetLeader() == creature)
                 creature.GetFormation().LeaderMoveTo(destX, destY, destZ);
         }
 

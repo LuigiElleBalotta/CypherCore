@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,6 +44,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(GuildGUID);
+            _worldPacket.WritePackedGuid(PlayerGuid);
             _worldPacket.WriteBit(HasGuildInfo);
             _worldPacket.FlushBits();
 
@@ -51,7 +52,7 @@ namespace Game.Network.Packets
             {
                 _worldPacket.WritePackedGuid(Info.GuildGuid);
                 _worldPacket.WriteUInt32(Info.VirtualRealmAddress);
-                _worldPacket.WriteUInt32(Info.Ranks.Count);
+                _worldPacket.WriteInt32(Info.Ranks.Count);
                 _worldPacket.WriteUInt32(Info.EmblemStyle);
                 _worldPacket.WriteUInt32(Info.EmblemColor);
                 _worldPacket.WriteUInt32(Info.BorderStyle);
@@ -75,6 +76,7 @@ namespace Game.Network.Packets
         }
 
         public ObjectGuid GuildGUID;
+        public ObjectGuid PlayerGuid;
         public GuildInfo Info = new GuildInfo();
         public bool HasGuildInfo;
 
@@ -127,8 +129,8 @@ namespace Game.Network.Packets
             _worldPacket.WriteInt32(NumAccounts);
             _worldPacket.WritePackedTime(CreateDate);
             _worldPacket.WriteInt32(GuildFlags);
-            _worldPacket.WriteUInt32(MemberData.Count);
-            _worldPacket.WriteBits(WelcomeText.GetByteCount(), 10);
+            _worldPacket.WriteInt32(MemberData.Count);
+            _worldPacket.WriteBits(WelcomeText.GetByteCount(), 11);
             _worldPacket.WriteBits(InfoText.GetByteCount(), 10);
             _worldPacket.FlushBits();
 
@@ -155,7 +157,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(MemberData.Count);
+            _worldPacket.WriteInt32(MemberData.Count);
 
             MemberData.ForEach(p => p.Write(_worldPacket));
         }
@@ -169,7 +171,7 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            uint textLen = _worldPacket.ReadBits<uint>(10);
+            uint textLen = _worldPacket.ReadBits<uint>(11);
             MotdText = _worldPacket.ReadString(textLen);
         }
 
@@ -182,8 +184,8 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(Result);
-            _worldPacket.WriteInt32(Command);
+            _worldPacket.WriteUInt32((uint)Result);
+            _worldPacket.WriteUInt32((uint)Command);
 
             _worldPacket.WriteBits(Name.GetByteCount(), 8);
             _worldPacket.WriteString(Name);
@@ -276,6 +278,23 @@ namespace Game.Network.Packets
         public string OldGuildName;
     }
 
+    public class GuildEventAwayChange : ServerPacket
+    {
+        public GuildEventAwayChange() : base(ServerOpcodes.GuildEventAwayChange) { }
+
+        public override void Write()
+        {
+            _worldPacket.WritePackedGuid(Guid);
+            _worldPacket.WriteBit(AFK);
+            _worldPacket.WriteBit(DND);
+            _worldPacket.FlushBits();
+        }
+
+        public ObjectGuid Guid;
+        public bool AFK;
+        public bool DND;
+    }
+
     public class GuildEventPresenceChange : ServerPacket
     {
         public GuildEventPresenceChange() : base(ServerOpcodes.GuildEventPresenceChange) { }
@@ -305,7 +324,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteBits(MotdText.GetByteCount(), 10);
+            _worldPacket.WriteBits(MotdText.GetByteCount(), 11);
             _worldPacket.WriteString(MotdText);
         }
 
@@ -384,7 +403,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Entry.Count);
+            _worldPacket.WriteInt32(Entry.Count);
 
             foreach (GuildEventEntry entry in Entry)
             {
@@ -438,16 +457,16 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteBit(SelfPromoted);
-            _worldPacket.WriteBits(NewLeaderName.GetByteCount(), 6);
             _worldPacket.WriteBits(OldLeaderName.GetByteCount(), 6);
+            _worldPacket.WriteBits(NewLeaderName.GetByteCount(), 6);
 
             _worldPacket.WritePackedGuid(OldLeaderGUID);
             _worldPacket.WriteUInt32(OldLeaderVirtualRealmAddress);
             _worldPacket.WritePackedGuid(NewLeaderGUID);
             _worldPacket.WriteUInt32(NewLeaderVirtualRealmAddress);
 
-            _worldPacket.WriteString(NewLeaderName);
             _worldPacket.WriteString(OldLeaderName);
+            _worldPacket.WriteString(NewLeaderName);
         }
 
         public ObjectGuid NewLeaderGUID;
@@ -526,7 +545,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteInt32(WithdrawGoldLimit);
             _worldPacket.WriteInt32(Flags);
             _worldPacket.WriteInt32(NumTabs);
-            _worldPacket.WriteUInt32(Tab.Count);
+            _worldPacket.WriteInt32(Tab.Count);
 
             foreach (GuildRankTabPermissions tab in Tab)
             {
@@ -557,28 +576,29 @@ namespace Game.Network.Packets
             RankID = _worldPacket.ReadInt32();
             RankOrder = _worldPacket.ReadInt32();
             Flags = _worldPacket.ReadUInt32();
-            OldFlags = _worldPacket.ReadUInt32();
-            WithdrawGoldLimit = _worldPacket.ReadInt32();
+            WithdrawGoldLimit = _worldPacket.ReadUInt32();
 
             for (byte i = 0; i < GuildConst.MaxBankTabs; i++)
             {
-                TabFlags[i] = _worldPacket.ReadInt32();
-                TabWithdrawItemLimit[i] = _worldPacket.ReadInt32();
+                TabFlags[i] = _worldPacket.ReadUInt32();
+                TabWithdrawItemLimit[i] = _worldPacket.ReadUInt32();
             }
 
             _worldPacket.ResetBitPos();
             uint rankNameLen = _worldPacket.ReadBits<uint>(7);
 
             RankName = _worldPacket.ReadString(rankNameLen);
+
+            OldFlags = _worldPacket.ReadUInt32();
         }
 
         public int RankID;
         public int RankOrder;
-        public int WithdrawGoldLimit;
+        public uint WithdrawGoldLimit;
         public uint Flags;
         public uint OldFlags;
-        public int[] TabFlags = new int[GuildConst.MaxBankTabs];
-        public int[] TabWithdrawItemLimit = new int[GuildConst.MaxBankTabs];
+        public uint[] TabFlags = new uint[GuildConst.MaxBankTabs];
+        public uint[] TabWithdrawItemLimit = new uint[GuildConst.MaxBankTabs];
         public string RankName;
     }
 
@@ -646,7 +666,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Ranks.Count);
+            _worldPacket.WriteInt32(Ranks.Count);
 
             Ranks.ForEach(p => p.Write(_worldPacket));
         }
@@ -716,7 +736,7 @@ namespace Game.Network.Packets
         }
 
         public ObjectGuid NoteeGUID;
-        public bool IsPublic;          ///< 0 == Officer, 1 == Public
+        public bool IsPublic;          // 0 == Officer, 1 == Public
         public string Note;
     }
 
@@ -736,7 +756,7 @@ namespace Game.Network.Packets
         }
 
         public ObjectGuid Member;
-        public bool IsPublic;          ///< 0 == Officer, 1 == Public
+        public bool IsPublic;          // 0 == Officer, 1 == Public
         public string Note;
     }
 
@@ -876,7 +896,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteUInt32(Version);
-            _worldPacket.WriteUInt32(RewardItems.Count);
+            _worldPacket.WriteInt32(RewardItems.Count);
 
             foreach (var item in RewardItems)
                 item.Write(_worldPacket);
@@ -981,7 +1001,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket .WriteInt64( RemainingWithdrawMoney);
+            _worldPacket.WriteInt64(RemainingWithdrawMoney);
         }
 
         public long RemainingWithdrawMoney;
@@ -1014,16 +1034,16 @@ namespace Game.Network.Packets
             _worldPacket.WriteUInt64(Money);
             _worldPacket.WriteInt32(Tab);
             _worldPacket.WriteInt32(WithdrawalsRemaining);
-            _worldPacket.WriteUInt32(TabInfo.Count);
-            _worldPacket.WriteUInt32(ItemInfo.Count);
+            _worldPacket.WriteInt32(TabInfo.Count);
+            _worldPacket.WriteInt32(ItemInfo.Count);
             _worldPacket.WriteBit(FullUpdate);
             _worldPacket.FlushBits();
 
             foreach (GuildBankTabInfo tab in TabInfo)
             {
-                _worldPacket.WriteUInt32(tab.TabIndex);
+                _worldPacket.WriteInt32(tab.TabIndex);
                 _worldPacket.WriteBits(tab.Name.GetByteCount(), 7);
-                _worldPacket.WriteBits(tab.Icon.GetByteCount(), 9);;
+                _worldPacket.WriteBits(tab.Icon.GetByteCount(), 9);
 
                 _worldPacket.WriteString(tab.Name);
                 _worldPacket.WriteString(tab.Icon);
@@ -1119,7 +1139,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(Tab);
-            _worldPacket.WriteUInt32(Entry.Count);
+            _worldPacket.WriteInt32(Entry.Count);
             _worldPacket.WriteBit(WeeklyBonusMoney.HasValue);
             _worldPacket.FlushBits();
 
@@ -1220,7 +1240,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(NewsEvents.Count);
+            _worldPacket.WriteInt32(NewsEvents.Count);
             foreach (var newsEvent in NewsEvents)
                 newsEvent.Write(_worldPacket);
         }
@@ -1243,6 +1263,13 @@ namespace Game.Network.Packets
         public int NewsID;
         public ObjectGuid GuildGUID;
         public bool Sticky;
+    }
+
+    class GuildReplaceGuildMaster : ClientPacket
+    {
+        public GuildReplaceGuildMaster(WorldPacket packet) : base(packet) { }
+
+        public override void Read() { }
     }
 
     public class GuildSetGuildMaster : ClientPacket
@@ -1318,7 +1345,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteInt32(Error);
+            _worldPacket.WriteUInt32((uint)Error);
         }
 
         public GuildEmblemError Error;
@@ -1423,7 +1450,7 @@ namespace Game.Network.Packets
         public GuildRosterProfessionData[] Profession = new GuildRosterProfessionData[2];
     }
 
-    public struct GuildEventEntry
+    public class GuildEventEntry
     {
         public ObjectGuid PlayerGUID;
         public ObjectGuid OtherGUID;
@@ -1436,7 +1463,7 @@ namespace Game.Network.Packets
     {
         public void Write(WorldPacket data)
         {
-            data.WriteUInt32(RankID);
+            data.WriteUInt8(RankID);
             data.WriteUInt32(RankOrder);
             data.WriteUInt32(Flags);
             data.WriteUInt32(WithdrawGoldLimit);
@@ -1451,7 +1478,7 @@ namespace Game.Network.Packets
             data.WriteString(RankName);
         }
 
-        public uint RankID;
+        public byte RankID;
         public uint RankOrder;
         public uint Flags;
         public uint WithdrawGoldLimit;
@@ -1466,10 +1493,10 @@ namespace Game.Network.Packets
         {
             data.WriteUInt32(ItemID);
             data.WriteUInt32(Unk4);
-            data.WriteUInt32(AchievementsRequired.Count);
+            data.WriteInt32(AchievementsRequired.Count);
             data.WriteUInt64(RaceMask);
-            data.WriteUInt32(MinGuildLevel);
-            data.WriteUInt32(MinGuildRep);
+            data.WriteInt32(MinGuildLevel);
+            data.WriteInt32(MinGuildRep);
             data.WriteUInt64(Cost);
 
             foreach (var achievementId in AchievementsRequired)
@@ -1505,7 +1532,7 @@ namespace Game.Network.Packets
         public string Icon;
     }
 
-    public struct GuildBankLogEntry
+    public class GuildBankLogEntry
     {
         public ObjectGuid PlayerGUID;
         public uint TimeOffset;
@@ -1529,7 +1556,7 @@ namespace Game.Network.Packets
                 data.WriteInt32(Data[i]);
 
             data.WritePackedGuid(MemberGuid);
-            data.WriteUInt32(MemberList.Count);
+            data.WriteInt32(MemberList.Count);
 
             foreach (ObjectGuid memberGuid in MemberList)
                 data.WritePackedGuid(memberGuid);

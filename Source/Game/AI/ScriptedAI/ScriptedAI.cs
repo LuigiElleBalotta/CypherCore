@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Game.AI
         {
             _isCombatMovementAllowed = true;
             _isHeroic = me.GetMap().IsHeroic();
-            _difficulty = me.GetMap().GetSpawnMode();
+            _difficulty = me.GetMap().GetDifficultyID();
         }
 
         void AttackStartNoMove(Unit target)
@@ -125,7 +125,7 @@ namespace Game.AI
                 return null;
 
             //Silenced so we can't cast
-            if (me.HasFlag(UnitFields.Flags, UnitFlags.Silenced))
+            if (me.HasUnitFlag(UnitFlags.Silenced))
                 return null;
 
             //Using the extended script system we first create a list of viable spells
@@ -133,12 +133,10 @@ namespace Game.AI
 
             uint spellCount = 0;
 
-            SpellInfo tempSpell = null;
-
             //Check if each spell is viable(set it to null if not)
             for (uint i = 0; i < SharedConst.MaxCreatureSpells; i++)
             {
-                tempSpell = Global.SpellMgr.GetSpellInfo(me.m_spells[i]);
+                SpellInfo tempSpell = Global.SpellMgr.GetSpellInfo(me.m_spells[i]);
 
                 //This spell doesn't exist
                 if (tempSpell == null)
@@ -186,17 +184,17 @@ namespace Game.AI
         //Drops all threat to 0%. Does not remove players from the threat list
         public void DoResetThreat()
         {
-            if (!me.CanHaveThreatList() || me.GetThreatManager().isThreatListEmpty())
+            if (!me.CanHaveThreatList() || me.GetThreatManager().IsThreatListEmpty())
             {
                 Log.outError(LogFilter.Scripts, "DoResetThreat called for creature that either cannot have threat list or has empty threat list (me entry = {0})", me.GetEntry());
                 return;
             }
 
-            var threatlist = me.GetThreatManager().getThreatList();
+            var threatlist = me.GetThreatManager().GetThreatList();
 
             foreach (var refe in threatlist)
             {
-                Unit unit = Global.ObjAccessor.GetUnit(me, refe.getUnitGuid());
+                Unit unit = Global.ObjAccessor.GetUnit(me, refe.GetUnitGuid());
                 if (unit != null && DoGetThreat(unit) != 0)
                     DoModifyThreatPercent(unit, -100);
             }
@@ -206,14 +204,14 @@ namespace Game.AI
         {
             if (unit == null)
                 return 0.0f;
-            return me.GetThreatManager().getThreat(unit);
+            return me.GetThreatManager().GetThreat(unit);
         }
 
         public void DoModifyThreatPercent(Unit unit, int pct)
         {
             if (unit == null)
                 return;
-            me.GetThreatManager().modifyThreatPercent(unit, pct);
+            me.GetThreatManager().ModifyThreatPercent(unit, pct);
         }
 
         void DoTeleportTo(float x, float y, float z, uint time = 0)
@@ -345,9 +343,6 @@ namespace Game.AI
         // Called when spell hits a target
         public override void SpellHitTarget(Unit target, SpellInfo spell) { }
 
-        //Called at waypoint reached or PointMovement end
-        public override void MovementInform(MovementGeneratorType type, uint id) { }
-
         // Called when AI is temporarily replaced or put back when possess is applied or removed
         public virtual void OnPossess(bool apply) { }
 
@@ -440,10 +435,7 @@ namespace Game.AI
             if (instance != null)
                 SetBoundary(instance.GetBossBoundary(bossId));
 
-            _scheduler.SetValidator(() =>
-            {
-                return !me.HasUnitState(UnitState.Casting);
-            });
+            _scheduler.SetValidator(() => !me.HasUnitState(UnitState.Casting));
         }
 
         public void _Reset()
@@ -483,7 +475,7 @@ namespace Game.AI
             }
 
             me.SetCombatPulseDelay(5);
-            me.setActive(true);
+            me.SetActive(true);
             DoZoneInCombat();
             ScheduleTasks();
         }
@@ -493,10 +485,10 @@ namespace Game.AI
             float x, y, z;
             me.GetPosition(out x, out y, out z);
 
-            var threatList = me.GetThreatManager().getThreatList();
+            var threatList = me.GetThreatManager().GetThreatList();
             foreach (var refe in threatList)
             {
-                Unit target = refe.getTarget();
+                Unit target = refe.GetTarget();
                 if (target)
                     if (target.IsTypeId(TypeId.Player) && !CheckBoundary(target))
                         target.NearTeleportTo(x, y, z, 0);
@@ -573,7 +565,7 @@ namespace Game.AI
 
         public override bool CanAIAttack(Unit victim) { return CheckBoundary(victim); }
 
-        public void _JustReachedHome() { me.setActive(false); }
+        public void _JustReachedHome() { me.SetActive(false); }
 
         public InstanceScript instance;
         public SummonList summons;
@@ -699,7 +691,7 @@ namespace Game.AI
             while (!this.Empty())
             {
                 Creature summon = ObjectAccessor.GetCreature(me, this.FirstOrDefault());
-                this.RemoveAt(0);
+                RemoveAt(0);
                 if (summon)
                     summon.DespawnOrUnsummon();
             }
@@ -714,7 +706,7 @@ namespace Game.AI
 
         public void RemoveNotExisting()
         {
-            foreach (var id in this.ToList())
+            foreach (var id in this)
             {
                 if (!ObjectAccessor.GetCreature(me, id))
                     Remove(id);

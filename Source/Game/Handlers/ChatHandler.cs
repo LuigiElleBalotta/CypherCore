@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -166,7 +166,7 @@ namespace Game
                     lang = (Language)ModLangAuras.FirstOrDefault().GetMiscValue();
             }
 
-            if (!sender.CanSpeak())
+            if (!CanSpeak())
             {
                 string timeStr = Time.secsToTimeString((ulong)(m_muteTime - Time.UnixTime));
                 SendNotification(CypherStrings.WaitBeforeSpeaking, timeStr);
@@ -192,7 +192,7 @@ namespace Game
                     if (!sender.IsAlive())
                         return;
 
-                    if (sender.getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatSayLevelReq))
+                    if (sender.GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatSayLevelReq))
                     {
                         SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.SayReq), WorldConfig.GetIntValue(WorldCfg.ChatSayLevelReq));
                         return;
@@ -205,7 +205,7 @@ namespace Game
                     if (!sender.IsAlive())
                         return;
 
-                    if (sender.getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatEmoteLevelReq))
+                    if (sender.GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatEmoteLevelReq))
                     {
                         SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.SayReq), WorldConfig.GetIntValue(WorldCfg.ChatEmoteLevelReq));
                         return;
@@ -218,7 +218,7 @@ namespace Game
                     if (!sender.IsAlive())
                         return;
 
-                    if (sender.getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatYellLevelReq))
+                    if (sender.GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatYellLevelReq))
                     {
                         SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.SayReq), WorldConfig.GetIntValue(WorldCfg.ChatYellLevelReq));
                         return;
@@ -237,12 +237,12 @@ namespace Game
                     }
 
                     Player receiver = Global.ObjAccessor.FindPlayerByName(extName.Name);
-                    if (!receiver || (lang != Language.Addon && !receiver.isAcceptWhispers() && receiver.GetSession().HasPermission(RBACPermissions.CanFilterWhispers) && !receiver.IsInWhisperWhiteList(sender.GetGUID())))
+                    if (!receiver || (lang != Language.Addon && !receiver.IsAcceptWhispers() && receiver.GetSession().HasPermission(RBACPermissions.CanFilterWhispers) && !receiver.IsInWhisperWhiteList(sender.GetGUID())))
                     {
                         SendChatPlayerNotfoundNotice(target);
                         return;
                     }
-                    if (!sender.IsGameMaster() && sender.getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatWhisperLevelReq) && !receiver.IsInWhisperWhiteList(sender.GetGUID()))
+                    if (!sender.IsGameMaster() && sender.GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatWhisperLevelReq) && !receiver.IsInWhisperWhiteList(sender.GetGUID()))
                     {
                         SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.WhisperReq), WorldConfig.GetIntValue(WorldCfg.ChatWhisperLevelReq));
                         return;
@@ -260,8 +260,8 @@ namespace Game
                         return;
                     }
 
-                    if (receiver.getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatWhisperLevelReq) ||
-                        (HasPermission(RBACPermissions.CanFilterWhispers) && !sender.isAcceptWhispers() && !sender.IsInWhisperWhiteList(receiver.GetGUID())))
+                    if (receiver.GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatWhisperLevelReq) ||
+                        (HasPermission(RBACPermissions.CanFilterWhispers) && !sender.IsAcceptWhispers() && !sender.IsInWhisperWhiteList(receiver.GetGUID())))
                         sender.AddWhisperWhiteList(receiver.GetGUID());
 
                     GetPlayer().Whisper(msg, lang, receiver);
@@ -273,7 +273,7 @@ namespace Game
                         if (!group)
                         {
                             group = GetPlayer().GetGroup();
-                            if (!group || group.isBGGroup())
+                            if (!group || group.IsBGGroup())
                                 return;
                         }
 
@@ -314,7 +314,7 @@ namespace Game
                 case ChatMsg.Raid:
                     {
                         Group group = GetPlayer().GetGroup();
-                        if (!group || !group.isRaidGroup() || group.isBGGroup())
+                        if (!group || !group.IsRaidGroup() || group.IsBGGroup())
                             return;
 
                         if (group.IsLeader(GetPlayer().GetGUID()))
@@ -330,7 +330,7 @@ namespace Game
                 case ChatMsg.RaidWarning:
                     {
                         Group group = GetPlayer().GetGroup();
-                        if (!group || !group.isRaidGroup() || !(group.IsLeader(GetPlayer().GetGUID()) || group.IsAssistant(GetPlayer().GetGUID())) || group.isBGGroup())
+                        if (!group || !(group.IsRaidGroup() || WorldConfig.GetBoolValue(WorldCfg.ChatPartyRaidWarnings)) || !(group.IsLeader(GetPlayer().GetGUID()) || group.IsAssistant(GetPlayer().GetGUID())) || group.IsBGGroup())
                             return;
 
                         Global.ScriptMgr.OnPlayerChat(GetPlayer(), type, lang, msg, group);
@@ -344,7 +344,7 @@ namespace Game
                 case ChatMsg.Channel:
                     if (!HasPermission(RBACPermissions.SkipCheckChatChannelReq))
                     {
-                        if (GetPlayer().getLevel() < WorldConfig.GetIntValue(WorldCfg.ChatChannelLevelReq))
+                        if (GetPlayer().GetLevel() < WorldConfig.GetIntValue(WorldCfg.ChatChannelLevelReq))
                         {
                             SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.ChannelReq), WorldConfig.GetIntValue(WorldCfg.ChatChannelLevelReq));
                             return;
@@ -379,53 +379,19 @@ namespace Game
             }
         }
 
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageGuild)]
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageOfficer)]
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageParty)]
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageRaid)]
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageInstanceChat)]
-        void HandleChatAddonMessage(ChatAddonMessage packet)
+        [WorldPacketHandler(ClientOpcodes.ChatAddonMessage)]
+        void HandleChatAddonMessage(ChatAddonMessage chatAddonMessage)
         {
-            ChatMsg type;
-
-            switch (packet.GetOpcode())
-            {
-                case ClientOpcodes.ChatAddonMessageGuild:
-                    type = ChatMsg.Guild;
-                    break;
-                case ClientOpcodes.ChatAddonMessageOfficer:
-                    type = ChatMsg.Officer;
-                    break;
-                case ClientOpcodes.ChatAddonMessageParty:
-                    type = ChatMsg.Party;
-                    break;
-                case ClientOpcodes.ChatAddonMessageRaid:
-                    type = ChatMsg.Raid;
-                    break;
-                case ClientOpcodes.ChatAddonMessageInstanceChat:
-                    type = ChatMsg.InstanceChat;
-                    break;
-                default:
-                    Log.outError(LogFilter.Network, "HandleChatAddonMessage: Unknown addon chat opcode ({0})", packet.GetOpcode());
-                    return;
-            }
-
-            HandleChatAddon(type, packet.Prefix, packet.Text);
+            HandleChatAddon(chatAddonMessage.Params.Type, chatAddonMessage.Params.Prefix, chatAddonMessage.Params.Text, chatAddonMessage.Params.IsLogged);
         }
 
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageWhisper)]
-        void HandleChatAddonMessageWhisper(ChatAddonMessageWhisper packet)
+        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageTargeted)]
+        void HandleChatAddonMessageTargeted(ChatAddonMessageTargeted chatAddonMessageTargeted)
         {
-            HandleChatAddon(ChatMsg.Whisper, packet.Prefix, packet.Text, packet.Target);
+            HandleChatAddon(chatAddonMessageTargeted.Params.Type, chatAddonMessageTargeted.Params.Prefix, chatAddonMessageTargeted.Params.Text, chatAddonMessageTargeted.Params.IsLogged, chatAddonMessageTargeted.Target);
         }
 
-        [WorldPacketHandler(ClientOpcodes.ChatAddonMessageChannel)]
-        void HandleChatAddonMessageChannel(ChatAddonMessageChannel chatAddonMessageChannel)
-        {
-            HandleChatAddon(ChatMsg.Channel, chatAddonMessageChannel.Prefix, chatAddonMessageChannel.Text, chatAddonMessageChannel.Target);
-        }
-
-        void HandleChatAddon(ChatMsg type, string prefix, string text, string target = "")
+        void HandleChatAddon(ChatMsg type, string prefix, string text, bool isLogged, string target = "")
         {
             Player sender = GetPlayer();
 
@@ -444,11 +410,11 @@ namespace Game
                     {
                         Guild guild = Global.GuildMgr.GetGuildById(sender.GetGuildId());
                         if (guild)
-                            guild.BroadcastAddonToGuild(this, type == ChatMsg.Officer, text, prefix);
+                            guild.BroadcastAddonToGuild(this, type == ChatMsg.Officer, text, prefix, isLogged);
                     }
                     break;
                 case ChatMsg.Whisper:
-                    /// @todo implement cross realm whispers (someday)
+                    // @todo implement cross realm whispers (someday)
                     ExtendedPlayerName extName = ObjectManager.ExtractExtendedPlayerName(target);
 
                     if (!ObjectManager.NormalizePlayerName(ref extName.Name))
@@ -458,7 +424,7 @@ namespace Game
                     if (!receiver)
                         break;
 
-                    sender.WhisperAddon(text, prefix, receiver);
+                    sender.WhisperAddon(text, prefix, isLogged, receiver);
                     break;
                 // Messages sent to "RAID" while in a party will get delivered to "PARTY"
                 case ChatMsg.Party:
@@ -481,14 +447,14 @@ namespace Game
                         }
 
                         ChatPkt data = new ChatPkt();
-                        data.Initialize(type, Language.Addon, sender, null, text, 0, "", LocaleConstant.enUS, prefix);
+                        data.Initialize(type, isLogged ? Language.AddonLogged : Language.Addon, sender, null, text, 0, "", LocaleConstant.enUS, prefix);
                         group.BroadcastAddonMessagePacket(data, prefix, true, subGroup, sender.GetGUID());
                         break;
                     }
                 case ChatMsg.Channel:
                     Channel chn = ChannelManager.GetChannelForPlayerByNamePart(target, sender);
                     if (chn != null)
-                        chn.AddonSay(sender.GetGUID(), prefix, text);
+                        chn.AddonSay(sender.GetGUID(), prefix, text, isLogged);
                     break;
 
                 default:
@@ -511,7 +477,7 @@ namespace Game
                 return;
             }
 
-            if (sender.isAFK()) // Already AFK
+            if (sender.IsAFK()) // Already AFK
             {
                 if (string.IsNullOrEmpty(packet.Text))
                     sender.ToggleAFK(); // Remove AFK
@@ -522,11 +488,15 @@ namespace Game
             {
                 sender.autoReplyMsg = string.IsNullOrEmpty(packet.Text) ? Global.ObjectMgr.GetCypherString(CypherStrings.PlayerAfkDefault) : packet.Text;
 
-                if (sender.isDND())
+                if (sender.IsDND())
                     sender.ToggleDND();
 
                 sender.ToggleAFK();
             }
+
+            Guild guild = sender.GetGuild();
+            if (guild != null)
+                guild.SendEventAwayChanged(sender.GetGUID(), sender.IsAFK(), sender.IsDND());
 
             Global.ScriptMgr.OnPlayerChat(sender, ChatMsg.Afk, Language.Universal, packet.Text);
         }
@@ -545,7 +515,7 @@ namespace Game
                 return;
             }
 
-            if (sender.isDND()) // Already DND
+            if (sender.IsDND()) // Already DND
             {
                 if (string.IsNullOrEmpty(packet.Text))
                     sender.ToggleDND(); // Remove DND
@@ -556,11 +526,15 @@ namespace Game
             {
                 sender.autoReplyMsg = string.IsNullOrEmpty(packet.Text) ? Global.ObjectMgr.GetCypherString(CypherStrings.PlayerDndDefault) : packet.Text;
 
-                if (sender.isAFK())
+                if (sender.IsAFK())
                     sender.ToggleAFK();
 
                 sender.ToggleDND();
             }
+
+            Guild guild = sender.GetGuild();
+            if (guild != null)
+                guild.SendEventAwayChanged(sender.GetGUID(), sender.IsAFK(), sender.IsDND());
 
             Global.ScriptMgr.OnPlayerChat(sender, ChatMsg.Dnd, Language.Universal, packet.Text);
         }
@@ -572,8 +546,7 @@ namespace Game
                 return;
 
             Global.ScriptMgr.OnPlayerClearEmote(GetPlayer());
-            if (GetPlayer().GetUInt32Value(UnitFields.NpcEmotestate) != 0)
-                GetPlayer().SetUInt32Value(UnitFields.NpcEmotestate, 0);
+            GetPlayer().SetEmoteState(Emote.OneshotNone);
         }
 
         [WorldPacketHandler(ClientOpcodes.SendTextEmote)]
@@ -582,7 +555,7 @@ namespace Game
             if (!GetPlayer().IsAlive())
                 return;
 
-            if (!GetPlayer().CanSpeak())
+            if (!CanSpeak())
             {
                 string timeStr = Time.secsToTimeString((ulong)(m_muteTime - Time.UnixTime));
                 SendNotification(CypherStrings.WaitBeforeSpeaking, timeStr);
@@ -595,7 +568,7 @@ namespace Game
             if (em == null)
                 return;
 
-            uint emote_anim = em.EmoteID;
+            uint emote_anim = em.EmoteId;
 
             switch ((Emote)emote_anim)
             {
@@ -606,7 +579,7 @@ namespace Game
                     break;
                 case Emote.StateDance:
                 case Emote.StateRead:
-                    GetPlayer().SetUInt32Value(UnitFields.NpcEmotestate, emote_anim);
+                    GetPlayer().SetEmoteState((Emote)emote_anim);
                     break;
                 default:
                     // Only allow text-emotes for "dead" entities (feign death included)

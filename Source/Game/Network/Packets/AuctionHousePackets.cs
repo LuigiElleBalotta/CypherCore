@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,9 +66,9 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteUInt32(AuctionItemID);
-            _worldPacket.WriteInt32(Command);
-            _worldPacket.WriteInt32(ErrorCode);
-            _worldPacket.WriteInt32(BagResult);
+            _worldPacket.WriteInt32((int)Command);
+            _worldPacket.WriteInt32((int)ErrorCode);
+            _worldPacket.WriteInt32((int)BagResult);
             _worldPacket.WritePackedGuid(Guid);
             _worldPacket.WriteUInt64(MinIncrement);
             _worldPacket.WriteUInt64(Money);
@@ -102,7 +102,7 @@ namespace Game.Network.Packets
                 AuctionItemForSale item;
                 item.Guid = _worldPacket.ReadPackedGuid();
                 item.UseCount = _worldPacket.ReadUInt32();
-                Items.Add(item);
+                Items[i] = item;
             }
         }
 
@@ -206,8 +206,8 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(Items.Count);
-            _worldPacket.WriteInt32(TotalCount);
-            _worldPacket.WriteInt32(DesiredDelay);
+            _worldPacket.WriteUInt32(TotalCount);
+            _worldPacket.WriteUInt32(DesiredDelay);
             _worldPacket.WriteBit(OnlyUsable);
             _worldPacket.FlushBits();
 
@@ -304,9 +304,9 @@ namespace Game.Network.Packets
                     ClassFilter.SubClassFilter subClassFilter;
                     subClassFilter.ItemSubclass = _worldPacket.ReadInt32();
                     subClassFilter.InvTypeMask = _worldPacket.ReadUInt32();
-                    classFilter.SubClassFilters.Add(subClassFilter);
+                    classFilter.SubClassFilters[x] = subClassFilter;
                 }
-                ClassFilters.Add(classFilter);
+                ClassFilters[i] = classFilter;
             }
 
             _worldPacket.Skip(4); // DataSize = (SortCount * 2)
@@ -354,11 +354,11 @@ namespace Game.Network.Packets
 
     class AuctionListPendingSalesResult : ServerPacket
     {
-        public AuctionListPendingSalesResult() : base(ServerOpcodes.AuctionListPendingSalesResult) { }
+        public AuctionListPendingSalesResult() : base(ServerOpcodes.Unknown) { }
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Mails.Count);
+            _worldPacket.WriteInt32(Mails.Count);
             _worldPacket.WriteInt32(TotalNumRecords);
 
             foreach (var mail in Mails)
@@ -441,7 +441,7 @@ namespace Game.Network.Packets
             _worldPacket.WriteUInt32(ChangeNumberGlobal);
             _worldPacket.WriteUInt32(ChangeNumberCursor);
             _worldPacket.WriteUInt32(ChangeNumberTombstone);
-            _worldPacket.WriteUInt32(Items.Count);
+            _worldPacket.WriteInt32(Items.Count);
 
             foreach (var item in Items)
                 item.Write(_worldPacket);
@@ -486,7 +486,7 @@ namespace Game.Network.Packets
             {
                 data.WritePackedGuid(ItemGuid);
                 data.WritePackedGuid(OwnerAccountID);
-                data.WriteInt32(EndTime);
+                data.WriteUInt32(EndTime);
             }
 
             if (!CensorBidInfo)

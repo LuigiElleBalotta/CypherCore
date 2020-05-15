@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -269,7 +269,7 @@ namespace Game
                     List<uint> creBounds;
                     List<uint> goBounds;
 
-                    Dictionary<uint, eQuestTypes> poolTypeMap = new Dictionary<uint, eQuestTypes>();
+                    Dictionary<uint, QuestTypes> poolTypeMap = new Dictionary<uint, QuestTypes>();
                     uint count = 0;
                     do
                     {
@@ -298,10 +298,10 @@ namespace Game
                             continue;
                         }
 
-                        if (poolTypeMap[pool_id] == eQuestTypes.None)
-                            poolTypeMap[pool_id] = quest.IsDaily() ? eQuestTypes.Daily : eQuestTypes.Weekly;
+                        if (poolTypeMap[pool_id] == QuestTypes.None)
+                            poolTypeMap[pool_id] = quest.IsDaily() ? QuestTypes.Daily : QuestTypes.Weekly;
 
-                        eQuestTypes currType = quest.IsDaily() ? eQuestTypes.Daily : eQuestTypes.Weekly;
+                        QuestTypes currType = quest.IsDaily() ? QuestTypes.Daily : QuestTypes.Weekly;
 
                         if (poolTypeMap[pool_id] != currType)
                         {
@@ -391,7 +391,7 @@ namespace Game
 
             foreach (var questPoolGroup in mPoolQuestGroups.Values)
             {
-                if (questPoolGroup.isEmpty())
+                if (questPoolGroup.IsEmpty())
                     continue;
                 PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_QUEST_POOL_SAVE);
                 stmt.AddValue(0, questPoolGroup.GetPoolId());
@@ -451,19 +451,19 @@ namespace Game
             switch (typeof(T).Name)
             {
                 case "Creature":
-                    if (mPoolCreatureGroups.ContainsKey(pool_id) && !mPoolCreatureGroups[pool_id].isEmpty())
+                    if (mPoolCreatureGroups.ContainsKey(pool_id) && !mPoolCreatureGroups[pool_id].IsEmpty())
                         mPoolCreatureGroups[pool_id].SpawnObject(mSpawnedData, mPoolTemplate[pool_id].MaxLimit, db_guid);
                     break;
                 case "GameObject":
-                    if (mPoolGameobjectGroups.ContainsKey(pool_id) && !mPoolGameobjectGroups[pool_id].isEmpty())
+                    if (mPoolGameobjectGroups.ContainsKey(pool_id) && !mPoolGameobjectGroups[pool_id].IsEmpty())
                         mPoolGameobjectGroups[pool_id].SpawnObject(mSpawnedData, mPoolTemplate[pool_id].MaxLimit, db_guid);
                     break;
                 case "Pool":
-                    if (mPoolPoolGroups.ContainsKey(pool_id) && !mPoolPoolGroups[pool_id].isEmpty())
+                    if (mPoolPoolGroups.ContainsKey(pool_id) && !mPoolPoolGroups[pool_id].IsEmpty())
                         mPoolPoolGroups[pool_id].SpawnObject(mSpawnedData, mPoolTemplate[pool_id].MaxLimit, db_guid);
                     break;
                 case "Quest":
-                    if (mPoolQuestGroups.ContainsKey(pool_id) && !mPoolQuestGroups[pool_id].isEmpty())
+                    if (mPoolQuestGroups.ContainsKey(pool_id) && !mPoolQuestGroups[pool_id].IsEmpty())
                         mPoolQuestGroups[pool_id].SpawnObject(mSpawnedData, mPoolTemplate[pool_id].MaxLimit, db_guid);
                     break;
             }
@@ -479,16 +479,16 @@ namespace Game
 
         public void DespawnPool(uint pool_id)
         {
-            if (mPoolCreatureGroups.ContainsKey(pool_id) && !mPoolCreatureGroups[pool_id].isEmpty())
+            if (mPoolCreatureGroups.ContainsKey(pool_id) && !mPoolCreatureGroups[pool_id].IsEmpty())
                 mPoolCreatureGroups[pool_id].DespawnObject(mSpawnedData);
 
-            if (mPoolGameobjectGroups.ContainsKey(pool_id) && !mPoolGameobjectGroups[pool_id].isEmpty())
+            if (mPoolGameobjectGroups.ContainsKey(pool_id) && !mPoolGameobjectGroups[pool_id].IsEmpty())
                 mPoolGameobjectGroups[pool_id].DespawnObject(mSpawnedData);
 
-            if (mPoolPoolGroups.ContainsKey(pool_id) && !mPoolPoolGroups[pool_id].isEmpty())
+            if (mPoolPoolGroups.ContainsKey(pool_id) && !mPoolPoolGroups[pool_id].IsEmpty())
                 mPoolPoolGroups[pool_id].DespawnObject(mSpawnedData);
 
-            if (mPoolQuestGroups.ContainsKey(pool_id) && !mPoolQuestGroups[pool_id].isEmpty())
+            if (mPoolQuestGroups.ContainsKey(pool_id) && !mPoolQuestGroups[pool_id].IsEmpty())
                 mPoolQuestGroups[pool_id].DespawnObject(mSpawnedData);
         }
 
@@ -534,7 +534,7 @@ namespace Game
             return 0;
         }
 
-        public enum eQuestTypes
+        public enum QuestTypes
         {
             None = 0,
             Daily = 1,
@@ -826,14 +826,11 @@ namespace Game
             DespawnObject(spawns);
 
             // recycle minimal amount of quests if possible count is lower than limit
-            if (limit > newQuests.Count && !currentQuests.Empty())
+            while (limit > newQuests.Count && !currentQuests.Empty())
             {
-                do
-                {
-                    ulong questId = currentQuests.SelectRandom();
-                    newQuests.Add(questId);
-                    currentQuests.Remove(questId);
-                } while (newQuests.Count < limit && !currentQuests.Empty()); // failsafe
+                ulong questId = currentQuests.SelectRandom();
+                newQuests.Add(questId);
+                currentQuests.Remove(questId);
             }
 
             if (newQuests.Empty())
@@ -886,7 +883,7 @@ namespace Game
                             GameObject go = GameObject.CreateGameObjectFromDB(obj.guid, map, false);
                             if (go)
                             {
-                                if (go.isSpawnedByDefault())
+                                if (go.IsSpawnedByDefault())
                                     map.AddToMap(go);
                             }
                         }
@@ -924,7 +921,7 @@ namespace Game
 
         public void SetPoolId(uint pool_id) { poolId = pool_id; }
 
-        public bool isEmpty() { return ExplicitlyChanced.Empty() && EqualChanced.Empty(); }
+        public bool IsEmpty() { return ExplicitlyChanced.Empty() && EqualChanced.Empty(); }
 
         public ulong GetFirstEqualChancedObjectId()
         {

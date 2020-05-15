@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -83,7 +83,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet
 
         class instance_ahnkahet_InstanceScript : InstanceScript
         {
-            public instance_ahnkahet_InstanceScript(Map map) : base(map)
+            public instance_ahnkahet_InstanceScript(InstanceMap map) : base(map)
             {
                 SetHeaders("AK");
                 SetBossNumber(DataTypes.HeraldVolazj + 1);
@@ -135,19 +135,19 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet
                         if (SpheresState[0] != 0)
                         {
                             go.SetGoState(GameObjectState.Active);
-                            go.SetFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                            go.AddFlag(GameObjectFlags.NotSelectable);
                         }
                         else
-                            go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                            go.RemoveFlag(GameObjectFlags.NotSelectable);
                         break;
                     case GameObjectIds.Sphere2:
                         if (SpheresState[1] != 0)
                         {
                             go.SetGoState(GameObjectState.Active);
-                            go.SetFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                            go.AddFlag(GameObjectFlags.NotSelectable);
                         }
                         else
-                            go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                            go.RemoveFlag(GameObjectFlags.NotSelectable);
                         break;
                     case GameObjectIds.PrinceTaldaramGate:
                         AddDoor(go, true);

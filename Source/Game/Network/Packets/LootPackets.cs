@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,13 +42,13 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(Owner);
             _worldPacket.WritePackedGuid(LootObj);
-            _worldPacket.WriteUInt8(FailureReason);
+            _worldPacket.WriteUInt8((byte)FailureReason);
             _worldPacket.WriteUInt8(AcquireReason);
-            _worldPacket.WriteUInt8(LootMethod);
+            _worldPacket.WriteUInt8((byte)LootMethod);
             _worldPacket.WriteUInt8(Threshold);
             _worldPacket.WriteUInt32(Coins);
-            _worldPacket.WriteUInt32(Items.Count);
-            _worldPacket.WriteUInt32(Currencies.Count);
+            _worldPacket.WriteInt32(Items.Count);
+            _worldPacket.WriteInt32(Currencies.Count);
             _worldPacket.WriteBit(Acquired);
             _worldPacket.WriteBit(AELooting);
             _worldPacket.FlushBits();
@@ -143,12 +143,14 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Money);
+            _worldPacket.WriteUInt64(Money);
+            _worldPacket.WriteUInt64(MoneyMod);
             _worldPacket.WriteBit(SoleLooter);
             _worldPacket.FlushBits();
         }
 
-        public uint Money;
+        public ulong Money;
+        public ulong MoneyMod;
         public bool SoleLooter;
     }
 
@@ -203,7 +205,7 @@ namespace Game.Network.Packets
 
     class LootList : ServerPacket
     {
-        public LootList() : base(ServerOpcodes.LootList) { }
+        public LootList() : base(ServerOpcodes.LootList, ConnectionType.Instance) { }
 
         public override void Write()
         {
@@ -248,8 +250,8 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(LootObj);
             _worldPacket.WriteInt32(MapID);
             _worldPacket.WriteUInt32(RollTime);
-            _worldPacket.WriteUInt8(ValidRolls);
-            _worldPacket.WriteUInt8(Method);
+            _worldPacket.WriteUInt8((byte)ValidRolls);
+            _worldPacket.WriteUInt8((byte)Method);
             Item.Write(_worldPacket);
         }
 
@@ -270,7 +272,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(LootObj);
             _worldPacket.WritePackedGuid(Player);
             _worldPacket.WriteInt32(Roll);
-            _worldPacket.WriteUInt8(RollType);
+            _worldPacket.WriteUInt8((byte)RollType);
             Item.Write(_worldPacket);
             _worldPacket.WriteBit(Autopassed);
             _worldPacket.FlushBits();
@@ -293,7 +295,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(LootObj);
             _worldPacket.WritePackedGuid(Winner);
             _worldPacket.WriteInt32(Roll);
-            _worldPacket.WriteUInt8(RollType);
+            _worldPacket.WriteUInt8((byte)RollType);
             Item.Write(_worldPacket);
             _worldPacket.WriteBit(MainSpec);
             _worldPacket.FlushBits();
@@ -364,7 +366,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(LootObj);
-            _worldPacket.WriteUInt32(Players.Count);
+            _worldPacket.WriteInt32(Players.Count);
             Players.ForEach(guid => _worldPacket.WritePackedGuid(guid));
         }
 

@@ -183,7 +183,7 @@ namespace Scripts.Northrend.FrozenHalls.PitOfSaron.BossKrickAndIck
             if (!me.IsInCombat())
                 return;
 
-            if (!me.GetVictim() && me.GetThreatManager().isThreatListEmpty())
+            if (!me.GetVictim() && me.GetThreatManager().IsThreatListEmpty())
             {
                 EnterEvadeMode(EvadeReason.NoHostiles);
                 return;
@@ -299,7 +299,7 @@ namespace Scripts.Northrend.FrozenHalls.PitOfSaron.BossKrickAndIck
             Initialize();
 
             me.SetReactState(ReactStates.Passive);
-            me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+            me.AddUnitFlag(UnitFlags.NonAttackable);
         }
 
         Creature GetIck()
@@ -447,7 +447,7 @@ namespace Scripts.Northrend.FrozenHalls.PitOfSaron.BossKrickAndIck
                     case Events.Outro9:
                         {
                             Talk(TextIds.SayKrickOutro8);
-                            /// @todo Tyrannus starts killing Krick.
+                            // @todo Tyrannus starts killing Krick.
                             // there shall be some visual spell effect
                             Creature tyrannus = ObjectAccessor.GetCreature(me, _tyrannusGUID);
                             if (tyrannus)
@@ -616,7 +616,7 @@ namespace Scripts.Northrend.FrozenHalls.PitOfSaron.BossKrickAndIck
                     {
                         ick.GetAI().Talk(TextIds.SayIckChase1, target);
                         ick.AddAura(GetSpellInfo().Id, target);
-                        ick.GetAI<boss_ick>().SetTempThreat(ick.GetThreatManager().getThreat(target));
+                        ick.GetAI<boss_ick>().SetTempThreat(ick.GetThreatManager().GetThreat(target));
                         ick.AddThreat(target, GetEffectValue());
                         target.AddThreat(ick, GetEffectValue());
                     }

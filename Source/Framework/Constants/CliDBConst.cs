@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,11 +13,33 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */﻿
+ */
+using System;
 
 namespace Framework.Constants
 {
-    public enum AbilytyLearnType : byte
+    public enum DB2ColumnCompression : uint
+    {
+        None,
+        Immediate,
+        Common,
+        Pallet,
+        PalletArray,
+        SignedImmediate
+    }
+
+    [Flags]
+    public enum HeaderFlags : short
+    {
+        None = 0x0,
+        OffsetMap = 0x1,
+        SecondIndex = 0x2,
+        IndexMap = 0x4,
+        Unknown = 0x8,
+        Compressed = 0x10,
+    }
+
+    public enum AbilityLearnType : byte
     {
         OnSkillValue = 1, // Spell state will update depending on skill value
         OnSkillLearn = 2  // Spell will be learned/removed together with entire skill
@@ -849,7 +871,7 @@ namespace Framework.Constants
         FlyWarriorChargeEnd = 821
     }
 
-    public enum AreaFlags : int
+    public enum AreaFlags
     {
         Snow = 0x01,                // Snow (Only Dun Morogh, Naxxramas, Razorfen Downs And Winterspring)
         Unk1 = 0x02,                // Razorfen Downs, Naxxramas And Acherus: The Ebon Hold (3.3.5a)
@@ -883,19 +905,40 @@ namespace Framework.Constants
         Unk9 = 0x40000000,
     }
 
+    public enum ArtifactCategory
+    {
+        Primary = 1,
+        Fishing = 2
+    }
+
     public enum ArtifactPowerFlag : byte
     {
         Gold = 0x01,
-        First = 0x02,
+        NoLinkRequired = 0x02,
         Final = 0x04,
         ScalesWithNumPowers = 0x08,
         DontCountFirstBonusRank = 0x10,
+        MaxRankWithTier = 0x20,
+
+        First = NoLinkRequired | DontCountFirstBonusRank,
+    }
+
+    public enum AzeriteItemMilestoneType
+    {
+        MajorEssence = 0,
+        MinorEssence = 1,
+        BonusStamina = 2
+    }
+
+    public enum AzeriteTierUnlockSetFlags
+    {
+        Default = 0x1
     }
 
     public enum BattlegroundBracketId                                  // bracketId for level ranges
     {
         First = 0,
-        Last = 11,
+        Last = 12,
         Max
     }
 
@@ -917,7 +960,8 @@ namespace Framework.Constants
     {
         Player = 0x01,
         DeathKnight = 0x04,
-        DemonHunter = 0x20
+        DemonHunter = 0x20,
+        Conditional = 0x400
     }
 
     public enum CharSectionType
@@ -942,6 +986,17 @@ namespace Framework.Constants
         Max
     }
 
+    public enum BattlemasterListFlags : sbyte
+    {
+        Disabled = 0x01,
+        SkipRoleCheck = 0x02,
+        Unk4 = 0x04,
+        CanInitWarGame = 0x08,
+        CanSpecificQueue = 0x10,
+        Brawl = 0x20,
+        Factional = 0x40
+    }
+
     public enum ChrSpecializationFlag
     {
         Caster = 0x01,
@@ -955,7 +1010,8 @@ namespace Framework.Constants
 
     public enum Curves
     {
-        ArtifactRelicItemLevelBonus = 1718
+        ArtifactRelicItemLevelBonus = 1718,
+        AzeriteEmpoweredItemRespecCost = 6785
     }
 
     public enum Emote
@@ -1232,7 +1288,7 @@ namespace Framework.Constants
         Prime = 2
     }
 
-    public enum ItemSetFlags : byte
+    public enum ItemSetFlags
     {
         LegacyInactive = 0x01,
     }
@@ -1292,7 +1348,7 @@ namespace Framework.Constants
 
     public enum LockType
     {
-        Picklock = 1,
+        Lockpicking = 1,
         Herbalism = 2,
         Mining = 3,
         DisarmTrap = 4,
@@ -1308,14 +1364,34 @@ namespace Framework.Constants
         OpenAttacking = 14,
         Gahzridian = 15,
         Blasting = 16,
-        SlowOpen = 17,
-        SlowClose = 18,
+        PvpOpen = 17,
+        PvpClose = 18,
         Fishing = 19,
         Inscription = 20,
         OpenFromVehicle = 21,
-        Archaelogy = 22,
+        Archaeology = 22,
         PvpOpenFast = 23,
-        LumberMill = 28
+        LumberMill = 28,
+        Skinning = 29,
+        AncientMana = 30,
+        Warboard = 31,
+        ClassicHerbalism = 32,
+        OutlandHerbalism = 33,
+        NorthrendHerbalism = 34,
+        CataclysmHerbalism = 35,
+        PandariaHerbalism = 36,
+        DraenorHerbalism = 37,
+        LegionHerbalism = 38,
+        KulTiranHerbalism = 39,
+        ClassicMining = 40,
+        OutlandMining = 41,
+        NorthrendMining = 42,
+        CataclysmMining = 43,
+        PandariaMining = 44,
+        DraenorMining = 45,
+        LegionMining = 46,
+        KulTiranMining = 47,
+        Skinning2 = 48
     }
 
     public enum MapTypes : byte
@@ -1341,6 +1417,14 @@ namespace Framework.Constants
         UnderwaterAllowed = 0x8
     }
 
+    public enum ModifierTreeOperator
+    {
+        SingleTrue = 2,
+        SingleFalse = 3,
+        All = 4,
+        Some = 8
+    }
+
     public enum MountCapabilityFlags : byte
     {
         Ground = 0x1,
@@ -1350,7 +1434,7 @@ namespace Framework.Constants
         IgnoreRestrictions = 0x20
     }
 
-    public enum MountFlags
+    public enum MountFlags : ushort
     {
         CanPitch = 0x4,                    // client checks MOVEMENTFLAG2_FULL_SPEED_PITCHING
         CanSwim = 0x8,                    // client checks MOVEMENTFLAG_SWIMMING
@@ -1369,13 +1453,25 @@ namespace Framework.Constants
     }
 
     // PhaseUseFlags fields in different db2s
-    public  enum PhaseUseFlagsValues : byte
+    public enum PhaseUseFlagsValues : byte
     {
         None = 0x0,
         AlwaysVisible = 0x1,
         Inverse = 0x2,
 
         All = AlwaysVisible | Inverse
+    }
+
+    public enum PlayerConditionLfgStatus
+    {
+        InLFGDungeon = 1,
+        InLFGRandomDungeon = 2,
+        InLFGFirstRandomDungeon = 3,
+        PartialClear = 4,
+        StrangerCount = 5,
+        VoteKickCount = 6,
+        BootCount = 7,
+        GearDiff = 8
     }
 
     public enum PrestigeLevelInfoFlags : byte
@@ -1407,7 +1503,7 @@ namespace Framework.Constants
         MonoValue = 0x400     // Skill always has value 1
     }
 
-    public enum SpellCategoryFlags : byte
+    public enum SpellCategoryFlags : sbyte
     {
         CooldownScalesWithWeaponSpeed = 0x01, // unused
         CooldownStartsOnEvent = 0x04,
@@ -1733,5 +1829,118 @@ namespace Framework.Constants
         Yw = 453,
         Read = 456,
         Boot = 506
+    }
+
+    public enum ExpectedStatType : byte
+    {
+        CreatureHealth = 0,
+        PlayerHealth = 1,
+        CreatureAutoAttackDps = 2,
+        CreatureArmor = 3,
+        PlayerMana = 4,
+        PlayerPrimaryStat = 5,
+        PlayerSecondaryStat = 6,
+        ArmorConstant = 7,
+        None = 8,
+        CreatureSpellDamage = 9
+    }
+
+    public enum UiMapSystem : sbyte
+    {
+        World = 0,
+        Taxi = 1,
+        Adventure = 2,
+        Max = 3
+    }
+
+    public enum UiMapType
+    {
+        Cosmic = 0,
+        World = 1,
+        Continent = 2,
+        Zone = 3,
+        Dungeon = 4,
+        Micro = 5,
+        Orphan = 6
+    }
+
+    public enum WorldStateExpressionValueType
+    {
+        Constant = 1,
+        WorldState = 2,
+        Function = 3
+    }
+
+    public enum WorldStateExpressionLogic
+    {
+        None = 0,
+        And = 1,
+        Or = 2,
+        Xor = 3,
+    }
+
+    public enum WorldStateExpressionComparisonType
+    {
+        None = 0,
+        Equal = 1,
+        NotEqual = 2,
+        Less = 3,
+        LessOrEqual = 4,
+        Greater = 5,
+        GreaterOrEqual = 6,
+    }
+
+    public enum WorldStateExpressionOperatorType
+    {
+        None = 0,
+        Sum = 1,
+        Substraction = 2,
+        Multiplication = 3,
+        Division = 4,
+        Remainder = 5,
+    }
+
+    public enum WorldStateExpressionFunctions
+    {
+        None = 0,
+        Random,
+        Month,
+        Day,
+        TimeOfDay,
+        Region,
+        ClockHour,
+        OldDifficultyId,
+        HolidayStart,
+        HolidayLeft,
+        HolidayActive,
+        TimerCurrentTime,
+        WeekNumber,
+        Unk13,
+        Unk14,
+        DifficultyId,
+        WarModeActive,
+        Unk17,
+        Unk18,
+        Unk19,
+        Unk20,
+        Unk21,
+        WorldStateExpression,
+        KeystoneAffix,
+        Unk24,
+        Unk25,
+        Unk26,
+        Unk27,
+        KeystoneLevel,
+        Unk29,
+        Unk30,
+        Unk31,
+        Unk32,
+        MersenneRandom,
+        Unk34,
+        Unk35,
+        Unk36,
+        UiWidgetData,
+
+        Max,
     }
 }

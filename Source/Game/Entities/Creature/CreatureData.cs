@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ using Framework.Constants;
 using System;
 using System.Collections.Generic;
 using Framework.Dynamic;
+using Game.Network.Packets;
 
 namespace Game.Entities
 {
@@ -28,10 +29,7 @@ namespace Game.Entities
         public uint Entry;
         public uint[] DifficultyEntry = new uint[SharedConst.MaxCreatureDifficulties];
         public uint[] KillCredit = new uint[SharedConst.MaxCreatureKillCredit];
-        public uint ModelId1;
-        public uint ModelId2;
-        public uint ModelId3;
-        public uint ModelId4;
+        public List<CreatureModel> Models = new List<CreatureModel>();
         public string Name;
         public string FemaleName;
         public string SubName;
@@ -45,7 +43,7 @@ namespace Game.Entities
         public uint RequiredExpansion;
         public uint VignetteID; // @todo Read Vignette.db2
         public uint Faction;
-        public NPCFlags Npcflag;
+        public ulong Npcflag;
         public float SpeedWalk;
         public float SpeedRun;
         public float Scale;
@@ -86,80 +84,77 @@ namespace Game.Entities
         public float ModExperience;
         public bool RacialLeader;
         public uint MovementId;
+        public float FadeRegionRadius;
+        public int WidgetSetID;
+        public int WidgetSetUnitConditionID;
         public bool RegenHealth;
         public uint MechanicImmuneMask;
         public CreatureFlagsExtra FlagsExtra;
         public uint ScriptID;
 
-        public uint GetRandomValidModelId()
-        {
-            byte c = 0;
-            uint[] modelIDs = new uint[4];
+        public QueryCreatureResponse QueryData;
 
-            if (ModelId1 != 0)
-                modelIDs[c++] = ModelId1;
-            if (ModelId2 != 0)
-                modelIDs[c++] = ModelId2;
-            if (ModelId3 != 0)
-                modelIDs[c++] = ModelId3;
-            if (ModelId4 != 0)
-                modelIDs[c++] = ModelId4;
-
-            return c > 0 ? modelIDs[RandomHelper.IRand(0, c - 1)] : 0;
-        }
-        public uint GetFirstValidModelId()
+        public CreatureModel GetModelByIdx(int idx)
         {
-            if (ModelId1 != 0)
-                return ModelId1;
-            if (ModelId2 != 0)
-                return ModelId2;
-            if (ModelId3 != 0)
-                return ModelId3;
-            if (ModelId4 != 0)
-                return ModelId4;
-            return 0;
+            return idx < Models.Count ? Models[idx] : null;
         }
 
-        public uint GetFirstInvisibleModel()
+        public CreatureModel GetRandomValidModel()
         {
-            CreatureModelInfo modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId1);
-            if (modelInfo != null && modelInfo.IsTrigger)
-                return ModelId1;
+            if (Models.Empty())
+                return null;
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId2);
-            if (modelInfo != null && modelInfo.IsTrigger)
-                return ModelId2;
+            // If only one element, ignore the Probability (even if 0)
+            if (Models.Count == 1)
+                return Models[0];
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId3);
-            if (modelInfo != null && modelInfo.IsTrigger)
-                return ModelId3;
+            var selectedItr = Models.SelectRandomElementByWeight(model =>
+            {
+                return model.Probability;
+            });
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId4);
-            if (modelInfo != null && modelInfo.IsTrigger)
-                return ModelId4;
+            return selectedItr;
+        }
+        public CreatureModel GetFirstValidModel()
+        {
+            foreach (CreatureModel model in Models)
+                if (model.CreatureDisplayID != 0)
+                    return model;
 
-            return 11686;
+            return null;
         }
 
-        public uint GetFirstVisibleModel()
+        public CreatureModel GetModelWithDisplayId(uint displayId)
         {
-            CreatureModelInfo modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId1);
-            if (modelInfo != null && !modelInfo.IsTrigger)
-                return ModelId1;
+            foreach (CreatureModel model in Models)
+                if (displayId == model.CreatureDisplayID)
+                    return model;
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId2);
-            if (modelInfo != null && !modelInfo.IsTrigger)
-                return ModelId2;
+            return null;
+        }
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId3);
-            if (modelInfo != null && !modelInfo.IsTrigger)
-                return ModelId3;
+        public CreatureModel GetFirstInvisibleModel()
+        {
+            foreach (CreatureModel model in Models)
+            {
+                CreatureModelInfo modelInfo = Global.ObjectMgr.GetCreatureModelInfo(model.CreatureDisplayID);
+                if (modelInfo != null && modelInfo.IsTrigger)
+                    return model;
+            }
 
-            modelInfo = Global.ObjectMgr.GetCreatureModelInfo(ModelId4);
-            if (modelInfo != null && !modelInfo.IsTrigger)
-                return ModelId4;
+            return CreatureModel.DefaultInvisibleModel;
+        }
 
-            return 17519;
+        public CreatureModel GetFirstVisibleModel()
+        {
+            foreach (CreatureModel model in Models)
+            {
+                CreatureModelInfo modelInfo = Global.ObjectMgr.GetCreatureModelInfo(model.CreatureDisplayID);
+                if (modelInfo != null && !modelInfo.IsTrigger)
+                    return model;
+            }
+
+            return CreatureModel.DefaultVisibleModel;
         }
 
         public SkillType GetRequiredLootSkill()
@@ -217,6 +212,58 @@ namespace Game.Entities
                 default:
                     return -1;
             }
+        }
+
+        public void InitializeQueryData()
+        {
+            QueryData = new QueryCreatureResponse();
+
+            QueryData.CreatureID = Entry;
+            QueryData.Allow = true;
+
+            CreatureStats stats = new CreatureStats();
+            stats.Leader = RacialLeader;
+
+            stats.Name[0] = Name;
+            stats.NameAlt[0] = FemaleName;
+
+            stats.Flags[0] = (uint)TypeFlags;
+            stats.Flags[1] = TypeFlags2;
+
+            stats.CreatureType = (int)CreatureType;
+            stats.CreatureFamily = (int)Family;
+            stats.Classification = (int)Rank;
+
+            for (uint i = 0; i < SharedConst.MaxCreatureKillCredit; ++i)
+                stats.ProxyCreatureID[i] = KillCredit[i];
+
+            foreach (var model in Models)
+            {
+                stats.Display.TotalProbability += model.Probability;
+                stats.Display.CreatureDisplay.Add(new CreatureXDisplay(model.CreatureDisplayID, model.DisplayScale, model.Probability));
+            }
+
+            stats.HpMulti = ModHealth;
+            stats.EnergyMulti = ModMana;
+
+            stats.CreatureMovementInfoID = MovementId;
+            stats.RequiredExpansion = RequiredExpansion;
+            stats.HealthScalingExpansion = HealthScalingExpansion;
+            stats.VignetteID = VignetteID;
+            stats.Class = (int)UnitClass;
+            stats.FadeRegionRadius = FadeRegionRadius;
+            stats.WidgetSetID = WidgetSetID;
+            stats.WidgetSetUnitConditionID = WidgetSetUnitConditionID;
+
+            stats.Title = SubName;
+            stats.TitleAlt = TitleAlt;
+            stats.CursorName = IconName;
+
+            var items = Global.ObjectMgr.GetCreatureQuestItemList(Entry);
+            if (items != null)
+                stats.QuestItems.AddRange(items);
+
+            QueryData.Stats = stats;
         }
     }
 
@@ -291,7 +338,7 @@ namespace Game.Entities
         public uint curhealth;
         public uint curmana;
         public byte movementType;
-        public ulong spawnMask;
+        public List<Difficulty> spawnDifficulties = new List<Difficulty>();
         public ulong npcflag;
         public uint unit_flags;     // enum UnitFlags mask values
         public uint unit_flags2;    // enum UnitFlags2 mask values
@@ -314,6 +361,24 @@ namespace Game.Entities
         public bool IsTrigger;
     }
 
+    public class CreatureModel
+    {
+        public static CreatureModel DefaultInvisibleModel = new CreatureModel(11686, 1.0f, 1.0f);
+        public static CreatureModel DefaultVisibleModel = new CreatureModel(17519, 1.0f, 1.0f);
+
+        public uint CreatureDisplayID;
+        public float DisplayScale;
+        public float Probability;
+
+        public CreatureModel() { }
+        public CreatureModel(uint creatureDisplayID, float displayScale, float probability)
+        {
+            CreatureDisplayID = creatureDisplayID;
+            DisplayScale = displayScale;
+            Probability = probability;
+        }
+    }
+
     public class CreatureAddon
     {
         public uint path_id;
@@ -325,6 +390,7 @@ namespace Game.Entities
         public ushort movementAnimKit;
         public ushort meleeAnimKit;
         public uint[] auras;
+        public VisibilityDistanceType visibilityDistanceType;
     }
 
     public class VendorItem

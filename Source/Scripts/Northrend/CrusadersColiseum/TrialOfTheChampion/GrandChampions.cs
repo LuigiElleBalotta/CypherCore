@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
     }
 
     [Script]
-    class generic_vehicleAI_toc5 : npc_escortAI
+    class generic_vehicleAI_toc5 : NpcEscortAI
     {
         public generic_vehicleAI_toc5(Creature creature) : base(creature)
         {
@@ -229,7 +229,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
     abstract class boss_basic_toc5AI : ScriptedAI
     {
-        public boss_basic_toc5AI(Creature creature) : base(creature)
+        protected boss_basic_toc5AI(Creature creature) : base(creature)
         {
             Initialize();
             instance = creature.GetInstanceScript();
@@ -242,7 +242,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
             me.SetReactState(ReactStates.Passive);
             // THIS IS A HACK, SHOULD BE REMOVED WHEN THE EVENT IS FULL SCRIPTED
-            me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.ImmuneToPc);
+            me.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.ImmuneToPc);
         }
 
         public abstract void Initialize();
@@ -320,7 +320,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
                     if (player.IsAlive())
                     {
-                        temp.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.ImmuneToPc);
+                        temp.RemoveUnitFlag(UnitFlags.NonAttackable | UnitFlags.ImmuneToPc);
                         temp.SetReactState(ReactStates.Aggressive);
                         temp.SetInCombatWith(player);
                         player.SetInCombatWith(temp);
@@ -330,16 +330,16 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
             }
         }
 
-        bool GrandChampionsOutVehicle(Creature me)
+        bool GrandChampionsOutVehicle(Creature creature)
         {
-            InstanceScript instance = me.GetInstanceScript();
+            InstanceScript instance = creature.GetInstanceScript();
 
             if (instance == null)
                 return false;
 
-            Creature pGrandChampion1 = ObjectAccessor.GetCreature(me, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_1));
-            Creature pGrandChampion2 = ObjectAccessor.GetCreature(me, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_2));
-            Creature pGrandChampion3 = ObjectAccessor.GetCreature(me, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_3));
+            Creature pGrandChampion1 = ObjectAccessor.GetCreature(creature, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_1));
+            Creature pGrandChampion2 = ObjectAccessor.GetCreature(creature, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_2));
+            Creature pGrandChampion3 = ObjectAccessor.GetCreature(creature, instance.GetGuidData((uint)Data64.DATA_GRAND_CHAMPION_3));
 
             if (pGrandChampion1 && pGrandChampion2 && pGrandChampion3)
             {
@@ -564,10 +564,10 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                     {
                         me.InterruptNonMeleeSpells(true);
 
-                        Unit target1 = Global.ObjAccessor.GetUnit(me, uiTargetGUID);
-                        if (target1 && me.IsInRange(target1, 5.0f, 30.0f, false))
+                        Unit uiTarget = Global.ObjAccessor.GetUnit(me, uiTargetGUID);
+                        if (uiTarget && me.IsInRange(uiTarget, 5.0f, 30.0f, false))
                         {
-                            DoCast(target1, TrialOfChampionSpells.MULTI_SHOT);
+                            DoCast(uiTarget, TrialOfChampionSpells.MULTI_SHOT);
                         }
                         else
                         {

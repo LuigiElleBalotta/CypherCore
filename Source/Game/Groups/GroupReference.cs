@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,24 +27,24 @@ namespace Game.Groups
             iSubGroup = 0;
         }
 
-        ~GroupReference() { unlink(); }
+        ~GroupReference() { Unlink(); }
 
-        public override void targetObjectBuildLink()
+        public override void TargetObjectBuildLink()
         {
-            getTarget().LinkMember(this);
+            GetTarget().LinkMember(this);
         }
 
-        public new GroupReference next() { return (GroupReference)base.next(); }
+        public new GroupReference Next() { return (GroupReference)base.Next(); }
 
-        public byte getSubGroup() { return iSubGroup; }
+        public byte GetSubGroup() { return iSubGroup; }
 
-        public void setSubGroup(byte pSubGroup) { iSubGroup = pSubGroup; }
+        public void SetSubGroup(byte pSubGroup) { iSubGroup = pSubGroup; }
 
         byte iSubGroup;
     }
 
     public class GroupRefManager : RefManager<Group, Player>
     {
-        public new GroupReference getFirst() { return (GroupReference)base.getFirst(); }
+        public new GroupReference GetFirst() { return (GroupReference)base.GetFirst(); }
     }
 }

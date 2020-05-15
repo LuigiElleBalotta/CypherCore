@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,8 +20,6 @@ using Framework.GameMath;
 using Game.Entities;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Linq;
 
 namespace Game.Movement
 {
@@ -46,10 +44,10 @@ namespace Game.Movement
             _msToNext = info.TimeToNext;
         }
 
-        uint SendPathSpline(Unit me, List<Vector3> wp)
+        uint SendPathSpline(Unit me, Span<Vector3> wp)
         {
-            int numWp = wp.Count;
-            Contract.Assert(numWp > 1, "Every path must have source & destination");
+            int numWp = wp.Length;
+            Cypher.Assert(numWp > 1, "Every path must have source & destination");
             MoveSplineInit init = new MoveSplineInit(me);
             if (numWp > 2)
                 init.MovebyPath(wp.ToArray());
@@ -61,11 +59,11 @@ namespace Game.Movement
 
         void SendSplineFor(Unit me, int index, uint toNext)
         {
-            Contract.Assert(index < _chainSize);
+            Cypher.Assert(index < _chainSize);
             Log.outDebug(LogFilter.Movement, "{0}: Sending spline for {1}.", me.GetGUID().ToString(), index);
 
             SplineChainLink thisLink = _chain[index];
-            uint actualDuration = SendPathSpline(me, thisLink.Points);
+            uint actualDuration = SendPathSpline(me, new Span<Vector3>(thisLink.Points.ToArray()));
             if (actualDuration != thisLink.ExpectedDuration)
             {
                 Log.outDebug(LogFilter.Movement, "{0}: Sent spline for {1}, duration is {2} ms. Expected was {3} ms (delta {4} ms). Adjusting.", me.GetGUID().ToString(), index, actualDuration, thisLink.ExpectedDuration, actualDuration - thisLink.ExpectedDuration);
@@ -91,9 +89,8 @@ namespace Game.Movement
                         Log.outError(LogFilter.Movement, "{0}: Attempted to resume spline chain from invalid resume state ({1}, {2}).", me.GetGUID().ToString(), _nextIndex, _nextFirstWP);
                         _nextFirstWP = (byte)(thisLink.Points.Count - 1);
                     }
-                    List<Vector3> partial = new List<Vector3>();
-                    partial.AddRange(thisLink.Points.Skip(_nextFirstWP - 1).ToArray());
-                    SendPathSpline(me, partial);
+                    Span<Vector3> span = thisLink.Points.ToArray();
+                    SendPathSpline(me, span.Slice(_nextFirstWP - 1));
                     Log.outDebug(LogFilter.Movement, "{0}: Resumed spline chain generator from resume state.", me.GetGUID().ToString());
                     ++_nextIndex;
                     if (_msToNext == 0)
@@ -133,7 +130,7 @@ namespace Game.Movement
             // _msToNext being zero here means we're on the final spline
             if (_msToNext == 0)
             {
-                finished = me.moveSpline.Finalized();
+                finished = me.MoveSpline.Finalized();
                 return !finished;
             }
 
@@ -160,14 +157,14 @@ namespace Game.Movement
         {
             if (_nextIndex == 0)
                 return new SplineChainResumeInfo(_id, _chain, _walk, 0, 0, _msToNext);
-            if (me.moveSpline.Finalized())
+            if (me.MoveSpline.Finalized())
             {
                 if (_nextIndex < _chainSize)
                     return new SplineChainResumeInfo(_id, _chain, _walk, _nextIndex, 0, 1u);
                 else
                     return new SplineChainResumeInfo();
             }
-            return new SplineChainResumeInfo(_id, _chain, _walk, (byte)(_nextIndex - 1), (byte)(me.moveSpline._currentSplineIdx()), _msToNext);
+            return new SplineChainResumeInfo(_id, _chain, _walk, (byte)(_nextIndex - 1), (byte)(me.MoveSpline.CurrentSplineIdx()), _msToNext);
         }
 
         public override void Reset(Unit owner) { }

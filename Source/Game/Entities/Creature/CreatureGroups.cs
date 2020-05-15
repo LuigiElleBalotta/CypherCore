@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,6 @@ namespace Game.Entities
 {
     public class FormationMgr
     {
-        public FormationMgr() { }
-
         public static void AddCreatureToGroup(uint groupId, Creature member)
         {
             Map map = member.GetMap();
@@ -56,7 +54,7 @@ namespace Game.Entities
             Log.outDebug(LogFilter.Unit, "Deleting member GUID: {0} from group {1}", group.GetId(), member.GetSpawnId());
             group.RemoveMember(member);
 
-            if (group.isEmpty())
+            if (group.IsEmpty())
             {
                 Map map = member.GetMap();
                 if (!map)
@@ -266,10 +264,10 @@ namespace Game.Entities
             }
         }
 
-        public Creature getLeader() { return m_leader; }
+        public Creature GetLeader() { return m_leader; }
         public uint GetId() { return m_groupID; }
-        public bool isEmpty() { return m_members.Empty(); }
-        public bool isFormed() { return m_Formed; }
+        public bool IsEmpty() { return m_members.Empty(); }
+        public bool IsFormed() { return m_Formed; }
 
         Creature m_leader;
         Dictionary<Creature, FormationInfo> m_members = new Dictionary<Creature, FormationInfo>();

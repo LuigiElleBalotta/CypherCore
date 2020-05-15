@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Framework.GameMath;
 using Game.Entities;
 using Game.Maps;
 using System;
-using System.Linq;
 
 namespace Game.Movement
 {
@@ -175,7 +174,7 @@ namespace Game.Movement
                     // Check both start and end points, if they're both in water, then we can *safely* let the creature move
                     for (uint i = 0; i < _pathPoints.Length; ++i)
                     {
-                        ZLiquidStatus status = _sourceUnit.GetMap().getLiquidStatus(_sourceUnit.GetPhaseShift(), _pathPoints[i].X, _pathPoints[i].Y, _pathPoints[i].Z, MapConst.MapAllLiquidTypes);
+                        ZLiquidStatus status = _sourceUnit.GetMap().GetLiquidStatus(_sourceUnit.GetPhaseShift(), _pathPoints[i].X, _pathPoints[i].Y, _pathPoints[i].Z, MapConst.MapAllLiquidTypes);
                         // One of the points is not in the water, cancel movement.
                         if (status == ZLiquidStatus.NoWater)
                         {
@@ -255,7 +254,7 @@ namespace Game.Movement
             }
 
             // look for startPoly/endPoly in current path
-            /// @todo we can merge it with getPathPolyByPosition() loop
+            // @todo we can merge it with getPathPolyByPosition() loop
             bool startPolyFound = false;
             bool endPolyFound = false;
             uint pathStartIndex = 0;
@@ -314,7 +313,7 @@ namespace Game.Movement
                 // sub-path of optimal path is optimal
 
                 // take ~80% of the original length
-                /// @todo play with the values here
+                // @todo play with the values here
                 uint prefixPolyLength = (uint)(_polyLength * 0.8f + 0.5f);
                 Array.Copy(_pathPolyRefs, pathStartIndex, _pathPolyRefs, 0, prefixPolyLength);
 
@@ -340,6 +339,7 @@ namespace Game.Movement
 
                 // generate suffix
                 uint suffixPolyLength = 0;
+                ulong[] tempPolyRefs = new ulong[_pathPolyRefs.Length];
 
                 uint dtResult;
                 if (_straightLine)
@@ -354,7 +354,7 @@ namespace Game.Movement
                         _filter,
                         ref hit,
                         hitNormal,
-                        _pathPolyRefs,
+                        tempPolyRefs,
                         ref suffixPolyLength,
                         74 - (int)prefixPolyLength);
 
@@ -374,7 +374,7 @@ namespace Game.Movement
                         suffixEndPoint,     // start position
                         endPoint,           // end position
                         _filter,            // polygon search filter
-                        _pathPolyRefs,
+                        tempPolyRefs,
                         ref suffixPolyLength,
                         74 - (int)prefixPolyLength);
                 }
@@ -388,6 +388,9 @@ namespace Game.Movement
                 }
 
                 Log.outDebug(LogFilter.Maps, "m_polyLength={0} prefixPolyLength={1} suffixPolyLength={2} \n", _polyLength, prefixPolyLength, suffixPolyLength);
+
+                for (var i = 0; i < _pathPolyRefs.Length - (prefixPolyLength - 1); ++i)
+                    _pathPolyRefs[(prefixPolyLength - 1) + i] = tempPolyRefs[i];
 
                 // new path = prefix + suffix - overlap
                 _polyLength = prefixPolyLength + suffixPolyLength - 1;
@@ -523,7 +526,7 @@ namespace Game.Movement
             {
                 // only happens if pass bad data to findStraightPath or navmesh is broken
                 // single point paths can be generated here
-                /// @todo check the exact cases
+                // @todo check the exact cases
                 Log.outDebug(LogFilter.Maps, "++ PathGenerator.BuildPointPath FAILED! path sized {0} returned\n", pointCount);
                 BuildShortcut();
                 pathType = PathType.NoPath;
@@ -630,9 +633,10 @@ namespace Game.Movement
             uint ns = 0;
             while (ns < nsteerPath)
             {
+                Span<float> span = steerPath;
                 // Stop at Off-Mesh link or when point is further than slop away.
                 if ((steerPathFlags[ns].HasAnyFlag((byte)Detour.dtStraightPathFlags.DT_STRAIGHTPATH_OFFMESH_CONNECTION) ||
-                    !InRangeYZX(steerPath.Skip((int)ns * 3).ToArray(), startPos, minTargetDist, 1000.0f)))
+                    !InRangeYZX(span.Slice((int)ns * 3).ToArray(), startPos, minTargetDist, 1000.0f)))
                     break;
                 ns++;
             }
@@ -797,20 +801,21 @@ namespace Game.Movement
 
         void CreateFilter()
         {
-            NavTerrain includeFlags = 0;
-            NavTerrain excludeFlags = 0;
+            NavTerrainFlag includeFlags = 0;
+            NavTerrainFlag excludeFlags = 0;
 
             if (_sourceUnit.IsTypeId(TypeId.Unit))
             {
                 Creature creature = _sourceUnit.ToCreature();
                 if (creature.CanWalk())
-                    includeFlags |= NavTerrain.Ground;
+                    includeFlags |= NavTerrainFlag.Ground;
 
+                // creatures don't take environmental damage
                 if (creature.CanSwim())
-                    includeFlags |= (NavTerrain.Water | NavTerrain.Magma | NavTerrain.Slime);
+                    includeFlags |= (NavTerrainFlag.Water | NavTerrainFlag.MagmaSlime);
             }
             else
-                includeFlags = (NavTerrain.Ground | NavTerrain.Water | NavTerrain.Magma | NavTerrain.Slime);
+                includeFlags = (NavTerrainFlag.Ground | NavTerrainFlag.Water | NavTerrainFlag.MagmaSlime);
 
             _filter.setIncludeFlags((ushort)includeFlags);
             _filter.setExcludeFlags((ushort)excludeFlags);
@@ -824,32 +829,31 @@ namespace Game.Movement
             // forcefully into terrain they can't normally move in
             if (_sourceUnit.IsInWater() || _sourceUnit.IsUnderWater())
             {
-                NavTerrain includedFlags = (NavTerrain)_filter.getIncludeFlags();
+                NavTerrainFlag includedFlags = (NavTerrainFlag)_filter.getIncludeFlags();
                 includedFlags |= GetNavTerrain(_sourceUnit.GetPositionX(), _sourceUnit.GetPositionY(), _sourceUnit.GetPositionZ());
 
                 _filter.setIncludeFlags((ushort)includedFlags);
             }
         }
 
-        NavTerrain GetNavTerrain(float x, float y, float z)
+        NavTerrainFlag GetNavTerrain(float x, float y, float z)
         {
             LiquidData data;
-            ZLiquidStatus liquidStatus = _sourceUnit.GetMap().getLiquidStatus(_sourceUnit.GetPhaseShift(), x, y, z, MapConst.MapAllLiquidTypes, out data);
+            ZLiquidStatus liquidStatus = _sourceUnit.GetMap().GetLiquidStatus(_sourceUnit.GetPhaseShift(), x, y, z, MapConst.MapAllLiquidTypes, out data);
             if (liquidStatus == ZLiquidStatus.NoWater)
-                return NavTerrain.Ground;
+                return NavTerrainFlag.Ground;
 
             data.type_flags &= ~MapConst.MapLiquidTypeDarkWater;
             switch (data.type_flags)
             {
                 case MapConst.MapLiquidTypeWater:
                 case MapConst.MapLiquidTypeOcean:
-                    return NavTerrain.Water;
+                    return NavTerrainFlag.Water;
                 case MapConst.MapLiquidTypeMagma:
-                    return NavTerrain.Magma;
                 case MapConst.MapLiquidTypeSlime:
-                    return NavTerrain.Slime;
+                    return NavTerrainFlag.MagmaSlime;
                 default:
-                    return NavTerrain.Ground;
+                    return NavTerrainFlag.Ground;
             }
         }
 
@@ -921,9 +925,9 @@ namespace Game.Movement
 
             _navMesh.calcTileLoc(point, ref tx, ref ty);
 
-            /// Workaround
-            /// For some reason, often the tx and ty variables wont get a valid value
-            /// Use this check to prevent getting negative tile coords and crashing on getTileAt
+            // Workaround
+            // For some reason, often the tx and ty variables wont get a valid value
+            // Use this check to prevent getting negative tile coords and crashing on getTileAt
             if (tx < 0 || ty < 0)
                 return false;
 
@@ -987,18 +991,23 @@ namespace Game.Movement
         NotUsingPath = 0x10,   // used when we are either flying/swiming or on map w/o mmaps
         Short = 0x20,   // path is longer or equal to its limited path length
     }
-    public enum NavTerrain
+
+    public enum NavArea
+    {
+        Empty = 0,
+        // areas 1-60 will be used for destructible areas (currently skipped in vmaps, WMO with flag 1)
+        // ground is the highest value to make recast choose ground over water when merging surfaces very close to each other (shallow water would be walkable) 
+        MagmaSlime = 61, // don't need to differentiate between them
+        Water = 62,
+        Ground = 63,
+    }
+
+    public enum NavTerrainFlag
     {
         Empty = 0x00,
-        Ground = 0x01,
-        Magma = 0x02,
-        Slime = 0x04,
-        Water = 0x08,
-        Unused1 = 0x10,
-        Unused2 = 0x20,
-        Unused3 = 0x40,
-        Unused4 = 0x80
-        // we only have 8 bits
+        Ground = 1 << (63 - NavArea.Ground),
+        Water = 1 << (63 - NavArea.Water),
+        MagmaSlime = 1 << (63 - NavArea.MagmaSlime)
     }
 
     public enum PolyFlag

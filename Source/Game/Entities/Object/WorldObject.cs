@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,29 +15,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using Framework.Collections;
 using Framework.Constants;
 using Framework.Dynamic;
 using Framework.GameMath;
-using Framework.IO;
 using Game.AI;
 using Game.BattleFields;
-using Game.DataStorage;
 using Game.Maps;
 using Game.Network;
 using Game.Network.Packets;
 using Game.Scenarios;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Game.Entities
 {
-    public class WorldObject : WorldLocation, IDisposable
+    public abstract class WorldObject : WorldLocation, IDisposable
     {
         public WorldObject(bool isWorldObject)
         {
@@ -47,13 +39,15 @@ namespace Game.Entities
             m_serverSideVisibility.SetValue(ServerSideVisibilityType.Ghost, GhostVisibilityType.Alive | GhostVisibilityType.Ghost);
             m_serverSideVisibilityDetect.SetValue(ServerSideVisibilityType.Ghost, GhostVisibilityType.Alive);
 
-            objectTypeId = TypeId.Object;
-            objectTypeMask = TypeMask.Object;
+            ObjectTypeId = TypeId.Object;
+            ObjectTypeMask = TypeMask.Object;
 
-            _fieldNotifyFlags = UpdateFieldFlags.Dynamic;
+            m_values = new UpdateFieldHolder(this);
 
             m_movementInfo = new MovementInfo();
-            m_updateFlag = UpdateFlag.None;
+            m_updateFlag.Clear();
+
+            m_objectData = new ObjectFieldData();
         }
 
         public virtual void Dispose()
@@ -63,9 +57,8 @@ namespace Game.Entities
             {
                 if (IsTypeId(TypeId.Corpse))
                 {
-                    Log.outFatal(LogFilter.Misc, "WorldObject.Dispose() Corpse Type: {0} ({1}) deleted but still in map!!",
-                        ToCorpse().GetCorpseType(), GetGUID().ToString());
-                    Contract.Assert(false);
+                    Log.outFatal(LogFilter.Misc, "WorldObject.Dispose() Corpse Type: {0} ({1}) deleted but still in map!!", ToCorpse().GetCorpseType(), GetGUID().ToString());
+                    Cypher.Assert(false);
                 }
                 ResetMap();
             }
@@ -73,57 +66,22 @@ namespace Game.Entities
             if (IsInWorld)
             {
                 Log.outFatal(LogFilter.Misc, "WorldObject.Dispose() {0} deleted but still in world!!", GetGUID().ToString());
-                if (isTypeMask(TypeMask.Item))
+                if (IsTypeMask(TypeMask.Item))
                     Log.outFatal(LogFilter.Misc, "Item slot {0}", ((Item)this).GetSlot());
-                Contract.Assert(false);
+                Cypher.Assert(false);
             }
 
             if (m_objectUpdated)
             {
                 Log.outFatal(LogFilter.Misc, "WorldObject.Dispose() {0} deleted but still in update list!!", GetGUID().ToString());
-                Contract.Assert(false);
+                Cypher.Assert(false);
             }
-        }
-
-        void InitValues()
-        {
-            UpdateData = new Hashtable((int)valuesCount);
-            for (int i = 0; i < valuesCount; ++i)
-                UpdateData[i] = 0u;
-
-            _changesMask = new BitArray((int)valuesCount);
-
-            if (_dynamicValuesCount != 0)
-            {
-                _dynamicValues = new uint[_dynamicValuesCount][];
-                _dynamicChangesArrayMask = new BitArray[_dynamicValuesCount];
-
-                for (var i = 0; i < _dynamicValuesCount; ++i)
-                {
-                    _dynamicValues[i] = new uint[0];
-                    _dynamicChangesArrayMask[i] = new BitArray(0);
-                    _dynamicChangesMask[i] = DynamicFieldChangeType.Unchanged;
-                }
-            }
-
-            m_objectUpdated = false;
         }
 
         public void _Create(ObjectGuid guid)
         {
-            if (UpdateData == null)
-                InitValues();
-
-            SetGuidValue(ObjectFields.Guid, guid);
-            SetUInt16Value(ObjectFields.Type, 0, (ushort)objectTypeMask);
-        }
-
-        public string _ConcatFields(object startIndex, uint size)
-        {
-            StringBuilder sb = new StringBuilder();
-            for (int index = 0; index < size; ++index)
-                sb.AppendFormat("{0} ", GetUInt32Value(index + (int)startIndex));
-            return sb.ToString();
+            m_objectUpdated = false;
+            m_guid = guid;
         }
 
         public virtual void AddToWorld()
@@ -140,7 +98,7 @@ namespace Game.Entities
             if (!IsInWorld)
                 return;
 
-            if (!objectTypeMask.HasAnyFlag(TypeMask.Item | TypeMask.Container))
+            if (!ObjectTypeMask.HasAnyFlag(TypeMask.Item | TypeMask.Container))
                 DestroyForNearbyPlayers();
 
             IsInWorld = false;
@@ -153,10 +111,17 @@ namespace Game.Entities
                 return;
 
             UpdateType updateType = UpdateType.CreateObject;
-            UpdateFlag flags = m_updateFlag;
+            TypeId tempObjectType = ObjectTypeId;
+            TypeMask tempObjectTypeMask = ObjectTypeMask;
+            CreateObjectBits flags = m_updateFlag;
 
             if (target == this)
-                flags |= UpdateFlag.Self;
+            {
+                flags.ThisIsYou = true;
+                flags.ActivePlayer = true;
+                tempObjectType = TypeId.ActivePlayer;
+                tempObjectTypeMask |= TypeMask.ActivePlayer;
+            }
 
             switch (GetGUID().GetHigh())
             {
@@ -181,19 +146,16 @@ namespace Game.Entities
                     break;
             }
 
-            if (!flags.HasAnyFlag(UpdateFlag.Living))
-            {
-                if (!m_movementInfo.transport.guid.IsEmpty())
-                    flags |= UpdateFlag.TransportPosition;
+            if (!flags.MovementUpdate && !m_movementInfo.transport.guid.IsEmpty())
+                flags.MovementTransport = true;
 
-                if (GetAIAnimKitId() != 0 || GetMovementAnimKitId() != 0 || GetMeleeAnimKitId() != 0)
-                    flags |= UpdateFlag.AnimKits;
-            }
+            if (GetAIAnimKitId() != 0 || GetMovementAnimKitId() != 0 || GetMeleeAnimKitId() != 0)
+                flags.AnimKit = true;
 
-            if (flags.HasAnyFlag(UpdateFlag.StationaryPosition))
+            if (flags.Stationary)
             {
                 // UPDATETYPE_CREATE_OBJECT2 for some gameobject types...
-                if (isTypeMask(TypeMask.GameObject))
+                if (IsTypeMask(TypeMask.GameObject))
                 {
                     switch (ToGameObject().GetGoType())
                     {
@@ -211,16 +173,15 @@ namespace Game.Entities
             Unit unit = ToUnit();
             if (unit)
                 if (unit.GetVictim())
-                    flags |= UpdateFlag.HasTarget;
+                    flags.CombatVictim = true;
 
             WorldPacket buffer = new WorldPacket();
-            buffer.WriteUInt8(updateType);
+            buffer.WriteUInt8((byte)updateType);
             buffer.WritePackedGuid(GetGUID());
-            buffer.WriteUInt8(objectTypeId);
+            buffer.WriteUInt8((byte)tempObjectType);
 
             BuildMovementUpdate(buffer, flags);
-            BuildValuesUpdate(updateType, buffer, target);
-            BuildDynamicValuesUpdate(updateType, buffer, target);
+            BuildValuesCreate(buffer, target);
             data.AddUpdateBlock(buffer);
         }
 
@@ -243,15 +204,31 @@ namespace Game.Entities
         {
             WorldPacket buffer = new WorldPacket();
 
-            buffer.WriteUInt8(UpdateType.Values);
+            buffer.WriteUInt8((byte)UpdateType.Values);
             buffer.WritePackedGuid(GetGUID());
 
-            BuildValuesUpdate(UpdateType.Values, buffer, target);
-            BuildDynamicValuesUpdate(UpdateType.Values, buffer, target);
+            BuildValuesUpdate(buffer, target);
 
             data.AddUpdateBlock(buffer);
         }
 
+        public void BuildValuesUpdateBlockForPlayerWithFlag(UpdateData data, UpdateFieldFlag flags, Player target)
+        {
+            WorldPacket buffer = new WorldPacket();
+
+            buffer.WriteUInt8((byte)UpdateType.Values);
+            buffer.WritePackedGuid(GetGUID());
+
+            BuildValuesUpdateWithFlag(buffer, flags, target);
+
+            data.AddUpdateBlock(buffer);
+        }
+
+        void BuildDestroyUpdateBlock(UpdateData data)
+        {
+            data.AddDestroyObject(GetGUID());
+        }
+        
         public void BuildOutOfRangeUpdateBlock(UpdateData data)
         {
             data.AddOutOfRangeGUID(GetGUID());
@@ -260,104 +237,44 @@ namespace Game.Entities
         public virtual void DestroyForPlayer(Player target)
         {
             UpdateData updateData = new UpdateData(target.GetMapId());
-            BuildOutOfRangeUpdateBlock(updateData);
+            BuildDestroyUpdateBlock(updateData);
             UpdateObject packet;
             updateData.BuildPacket(out packet);
             target.SendPacket(packet);
         }
 
-        public int GetInt32Value(object index)
+        public void BuildMovementUpdate(WorldPacket data, CreateObjectBits flags)
         {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            return Convert.ToInt32(UpdateData[(int)index]);
-        }
-
-        public uint GetUInt32Value(object index)
-        {
-            Contract.Assert(Convert.ToInt32(index) < valuesCount || PrintIndexError(index, false));
-            return Convert.ToUInt32(UpdateData[Convert.ToInt32(index)]);
-        }
-
-        public ulong GetUInt64Value(object index)
-        {
-            Contract.Assert((int)index + 1 < valuesCount || PrintIndexError(index, false));
-            return (Convert.ToUInt64(UpdateData[(int)index + 1]) << 32 | (uint)UpdateData[(int)index]);
-        }
-
-        public float GetFloatValue(object index)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            return Convert.ToSingle(UpdateData[(int)index]);
-        }
-
-        public byte GetByteValue(object index, byte offset)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            Contract.Assert(offset < 4);
-            return Convert.ToByte(((uint)UpdateData[(int)index] >> (offset * 8)) & 0xFF);
-        }
-
-        public ushort GetUInt16Value(object index, byte offset)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            Contract.Assert(offset < 2);
-            return Convert.ToUInt16(((uint)UpdateData[(int)index] >> (offset * 16)) & 0xFFFF);
-        }
-
-        public ObjectGuid GetGuidValue(object index)
-        {
-            Contract.Assert((int)index + 3 < valuesCount || PrintIndexError(index, false));
-            return new ObjectGuid(GetUInt64Value((int)index + 2), GetUInt64Value(index));
-        }
-
-        public void BuildMovementUpdate(WorldPacket data, UpdateFlag flags)
-        {
-            bool NoBirthAnim = false;
-            bool EnablePortals = false;
-            bool PlayHoverAnim = false;
-            bool HasMovementUpdate = flags.HasAnyFlag(UpdateFlag.Living);
-            bool HasMovementTransport = flags.HasAnyFlag(UpdateFlag.TransportPosition);
-            bool Stationary = flags.HasAnyFlag(UpdateFlag.StationaryPosition);
-            bool CombatVictim = flags.HasAnyFlag(UpdateFlag.HasTarget);
-            bool ServerTime = flags.HasAnyFlag(UpdateFlag.Transport);
-            bool VehicleCreate = flags.HasAnyFlag(UpdateFlag.Vehicle);
-            bool AnimKitCreate = flags.HasAnyFlag(UpdateFlag.AnimKits);
-            bool Rotation = flags.HasAnyFlag(UpdateFlag.Rotation);
-            bool HasAreaTrigger = flags.HasAnyFlag(UpdateFlag.Areatrigger);
-            bool HasGameObject = flags.HasAnyFlag(UpdateFlag.Gameobject);
-            bool ThisIsYou = flags.HasAnyFlag(UpdateFlag.Self);
-            bool SmoothPhasing = false;
-            bool SceneObjCreate = false;
-            bool PlayerCreateData = GetTypeId() == TypeId.Player && ToUnit().GetPowerIndex(PowerType.Runes) != (int)PowerType.Max;
             int PauseTimesCount = 0;
 
             GameObject go = ToGameObject();
             if (go)
             {
                 if (go.GetGoType() == GameObjectTypes.Transport)
-                    PauseTimesCount = go.m_goValue.Transport.StopFrames.Count;
+                    PauseTimesCount = go.GetGoValue().Transport.StopFrames.Count;
             }
 
-            data.WriteBit(NoBirthAnim);
-            data.WriteBit(EnablePortals);
-            data.WriteBit(PlayHoverAnim);
-            data.WriteBit(HasMovementUpdate);
-            data.WriteBit(HasMovementTransport);
-            data.WriteBit(Stationary);
-            data.WriteBit(CombatVictim);
-            data.WriteBit(ServerTime);
-            data.WriteBit(VehicleCreate);
-            data.WriteBit(AnimKitCreate);
-            data.WriteBit(Rotation);
-            data.WriteBit(HasAreaTrigger);
-            data.WriteBit(HasGameObject);
-            data.WriteBit(SmoothPhasing);
-            data.WriteBit(ThisIsYou);
-            data.WriteBit(SceneObjCreate);
-            data.WriteBit(PlayerCreateData);
+            data.WriteBit(flags.NoBirthAnim);
+            data.WriteBit(flags.EnablePortals);
+            data.WriteBit(flags.PlayHoverAnim);
+            data.WriteBit(flags.MovementUpdate);
+            data.WriteBit(flags.MovementTransport);
+            data.WriteBit(flags.Stationary);
+            data.WriteBit(flags.CombatVictim);
+            data.WriteBit(flags.ServerTime);
+            data.WriteBit(flags.Vehicle);
+            data.WriteBit(flags.AnimKit);
+            data.WriteBit(flags.Rotation);
+            data.WriteBit(flags.AreaTrigger);
+            data.WriteBit(flags.GameObject);
+            data.WriteBit(flags.SmoothPhasing);
+            data.WriteBit(flags.ThisIsYou);
+            data.WriteBit(flags.SceneObject);
+            data.WriteBit(flags.ActivePlayer);
+            data.WriteBit(flags.Conversation);
             data.FlushBits();
 
-            if (HasMovementUpdate)
+            if (flags.MovementUpdate)
             {
                 Unit unit = ToUnit();
                 bool HasFallDirection = unit.HasUnitMovementFlag(MovementFlag.Falling);
@@ -415,29 +332,33 @@ namespace Game.Entities
                 data.WriteFloat(unit.GetSpeed(UnitMoveType.TurnRate));
                 data.WriteFloat(unit.GetSpeed(UnitMoveType.PitchRate));
 
-                data.WriteUInt32(0); // unit.m_movementInfo.forces.size()
+                MovementForces movementForces = unit.GetMovementForces();
+                if (movementForces != null)
+                {
+                    data.WriteInt32(movementForces.GetForces().Count);
+                    data.WriteFloat(movementForces.GetModMagnitude());          // MovementForcesModMagnitude
+                }
+                else
+                {
+                    data.WriteUInt32(0);
+                    data.WriteFloat(1.0f);                                       // MovementForcesModMagnitude
+                }
 
                 data.WriteBit(HasSpline);
                 data.FlushBits();
 
-                //for (public uint i = 0; i < unit.m_movementInfo.forces.Count; ++i)
-                //{
-                //    *data << ObjectGuid(ID);
-                //    *data << Vector3(Origin);
-                //    *data << Vector3(Direction);
-                //    *data << uint32(TransportID);
-                //    *data.WriteFloat(Magnitude);
-                //    *data.WriteBits(Type, 2);
-                //}
+                if (movementForces != null)
+                    foreach (MovementForce force in movementForces.GetForces())
+                        MovementExtensions.WriteMovementForceWithDirection(force, data, unit);
 
                 // HasMovementSpline - marks that spline data is present in packet
                 if (HasSpline)
-                    MovementExtensions.WriteCreateObjectSplineDataBlock(unit.moveSpline, data);
+                    MovementExtensions.WriteCreateObjectSplineDataBlock(unit.MoveSpline, data);
             }
 
-            data.WriteUInt32(PauseTimesCount);
+            data.WriteInt32(PauseTimesCount);
 
-            if (Stationary)
+            if (flags.Stationary)
             {
                 WorldObject self = this;
                 data.WriteFloat(self.GetStationaryX());
@@ -446,10 +367,10 @@ namespace Game.Entities
                 data.WriteFloat(self.GetStationaryO());
             }
 
-            if (CombatVictim)
+            if (flags.CombatVictim)
                 data.WritePackedGuid(ToUnit().GetVictim().GetGUID());                      // CombatVictim
 
-            if (ServerTime)
+            if (flags.ServerTime)
             {
                 GameObject go1 = ToGameObject();
                 /** @TODO Use IsTransport() to also handle type 11 (TRANSPORT)
@@ -458,41 +379,41 @@ namespace Game.Entities
                     resulting in players seeing the object in a different position
                 */
                 if (go1 && go1.ToTransport())                                    // ServerTime
-                    data.WriteUInt32(go1.m_goValue.Transport.PathProgress);
+                    data.WriteUInt32(go1.GetGoValue().Transport.PathProgress);
                 else
-                    data.WriteUInt32(Time.GetMSTime());
+                    data.WriteUInt32(GameTime.GetGameTimeMS());
             }
 
-            if (VehicleCreate)
+            if (flags.Vehicle)
             {
                 Unit unit = ToUnit();
                 data.WriteUInt32(unit.GetVehicleKit().GetVehicleInfo().Id); // RecID
                 data.WriteFloat(unit.GetOrientation());                         // InitialRawFacing
             }
 
-            if (AnimKitCreate)
+            if (flags.AnimKit)
             {
                 data.WriteUInt16(GetAIAnimKitId());                        // AiID
                 data.WriteUInt16(GetMovementAnimKitId());                  // MovementID
                 data.WriteUInt16(GetMeleeAnimKitId());                     // MeleeID
             }
 
-            if (Rotation)
+            if (flags.Rotation)
                 data.WriteInt64(ToGameObject().GetPackedWorldRotation());                 // Rotation
 
             if (go)
             {
                 for (int i = 0; i < PauseTimesCount; ++i)
-                    data.WriteUInt32(go.m_goValue.Transport.StopFrames[i]);
+                    data.WriteUInt32(go.GetGoValue().Transport.StopFrames[i]);
             }
 
-            if (HasMovementTransport)
+            if (flags.MovementTransport)
             {
                 WorldObject self = this;
                 MovementExtensions.WriteTransportInfo(data, self.m_movementInfo.transport);
             }
 
-            if (HasAreaTrigger)
+            if (flags.AreaTrigger)
             {
                 AreaTrigger areaTrigger = ToAreaTrigger();
                 AreaTriggerMiscTemplate areaTriggerMiscTemplate = areaTrigger.GetMiscTemplate();
@@ -513,15 +434,16 @@ namespace Game.Entities
                 bool hasMorphCurveID = areaTriggerMiscTemplate.MorphCurveId != 0;
                 bool hasFacingCurveID = areaTriggerMiscTemplate.FacingCurveId != 0;
                 bool hasMoveCurveID = areaTriggerMiscTemplate.MoveCurveId != 0;
-                bool hasUnk2 = areaTriggerTemplate.HasFlag(AreaTriggerFlags.Unk2);
+                bool hasAnimation = areaTriggerTemplate.HasFlag(AreaTriggerFlags.HasAnimID);
                 bool hasUnk3 = areaTriggerTemplate.HasFlag(AreaTriggerFlags.Unk3);
-                bool hasUnk4 = areaTriggerTemplate.HasFlag(AreaTriggerFlags.Unk4);
+                bool hasAnimKitID = areaTriggerTemplate.HasFlag(AreaTriggerFlags.HasAnimKitID);
+                bool hasAnimProgress = false;
                 bool hasAreaTriggerSphere = areaTriggerTemplate.IsSphere();
                 bool hasAreaTriggerBox = areaTriggerTemplate.IsBox();
                 bool hasAreaTriggerPolygon = areaTriggerTemplate.IsPolygon();
                 bool hasAreaTriggerCylinder = areaTriggerTemplate.IsCylinder();
                 bool hasAreaTriggerSpline = areaTrigger.HasSplines();
-                bool hasAreaTriggerUnkType = false; // areaTriggerTemplate.HasFlag(AREATRIGGER_FLAG_UNK5);
+                bool hasCircularMovement = areaTrigger.HasCircularMovement();
 
                 data.WriteBit(hasAbsoluteOrientation);
                 data.WriteBit(hasDynamicShape);
@@ -534,15 +456,16 @@ namespace Game.Entities
                 data.WriteBit(hasMorphCurveID);
                 data.WriteBit(hasFacingCurveID);
                 data.WriteBit(hasMoveCurveID);
-                data.WriteBit(hasUnk2);
+                data.WriteBit(hasAnimation);
+                data.WriteBit(hasAnimKitID);
                 data.WriteBit(hasUnk3);
-                data.WriteBit(hasUnk4);
+                data.WriteBit(hasAnimProgress);
                 data.WriteBit(hasAreaTriggerSphere);
                 data.WriteBit(hasAreaTriggerBox);
                 data.WriteBit(hasAreaTriggerPolygon);
                 data.WriteBit(hasAreaTriggerCylinder);
                 data.WriteBit(hasAreaTriggerSpline);
-                data.WriteBit(hasAreaTriggerUnkType);
+                data.WriteBit(hasCircularMovement);
 
                 if (hasUnk3)
                     data.WriteBit(0);
@@ -572,10 +495,13 @@ namespace Game.Entities
                 if (hasMoveCurveID)
                     data.WriteUInt32(areaTriggerMiscTemplate.MoveCurveId);
 
-                if (hasUnk2)
-                    data.WriteInt32(0);
+                if (hasAnimation)
+                    data.WriteUInt32(areaTriggerMiscTemplate.AnimId);
 
-                if (hasUnk4)
+                if (hasAnimKitID)
+                    data.WriteUInt32(areaTriggerMiscTemplate.AnimKitId);
+
+                if (hasAnimProgress)
                     data.WriteUInt32(0);
 
                 if (hasAreaTriggerSphere)
@@ -588,19 +514,13 @@ namespace Game.Entities
                 {
                     unsafe
                     {
-                        fixed (float* ptr = areaTriggerTemplate.BoxDatas.Extents)
-                        {
-                            data.WriteFloat(ptr[0]);
-                            data.WriteFloat(ptr[1]);
-                            data.WriteFloat(ptr[2]);
-                        }
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.Extents[0]);
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.Extents[1]);
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.Extents[2]);
 
-                        fixed (float* ptr = areaTriggerTemplate.BoxDatas.ExtentsTarget)
-                        {
-                            data.WriteFloat(ptr[0]);
-                            data.WriteFloat(ptr[1]);
-                            data.WriteFloat(ptr[2]);
-                        }
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.ExtentsTarget[0]);
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.ExtentsTarget[1]);
+                        data.WriteFloat(areaTriggerTemplate.BoxDatas.ExtentsTarget[2]);
                     }
                 }
 
@@ -628,31 +548,11 @@ namespace Game.Entities
                     data.WriteFloat(areaTriggerTemplate.CylinderDatas.LocationZOffsetTarget);
                 }
 
-                if (hasAreaTriggerUnkType)
-                {
-                    /*packet.ResetBitReader();
-                    var unk1 = packet.ReadBit("AreaTriggerUnk1");
-                    var hasCenter = packet.ReadBit("HasCenter", index);
-                    packet.ReadBit("Unk bit 703 1", index);
-                    packet.ReadBit("Unk bit 703 2", index);
-
-                    packet.ReadUInt32();
-                    packet.ReadInt32();
-                    packet.ReadUInt32();
-                    packet.ReadSingle("Radius", index);
-                    packet.ReadSingle("BlendFromRadius", index);
-                    packet.ReadSingle("InitialAngel", index);
-                    packet.ReadSingle("ZOffset", index);
-
-                    if (unk1)
-                        packet.ReadPackedGuid128("AreaTriggerUnkGUID", index);
-
-                    if (hasCenter)
-                        packet.ReadVector3("Center", index);*/
-                }
+                if (hasCircularMovement)
+                   areaTrigger.GetCircularMovementInfo().Value.Write(data);
             }
 
-            if (HasGameObject)
+            if (flags.GameObject)
             {
                 bool bit8 = false;
                 uint Int1 = 0;
@@ -667,7 +567,7 @@ namespace Game.Entities
                     data.WriteUInt32(Int1);
             }
 
-            //if (SmoothPhasing)
+            //if (flags.SmoothPhasing)
             //{
             //    data.WriteBit(ReplaceActive);
             //    data.WriteBit(HasReplaceObjectt);
@@ -676,7 +576,7 @@ namespace Game.Entities
             //        *data << ObjectGuid(ReplaceObject);
             //}
 
-            //if (SceneObjCreate)
+            //if (flags.SceneObject)
             //{
             //    data.WriteBit(HasLocalScriptData);
             //    data.WriteBit(HasPetBattleFullUpdate);
@@ -786,7 +686,7 @@ namespace Game.Entities
             //    }
             //}
 
-            if (PlayerCreateData)
+            if (flags.ActivePlayer)
             {
                 bool HasSceneInstanceIDs = false;
                 bool HasRuneState = ToUnit().GetPowerIndex(PowerType.Runes) != (int)PowerType.Max;
@@ -806,102 +706,32 @@ namespace Game.Entities
                     float baseCd = player.GetRuneBaseCooldown();
                     uint maxRunes = (uint)player.GetMaxPower(PowerType.Runes);
 
-                    data.WriteUInt8((1 << (int)maxRunes) - 1u);
+                    data.WriteUInt8((byte)((1 << (int)maxRunes) - 1u));
                     data.WriteUInt8(player.GetRunesState());
                     data.WriteUInt32(maxRunes);
                     for (byte i = 0; i < maxRunes; ++i)
-                        data.WriteUInt8((baseCd - (float)player.GetRuneCooldown(i)) / baseCd * 255);
-                }
-            }
-        }
-
-        public virtual void BuildValuesUpdate(UpdateType updatetype, ByteBuffer data, Player target)
-        {
-            if (!target)
-                return;
-
-            ByteBuffer fieldBuffer = new ByteBuffer();
-            UpdateMask updateMask = new UpdateMask(valuesCount);
-
-            uint[] flags;
-            uint visibleFlag = GetUpdateFieldData(target, out flags);
-            for (int index = 0; index < valuesCount; ++index)
-            {
-                if (Convert.ToBoolean(_fieldNotifyFlags & flags[index]) ||
-                    ((updatetype == UpdateType.Values ? _changesMask.Get(index) : HasUpdateValue(index)) && Convert.ToBoolean(flags[index] & visibleFlag)))
-                {
-                    updateMask.SetBit(index);
-                    WriteValue(fieldBuffer, index);
+                        data.WriteUInt8((byte)((baseCd - (float)player.GetRuneCooldown(i)) / baseCd * 255));
                 }
             }
 
-            updateMask.AppendToPacket(data);
-            data.WriteBytes(fieldBuffer);
-        }
-
-        public virtual void BuildDynamicValuesUpdate(UpdateType updateType, WorldPacket data, Player target)
-        {
-            if (!target)
-                return;
-
-            ByteBuffer fieldBuffer = new ByteBuffer();
-            UpdateMask fieldMask = new UpdateMask(_dynamicValuesCount);
-
-            uint[] flags;
-            uint visibleFlag = GetDynamicUpdateFieldData(target, out flags);
-
-            for (var index = 0; index < _dynamicValuesCount; ++index)
+            if (flags.Conversation)
             {
-                ByteBuffer valueBuffer = new ByteBuffer();
-                var values = _dynamicValues[index];
-                if (_fieldNotifyFlags.HasAnyFlag(flags[index]) ||
-                    ((updateType == UpdateType.Values ? _dynamicChangesMask[index] != DynamicFieldChangeType.Unchanged : !values.Empty()) && flags[index].HasAnyFlag(visibleFlag)))
-                {
-                    fieldMask.SetBit(index);
-
-                    DynamicUpdateMask arrayMask = new DynamicUpdateMask((uint)values.Length);
-                    arrayMask.EncodeDynamicFieldChangeType(_dynamicChangesMask[index], updateType);
-                    if (updateType == UpdateType.Values && _dynamicChangesMask[index] == DynamicFieldChangeType.ValueAndSizeChanged)
-                        arrayMask.SetCount(values.Length);
-
-                    for (var v = 0; v < values.Length; ++v)
-                    {
-                        if (updateType != UpdateType.Values || _dynamicChangesArrayMask[index].Get(v))
-                        {
-                            arrayMask.SetBit(v);
-                            valueBuffer.WriteUInt32(values[v]);
-                        }
-                    }
-
-                    arrayMask.AppendToPacket(fieldBuffer);
-                    fieldBuffer.WriteBytes(valueBuffer);
-                }
-            }
-
-            fieldMask.AppendToPacket(data);
-            data.WriteBytes(fieldBuffer);
-        }
-
-        public void WriteValue(ByteBuffer data, int index)
-        {
-            switch (UpdateData[index].GetType().Name)
-            {
-                default:
-                case "UInt32":
-                    data.WriteUInt32(UpdateData[index]);
-                    break;
-                case "Single":
-                    data.WriteFloat((float)UpdateData[index]);
-                    break;
-                case "Int32":
-                    data.WriteInt32((int)UpdateData[index]);
-                    break;
+                Conversation self = ToConversation();
+                if (data.WriteBit(self.GetTextureKitId() != 0))
+                    data.WriteUInt32(self.GetTextureKitId());
+                data.FlushBits();
             }
         }
 
-        public bool HasUpdateValue(int index)
+        public virtual UpdateFieldFlag GetUpdateFieldFlagsFor(Player target)
         {
-            return UpdateData.ContainsKey(index);
+            return UpdateFieldFlag.None;
+        }
+
+        public virtual void BuildValuesUpdateWithFlag(WorldPacket data, UpdateFieldFlag flags, Player target)
+        {
+            data.WriteUInt32(0);
+            data.WriteUInt32(0);
         }
 
         public void AddToObjectUpdateIfNeeded()
@@ -913,14 +743,9 @@ namespace Game.Entities
             }
         }
 
-        public void ClearUpdateMask(bool remove)
+        public virtual void ClearUpdateMask(bool remove)
         {
-            _changesMask.SetAll(false);
-            for (int i = 0; i < _dynamicValuesCount; ++i)
-            {
-                _dynamicChangesMask[i] = DynamicFieldChangeType.Unchanged;
-                _dynamicChangesArrayMask[i].SetAll(false);
-            }
+            m_values.ClearChangesMask(m_objectData);
 
             if (m_objectUpdated)
             {
@@ -944,606 +769,157 @@ namespace Game.Entities
             BuildValuesUpdateBlockForPlayer(data, player);
         }
 
-        uint GetUpdateFieldData(Player target, out uint[] flags)
+        public abstract void BuildValuesCreate(WorldPacket data, Player target);
+        public abstract void BuildValuesUpdate(WorldPacket data, Player target);
+
+        public void SetUpdateFieldValue<T>(IUpdateField<T> updateField, T newValue) where T : new()
         {
-            var visibleFlag = UpdateFieldFlags.Public;
-            flags = null;
-
-            if (target == this)
-                visibleFlag |= UpdateFieldFlags.Private;
-
-            switch (GetTypeId())
+            Type type = typeof(T);
+            if (type.IsGenericType || (dynamic)newValue != updateField.GetValue())
             {
-                case TypeId.Item:
-                case TypeId.Container:
-                    flags = UpdateFieldFlags.ItemUpdateFieldFlags;
-                    if (((Item)this).GetOwnerGUID() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Owner | UpdateFieldFlags.ItemOwner;
-                    break;
-                case TypeId.Unit:
-                case TypeId.Player:
-                    {
-                        Player plr = ToUnit().GetCharmerOrOwnerPlayerOrPlayerItself();
-                        flags = UpdateFieldFlags.UnitUpdateFieldFlags;
-                        if (ToUnit().GetOwnerGUID() == target.GetGUID())
-                            visibleFlag |= UpdateFieldFlags.Owner;
-
-                        if (HasFlag(ObjectFields.DynamicFlags, UnitDynFlags.SpecialInfo))
-                            if (ToUnit().HasAuraTypeWithCaster(AuraType.Empathy, target.GetGUID()))
-                                visibleFlag |= UpdateFieldFlags.SpecialInfo;
-
-                        if (plr != null && plr.IsInSameGroupWith(target))
-                            visibleFlag |= UpdateFieldFlags.PartyMember;
-                        break;
-                    }
-                case TypeId.GameObject:
-                    flags = UpdateFieldFlags.GameObjectUpdateFieldFlags;
-                    if (ToGameObject().GetOwnerGUID() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Owner;
-                    break;
-                case TypeId.DynamicObject:
-                    flags = UpdateFieldFlags.DynamicObjectUpdateFieldFlags;
-                    if (ToDynamicObject().GetCasterGUID() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Owner;
-                    break;
-                case TypeId.Corpse:
-                    flags = UpdateFieldFlags.CorpseUpdateFieldFlags;
-                    if (ToCorpse().GetOwnerGUID() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Owner;
-                    break;
-                case TypeId.AreaTrigger:
-                    flags = UpdateFieldFlags.AreaTriggerUpdateFieldFlags;
-                    break;
-                case TypeId.SceneObject:
-                    flags = UpdateFieldFlags.SceneObjectUpdateFieldFlags;
-                    break;
-                case TypeId.Conversation:
-                    flags = UpdateFieldFlags.ConversationUpdateFieldFlags;
-                    break;
-                case TypeId.Object:
-                    Contract.Assert(false);
-                    break;
-            }
-            return visibleFlag;
-        }
-
-        public uint GetDynamicUpdateFieldData(Player target, out uint[] flags)
-        {
-            uint visibleFlag = UpdateFieldFlags.Public;
-
-            if (target == this)
-                visibleFlag |= UpdateFieldFlags.Private;
-
-            switch (GetTypeId())
-            {
-                case TypeId.Item:
-                case TypeId.Container:
-                    flags = UpdateFieldFlags.ItemDynamicUpdateFieldFlags;
-                    if (((Item)this).GetOwnerGUID() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Owner | UpdateFieldFlags.ItemOwner;
-                    break;
-                case TypeId.Unit:
-                case TypeId.Player:
-                    {
-                        Player plr = ToUnit().GetCharmerOrOwnerPlayerOrPlayerItself();
-                        flags = UpdateFieldFlags.UnitDynamicUpdateFieldFlags;
-                        if (ToUnit().GetOwnerGUID() == target.GetGUID())
-                            visibleFlag |= UpdateFieldFlags.Owner;
-
-                        if (HasFlag(ObjectFields.DynamicFlags, UnitDynFlags.SpecialInfo))
-                            if (ToUnit().HasAuraTypeWithCaster(AuraType.Empathy, target.GetGUID()))
-                                visibleFlag |= UpdateFieldFlags.SpecialInfo;
-
-                        if (plr && plr.IsInSameRaidWith(target))
-                            visibleFlag |= UpdateFieldFlags.PartyMember;
-                        break;
-                    }
-                case TypeId.GameObject:
-                    flags = UpdateFieldFlags.GameObjectDynamicUpdateFieldFlags;
-                    break;
-                case TypeId.Conversation:
-                    flags = UpdateFieldFlags.ConversationDynamicUpdateFieldFlags;
-
-                    if (ToConversation().GetCreatorGuid() == target.GetGUID())
-                        visibleFlag |= UpdateFieldFlags.Unknownx100;
-                    break;
-                default:
-                    flags = null;
-                    break;
-            }
-
-            return visibleFlag;
-        }
-
-        public void _LoadIntoDataField(string data, uint startOffset, uint count)
-        {
-            if (string.IsNullOrEmpty(data))
-                return;
-
-            var lines = new StringArray(data, ' ');
-            if (lines.Length != count)
-                return;
-
-            for (var index = 0; index < count; ++index)
-            {
-                if (uint.TryParse(lines[index], out uint value))
-                {
-                    UpdateData[(int)startOffset + index] = value;
-                    _changesMask.Set((int)(startOffset + index), true);
-                }
-            }
-        }
-
-        public void SetInt32Value(object index, int value)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-
-            if (Convert.ToInt32(UpdateData[(int)index]) != value)
-            {
-                UpdateData[(int)index] = value;
-                _changesMask.Set((int)index, true);
-
+                updateField.SetValue(newValue);
                 AddToObjectUpdateIfNeeded();
             }
         }
 
-        public void SetUInt32Value(object index, uint value)
+        public void SetUpdateFieldValue<T>(ref T value, T newValue) where T : new()
         {
-            int _index = Convert.ToInt32(index);
-            Contract.Assert(_index < valuesCount || PrintIndexError(index, true));
-
-            if (Convert.ToUInt32(UpdateData[_index]) != value)
+            Type type = typeof(T);
+            if (type.IsGenericType || (dynamic)newValue != value)
             {
-                UpdateData[_index] = value;
-                _changesMask.Set(_index, true);
-
+                value = newValue;
                 AddToObjectUpdateIfNeeded();
             }
         }
 
-        public void UpdateUInt32Value(object index, uint value)
+        public void SetUpdateFieldValue<T>(DynamicUpdateField<T> updateField, int index, T newValue) where T : new()
         {
-            UpdateData[(int)index] = value;
-            _changesMask.Set((int)index, true);
-        }
-
-        public void SetUInt64Value(object index, ulong value)
-        {
-            Contract.Assert((int)index + 1 < valuesCount || PrintIndexError(index, true));
-            if (GetUInt64Value(index) != value)
+            if ((dynamic)newValue != updateField[index])
             {
-                UpdateData[(int)index] = MathFunctions.Pair64_LoPart(value);
-                UpdateData[(int)index + 1] = MathFunctions.Pair64_HiPart(value);
-                _changesMask.Set((int)index, true);
-                _changesMask.Set((int)index + 1, true);
-
+                updateField[index] = newValue;
                 AddToObjectUpdateIfNeeded();
             }
         }
 
-        public bool AddUInt64Value(object index, ulong value)
+        public void SetUpdateFieldFlagValue<T>(IUpdateField<T> updateField, T flag) where T : new()
         {
-            if (value != 0 && GetUInt64Value(index) == 0)
-            {
-                SetUInt64Value(index, value);
-                return true;
-            }
-
-            return false;
+            //static_assert(std::is_integral < T >::value, "SetUpdateFieldFlagValue must be used with integral types");
+            SetUpdateFieldValue(updateField, (T)(updateField.GetValue() | (dynamic)flag));
         }
 
-        public bool RemoveUInt64Value(object index, ulong value)
+        public void SetUpdateFieldFlagValue<T>(ref T value, T flag) where T : new()
         {
-            if (value != 0 && GetUInt64Value(index) == value)
-            {
-                SetUInt64Value(index, 0);
-                return true;
-            }
-
-            return false;
+            //static_assert(std::is_integral < T >::value, "SetUpdateFieldFlagValue must be used with integral types");
+            SetUpdateFieldValue(ref value, (T)(value | (dynamic)flag));
         }
 
-        public bool AddGuidValue(object index, ObjectGuid value)
+        public void RemoveUpdateFieldFlagValue<T>(IUpdateField<T> updateField, T flag) where T : new()
         {
-            if (!value.IsEmpty() && GetGuidValue(index).IsEmpty())
-            {
-                SetGuidValue(index, value);
-                return true;
-            }
-
-            return false;
+            //static_assert(std::is_integral < T >::value, "SetUpdateFieldFlagValue must be used with integral types");
+            SetUpdateFieldValue(updateField, (T)(updateField.GetValue() & ~(dynamic)flag));
         }
 
-        public bool RemoveGuidValue(object index, ObjectGuid value)
+        public void RemoveUpdateFieldFlagValue<T>(ref T value, T flag) where T : new()
         {
-            if (!value.IsEmpty() && GetGuidValue(index) == value)
-            {
-                SetGuidValue(index, ObjectGuid.Empty);
-                return true;
-            }
-
-            return false;
+            //static_assert(std::is_integral < T >::value, "RemoveUpdateFieldFlagValue must be used with integral types");
+            SetUpdateFieldValue(ref value, (T)(value & ~(dynamic)flag));
         }
 
-        public void SetFloatValue(object index, float value)
+        public void AddDynamicUpdateFieldValue<T>(DynamicUpdateField<T> updateField, T value) where T : new()
         {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-
-            if (GetFloatValue(index) != value)
-            {
-                UpdateData[(int)index] = value;
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
+            AddToObjectUpdateIfNeeded();
+            updateField.AddValue(value);
         }
 
-        public void SetByteValue(object index, byte offset, byte value)
+        public void InsertDynamicUpdateFieldValue<T>(DynamicUpdateField<T> updateField, int index, T value) where T : new()
         {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-
-            if (offset > 3)
-            {
-                Log.outError(LogFilter.Server, "Object.SetByteValue: wrong offset {0}", offset);
-                return;
-            }
-
-            if ((byte)(GetUInt32Value(index) >> (offset * 8)) != value)
-            {
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] & ~(uint)(0xFF << (offset * 8));
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] | (uint)value << (offset * 8);
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
+            AddToObjectUpdateIfNeeded();
+            updateField.InsertValue(index, value);
         }
 
-        public void SetUInt16Value(object index, byte offset, ushort value)
+        public void RemoveDynamicUpdateFieldValue<T>(DynamicUpdateField<T> updateField, int index) where T : new()
         {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-
-            if (offset > 2)
-            {
-                Log.outError(LogFilter.Server, "WorldObject.SetUInt16Value: wrong offset {0}", offset);
-                return;
-            }
-
-            if ((ushort)(GetUInt32Value(index) >> (offset * 16)) != value)
-            {
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] & ~((uint)0xFFFF << (offset * 16));
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] | (uint)value << (offset * 16);
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
+            AddToObjectUpdateIfNeeded();
+            updateField.RemoveValue(index);
         }
 
-        public void SetGuidValue(object index, ObjectGuid value)
+        public void ClearDynamicUpdateFieldValues<T>(DynamicUpdateField<T> updateField) where T : new()
         {
-            Contract.Assert((int)index + 3 < valuesCount || PrintIndexError(index, true));
-            if (new ObjectGuid(GetUInt64Value((int)index + 2), GetUInt64Value(index)) != value)
-            {
-                SetUInt64Value(index, value.GetLowValue());
-                SetUInt64Value((int)index + 2, value.GetHighValue());
-
-                AddToObjectUpdateIfNeeded();
-            }
+            AddToObjectUpdateIfNeeded();
+            updateField.Clear();
         }
 
-        public void SetStatFloatValue(object index, float value)
+        // stat system helpers
+        public void SetUpdateFieldStatValue<T>(IUpdateField<T> updateField, T value) where T : new()
         {
-            if (value < 0)
-                value = 0.0f;
-
-            SetFloatValue(index, value);
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
+            SetUpdateFieldValue(updateField, Math.Max((dynamic)value, 0));
         }
 
-        public void SetStatInt32Value(object index, int value)
-        {
-            if (value < 0)
-                value = 0;
-
-            SetUInt32Value(index, (uint)value);
+        public void SetUpdateFieldStatValue<T>(ref T oldValue, T value)
+        {      
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
+            SetUpdateFieldValue(ref oldValue, Math.Max((dynamic)value, 0));
         }
 
-        public void ApplyModInt32Value(object index, int val, bool apply)
+        public void ApplyModUpdateFieldValue<T>(IUpdateField<T> updateField, T mod, bool apply) where T : new()
         {
-            int cur = GetInt32Value(index);
-            cur += (apply ? val : -val);
-            if (cur < 0)
-                cur = 0;
-            SetInt32Value(index, cur);
-        }
-
-        public void ApplyModUInt32Value(object index, int val, bool apply)
-        {
-            int cur = (int)GetUInt32Value(index);
-            cur += (apply ? val : -val);
-            if (cur < 0)
-                cur = 0;
-            SetUInt32Value(index, (uint)cur);
-        }
-
-        public void ApplyModUInt16Value(object index, byte offset, short val, bool apply)
-        {
-            short cur = (short)GetUInt16Value(index, offset);
-            cur += (short)(apply ? val : -val);
-            if (cur < 0)
-                cur = 0;
-            SetUInt16Value(index, offset, (ushort)cur);
-        }
-
-        public void ApplyModSignedFloatValue(object index, float val, bool apply)
-        {
-            float cur = GetFloatValue(index);
-            cur += (apply ? val : -val);
-            SetFloatValue(index, cur);
-        }
-
-        public void ApplyPercentModFloatValue(object index, float val, bool apply)
-        {
-            float value = GetFloatValue(index);
-            MathFunctions.ApplyPercentModFloatVar(ref value, val, apply);
-            SetFloatValue(index, value);
-        }
-
-        public void SetFlag(object index, object newflag)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-            uint oldval = (uint)UpdateData[(int)index];
-            uint newval = oldval | Convert.ToUInt32(newflag);
-
-            if (oldval != newval)
-            {
-                UpdateData[(int)index] = newval;
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public void RemoveFlag(object index, object oldFlag)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-            Contract.Assert(UpdateData != null);
-
-            uint oldval = (uint)UpdateData[(int)index];
-            uint newval = (oldval & ~Convert.ToUInt32(oldFlag));
-
-            if (oldval != newval)
-            {
-                UpdateData[(int)index] = newval;
-                _changesMask.Set((int)index, true);
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public void ToggleFlag(object index, object flag)
-        {
-            if (HasFlag(index, flag))
-                RemoveFlag(index, flag);
-            else
-                SetFlag(index, flag);
-        }
-
-        public bool HasFlag(object index, object flag)
-        {
-            if ((int)index >= valuesCount && !PrintIndexError(index, false))
-                return false;
-
-            return (GetUInt32Value(index) & Convert.ToUInt32(flag)) != 0;
-        }
-
-        public void ApplyModFlag<T>(object index, T flag, bool apply)
-        {
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
+            dynamic value = updateField.GetValue();
             if (apply)
-                SetFlag(index, flag);
+                value += mod;
             else
-                RemoveFlag(index, flag);
+                value -= mod;
+
+            SetUpdateFieldValue(updateField, value);
         }
 
-        public void SetByteFlag(object index, byte offset, object newFlag)
+        public void ApplyModUpdateFieldValue<T>(ref T oldvalue, T mod, bool apply) where T : new()
         {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
 
-            if (offset > 4)
-            {
-                Log.outError(LogFilter.Server, "Object.SetByteFlag: wrong offset {0}", offset);
-                return;
-            }
-
-            if (!Convert.ToBoolean((uint)UpdateData[(int)index] >> (offset * 8) & Convert.ToUInt32(newFlag)))
-            {
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] | Convert.ToUInt32(newFlag) << (offset * 8);
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public void RemoveByteFlag(object index, byte offset, object oldFlag)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, true));
-
-            if (offset > 4)
-            {
-                Log.outError(LogFilter.Server, "Object.RemoveByteFlag: wrong offset {0}", offset);
-                return;
-            }
-
-            if (Convert.ToBoolean((uint)UpdateData[(int)index] >> (offset * 8) & Convert.ToUInt32(oldFlag)))
-            {
-                UpdateData[(int)index] = (uint)UpdateData[(int)index] & ~(Convert.ToUInt32(oldFlag) << (offset * 8));
-                _changesMask.Set((int)index, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public void ToggleByteFlag(object index, byte offset, byte flag)
-        {
-            if (HasByteFlag(index, offset, flag))
-                RemoveByteFlag(index, offset, flag);
-            else
-                SetByteFlag(index, offset, flag);
-        }
-
-        public bool HasByteFlag(object index, byte offset, object flag)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            Contract.Assert(offset < 4);
-            return Convert.ToBoolean((uint)UpdateData[(int)index] >> (offset * 8) & Convert.ToUInt32(flag));
-        }
-
-        public void SetFlag64(object index, object newFlag)
-        {
-            ulong oldval = GetUInt64Value(index);
-            ulong newval = oldval | Convert.ToUInt64(newFlag);
-            SetUInt64Value(index, newval);
-        }
-
-        public void RemoveFlag64(object index, object oldFlag)
-        {
-            ulong oldval = GetUInt64Value(index);
-            ulong newval = oldval & ~Convert.ToUInt64(oldFlag);
-            SetUInt64Value(index, newval);
-        }
-
-        public void ToggleFlag64(object index, object flag)
-        {
-            if (HasFlag64(index, flag))
-                RemoveFlag64(index, flag);
-            else
-                SetFlag64(index, flag);
-        }
-
-        public bool HasFlag64(object index, object flag)
-        {
-            Contract.Assert((int)index < valuesCount || PrintIndexError(index, false));
-            return (GetUInt64Value(index) & Convert.ToUInt64(flag)) != 0;
-        }
-
-        void ApplyModFlag64(object index, ulong flag, bool apply)
-        {
+            dynamic value = oldvalue;
             if (apply)
-                SetFlag64(index, flag);
+                value += mod;
             else
-                RemoveFlag64(index, flag);
+                value -= mod;
+
+            SetUpdateFieldValue(ref oldvalue, value);
         }
 
-        public uint[] GetDynamicValues(object index)
+        public void ApplyPercentModUpdateFieldValue<T>(IUpdateField<T> updateField, float percent, bool apply) where T : new()
         {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, false));
-            return _dynamicValues[(int)index];
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
+
+            dynamic value = updateField.GetValue();
+
+            // don't want to include Util.h here
+            //ApplyPercentModFloatVar(value, percent, apply);
+            if (percent == -100.0f)
+                percent = -99.99f;
+            value *= (apply ? (100.0f + percent) / 100.0f : 100.0f / (100.0f + percent));
+
+            SetUpdateFieldValue(updateField, value);
         }
 
-        public uint GetDynamicValue(object index, ushort offset)
+        public void ApplyPercentModUpdateFieldValue<T>(ref T oldValue, float percent, bool apply) where T : new()
         {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, false));
-            if (offset >= _dynamicValues[(int)index].Length)
-                return 0;
+            //static_assert(std::is_arithmetic < T >::value, "SetUpdateFieldStatValue must be used with arithmetic types");
 
-            return _dynamicValues[(int)index][offset];
+            dynamic value = oldValue;
+
+            // don't want to include Util.h here
+            //ApplyPercentModFloatVar(value, percent, apply);
+            if (percent == -100.0f)
+                percent = -99.99f;
+            value *= (apply ? (100.0f + percent) / 100.0f : 100.0f / (100.0f + percent));
+
+            SetUpdateFieldValue(ref oldValue, value);
         }
 
-        public void AddDynamicValue(object index, uint value)
+        public void ForceUpdateFieldChange()
         {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, true));
-
-            SetDynamicValue(index, (byte)_dynamicValues[(int)index].Length, value);
-        }
-
-        public void RemoveDynamicValue(object index, uint value)
-        {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, false));
-
-            // TODO: Research if this is blizzlike to just set value to 0
-            for (var i = 0; i < _dynamicValues[(int)index].Length; ++i)
-            {
-                if (_dynamicValues[(int)index][i] == value)
-                {
-                    _dynamicValues[(int)index][i] = 0;
-                    _dynamicChangesMask[(int)index] = DynamicFieldChangeType.ValueChanged;
-                    _dynamicChangesArrayMask[(int)index].Set(i, true);
-
-                    AddToObjectUpdateIfNeeded();
-                }
-            }
-        }
-
-        public void ClearDynamicValue(object index)
-        {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, false));
-
-            if (!_dynamicValues[(int)index].Empty())
-            {
-                _dynamicValues[(int)index] = new uint[0];
-                _dynamicChangesMask[(int)index] = DynamicFieldChangeType.ValueAndSizeChanged;
-                _dynamicChangesArrayMask[(int)index].SetAll(false);
-
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public void SetDynamicValue(object index, ushort offset, uint value)
-        {
-            Contract.Assert((int)index < _dynamicValuesCount || PrintIndexError(index, true));
-
-            DynamicFieldChangeType changeType = DynamicFieldChangeType.ValueChanged;
-            if (_dynamicValues[(int)index].Length <= offset)
-            {
-                Array.Resize(ref _dynamicValues[(int)index], offset + 1);
-                changeType = DynamicFieldChangeType.ValueAndSizeChanged;
-            }
-
-            if (_dynamicChangesArrayMask[(int)index].Count <= offset)
-                _dynamicChangesArrayMask[(int)index].Length = offset + 1;
-
-            if (_dynamicValues[(int)index][offset] != value || changeType == DynamicFieldChangeType.ValueAndSizeChanged)
-            {
-                _dynamicValues[(int)index][offset] = value;
-                _dynamicChangesMask[(int)index] = changeType;
-                _dynamicChangesArrayMask[(int)index].Set(offset, true);
-
-                AddToObjectUpdateIfNeeded();
-            }
-        }
-
-        public List<T> GetDynamicStructuredValues<T>(object index)
-        {
-            var values = _dynamicValues[(int)index];
-            return new List<T>(values.DeserializeObjects<T>());
-        }
-
-        public T GetDynamicStructuredValue<T>(object index, ushort offset)
-        {
-            return GetDynamicStructuredValues<T>(index)[offset];
-        }
-
-        public void SetDynamicStructuredValue<T>(object index, ushort offset, T value)
-        {
-            int BlockCount = Marshal.SizeOf<T>() / sizeof(uint);
-            SetDynamicValue(index, (ushort)((offset + 1) * BlockCount - 1), 0); // reserve space
-
-            for (ushort i = 0; i < BlockCount; ++i)
-                SetDynamicValue(index, (ushort)(offset * BlockCount + i), Extensions.SerializeObject(value)[i]);
-        }
-
-        public void AddDynamicStructuredValue<T>(object index, T value)
-        {
-            int BlockCount = Marshal.SizeOf<T>() / sizeof(uint);
-            ushort offset = (ushort)(_dynamicValues[(int)index].Length / BlockCount);
-            SetDynamicValue(index, (ushort)((offset + 1) * BlockCount - 1), 0); // reserve space
-            for (ushort i = 0; i < BlockCount; ++i)
-                SetDynamicValue(index, (ushort)(offset * BlockCount + i), Extensions.SerializeObject(value)[i]);
-        }
-
-        bool PrintIndexError(object index, bool set)
-        {
-            Log.outError(LogFilter.Server, "Attempt {0} non-existed value field: {1} (count: {2}) for object typeid: {3} type mask: {4}", (set ? "set value to" : "get value from"), index, valuesCount, GetTypeId(), objectTypeId);
-
-            // ASSERT must fail after function call
-            return false;
+            AddToObjectUpdateIfNeeded();
         }
 
         public bool IsWorldObject()
@@ -1563,7 +939,7 @@ namespace Game.Entities
 
             GetMap().AddObjectToSwitchList(this, on);
         }
-        public void setActive(bool on)
+        public void SetActive(bool on)
         {
             if (m_isActive == on)
                 return;
@@ -1596,6 +972,17 @@ namespace Game.Entities
             }
         }
 
+        bool IsVisibilityOverridden() { return m_visibilityDistanceOverride.HasValue; }
+
+        public void SetVisibilityDistanceOverride(VisibilityDistanceType type)
+        {
+            Cypher.Assert(type < VisibilityDistanceType.Max);
+            if (GetTypeId() == TypeId.Player)
+                return;
+
+            m_visibilityDistanceOverride.Set(SharedConst.VisibilityDistances[(int)type]);
+        }
+
         public virtual void CleanupsBeforeDelete(bool finalCleanup = true)
         {
             if (IsInWorld)
@@ -1621,6 +1008,19 @@ namespace Game.Entities
             GetMap().GetZoneAndAreaId(GetPhaseShift(), out zoneid, out areaid, posX, posY, posZ);
         }
 
+        public bool IsInWorldPvpZone()
+        {
+            switch (GetZoneId())
+            {
+                case 4197: // Wintergrasp
+                case 5095: // Tol Barad
+                case 6941: // Ashran
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         public InstanceScript GetInstanceScript()
         {
             Map map = GetMap();
@@ -1629,29 +1029,25 @@ namespace Game.Entities
 
         public float GetGridActivationRange()
         {
-            if (IsTypeId(TypeId.Player))
+            if (IsActiveObject())
             {
-                if (ToPlayer().GetCinematicMgr().IsOnCinematic())
-                    return SharedConst.DefaultVisibilityInstance;
+                if (GetTypeId() == TypeId.Player && ToPlayer().GetCinematicMgr().IsOnCinematic())
+                    return Math.Max(SharedConst.DefaultVisibilityInstance, GetMap().GetVisibilityRange());
 
                 return GetMap().GetVisibilityRange();
             }
-            else if (IsTypeId(TypeId.Unit))
-                return ToCreature().m_SightDistance;
-            else if (IsTypeId(TypeId.DynamicObject))
-            {
-                if (isActiveObject())
-                    return GetMap().GetVisibilityRange();
-                else
-                    return 0.0f;
-            }
-            else
-                return 0.0f;
+            Creature thisCreature = ToCreature();
+            if (thisCreature != null)
+                return thisCreature.m_SightDistance;
+
+            return 0.0f;
         }
 
         public float GetVisibilityRange()
         {
-            if (isActiveObject() && !IsTypeId(TypeId.Player))
+            if (IsVisibilityOverridden() && !IsTypeId(TypeId.Player))
+                return m_visibilityDistanceOverride.Value;
+            else if (IsActiveObject() && !IsTypeId(TypeId.Player))
                 return SharedConst.MaxVisibilityDistance;
             else
                 return GetMap().GetVisibilityRange();
@@ -1663,7 +1059,9 @@ namespace Game.Entities
             {
                 if (IsTypeId(TypeId.Player))
                 {
-                    if (target != null && target.isActiveObject() && target.ToPlayer() == null)
+                    if (target != null && target.IsVisibilityOverridden() && !target.IsTypeId(TypeId.Player))
+                        return target.m_visibilityDistanceOverride.Value;
+                    else if (target != null && target.IsActiveObject() && !target.IsTypeId(TypeId.Player))
                         return SharedConst.MaxVisibilityDistance;
                     else if (ToPlayer().GetCinematicMgr().IsOnCinematic())
                         return SharedConst.DefaultVisibilityInstance;
@@ -1676,7 +1074,7 @@ namespace Game.Entities
                     return SharedConst.SightRangeUnit;
             }
 
-            if (IsTypeId(TypeId.DynamicObject) && isActiveObject())
+            if (IsTypeId(TypeId.DynamicObject) && IsActiveObject())
             {
                 return GetMap().GetVisibilityRange();
             }
@@ -1713,6 +1111,16 @@ namespace Game.Entities
                                 if (corpse.IsWithinDist(obj, GetSightRange(obj), false))
                                     corpseVisibility = true;
                         }
+                    }
+
+                    Unit target = obj.ToUnit();
+                    if (target)
+                    {
+                        // Don't allow to detect vehicle accessories if you can't see vehicle
+                        Unit vehicle = target.GetVehicleBase();
+                        if (vehicle)
+                            if (!thisPlayer.HaveAtClient(vehicle))
+                                return false;
                     }
                 }
 
@@ -1856,7 +1264,7 @@ namespace Game.Entities
             if (!HasInArc(MathFunctions.PI, obj))
                 return false;
 
-            GameObject go = ToGameObject();
+            GameObject go = obj.ToGameObject();
             for (int i = 0; i < (int)StealthType.Max; ++i)
             {
                 if (!Convert.ToBoolean(obj.m_stealth.GetFlags() & (1 << i)))
@@ -1907,14 +1315,6 @@ namespace Game.Entities
             return true;
         }
 
-        public void ForceValuesUpdateAtIndex(object _index)
-        {
-            int index = (int)_index;
-            _changesMask.Set(index, true);
-
-            AddToObjectUpdateIfNeeded();
-        }
-
         public virtual void SendMessageToSet(ServerPacket packet, bool self)
         {
             if (IsInWorld)
@@ -1935,8 +1335,8 @@ namespace Game.Entities
 
         public virtual void SetMap(Map map)
         {
-            Contract.Assert(map != null);
-            Contract.Assert(!IsInWorld);
+            Cypher.Assert(map != null);
+            Cypher.Assert(!IsInWorld);
 
             if (_currMap == map)
                 return;
@@ -1950,8 +1350,11 @@ namespace Game.Entities
 
         public virtual void ResetMap()
         {
-            Contract.Assert(_currMap != null);
-            Contract.Assert(!IsInWorld);
+            if (_currMap == null)
+                return;
+
+            Cypher.Assert(_currMap != null);
+            Cypher.Assert(!IsInWorld);
             if (IsWorldObject())
                 _currMap.RemoveWorldObject(this);
             _currMap = null;
@@ -2079,8 +1482,8 @@ namespace Game.Entities
 
             if (IsTypeId(TypeId.Player) || IsTypeId(TypeId.Unit))
             {
-                summon.SetFaction(ToUnit().getFaction());
-                summon.SetLevel(ToUnit().getLevel());
+                summon.SetFaction(ToUnit().GetFaction());
+                summon.SetLevel(ToUnit().GetLevel());
             }
 
             if (AI != null)
@@ -2090,7 +1493,7 @@ namespace Game.Entities
 
         public void SummonCreatureGroup(byte group, out List<TempSummon> list)
         {
-            Contract.Assert((IsTypeId(TypeId.GameObject) || IsTypeId(TypeId.Unit)), "Only GOs and creatures can summon npc groups!");
+            Cypher.Assert((IsTypeId(TypeId.GameObject) || IsTypeId(TypeId.Unit)), "Only GOs and creatures can summon npc groups!");
             list = new List<TempSummon>();
             var data = Global.ObjectMgr.GetSummonGroup(GetEntry(), IsTypeId(TypeId.GameObject) ? SummonerType.GameObject : SummonerType.Creature, group);
             if (data.Empty())
@@ -2134,6 +1537,14 @@ namespace Game.Entities
             return searcher.GetTarget();
         }
 
+        public Player SelectNearestPlayer(float distance)
+        {
+            var checker = new NearestPlayerInObjectRangeCheck(this, distance);
+            var searcher = new PlayerLastSearcher(this, checker);
+            Cell.VisitAllObjects(this, searcher, distance);
+            return searcher.GetTarget();
+        }
+
         public void GetGameObjectListWithEntryInGrid(List<GameObject> gameobjectList, uint entry = 0, float maxSearchRange = 250.0f)
         {
             var check = new AllGameObjectsWithEntryInRange(this, entry, maxSearchRange);
@@ -2162,7 +1573,11 @@ namespace Game.Entities
 
         public float GetObjectSize()
         {
-            return (valuesCount > (uint)UnitFields.CombatReach) ? GetFloatValue(UnitFields.CombatReach) : SharedConst.DefaultWorldObjectSize;
+            Unit thisUnit = ToUnit();
+            if (thisUnit != null)
+                return thisUnit.m_unitData.CombatReach;
+
+            return SharedConst.DefaultWorldObjectSize;
         }
 
         public bool IsInPhase(WorldObject obj)
@@ -2171,9 +1586,9 @@ namespace Game.Entities
         }
 
         public PhaseShift GetPhaseShift() { return _phaseShift; }
-        public void SetPhaseShift(PhaseShift phaseShift) { _phaseShift = phaseShift; }
+        public void SetPhaseShift(PhaseShift phaseShift) { _phaseShift = new PhaseShift(phaseShift); }
         public PhaseShift GetSuppressedPhaseShift() { return _suppressedPhaseShift; }
-        public void SetSuppressedPhaseShift(PhaseShift phaseShift) { _suppressedPhaseShift = phaseShift; }
+        public void SetSuppressedPhaseShift(PhaseShift phaseShift) { _suppressedPhaseShift = new PhaseShift(phaseShift); }
         public int GetDBPhase() { return _dbPhase; }
 
         // if negative it is used as PhaseGroupId
@@ -2222,7 +1637,7 @@ namespace Game.Entities
                 if (!player.HaveAtClient(this))
                     continue;
 
-                if (isTypeMask(TypeMask.Unit) && (ToUnit().GetCharmerGUID() == player.GetGUID()))// @todo this is for puppet
+                if (IsTypeMask(TypeMask.Unit) && (ToUnit().GetCharmerGUID() == player.GetGUID()))// @todo this is for puppet
                     continue;
 
                 DestroyForPlayer(player);
@@ -2269,27 +1684,30 @@ namespace Game.Entities
         public virtual string GetName(LocaleConstant locale_idx = LocaleConstant.enUS) { return _name; }
         public void SetName(string name) { _name = name; }
 
-        public ObjectGuid GetGUID() { return GetGuidValue(ObjectFields.Guid); }
-        public uint GetEntry() { return GetUInt32Value(ObjectFields.Entry); }
-        public void SetEntry(uint entry) { SetUInt32Value(ObjectFields.Entry, entry); }
+        public ObjectGuid GetGUID() { return m_guid; }
+        public uint GetEntry() { return m_objectData.EntryId; }
+        public void SetEntry(uint entry) { SetUpdateFieldValue(m_values.ModifyValue(m_objectData).ModifyValue(m_objectData.EntryId), entry); }
 
-        public float GetObjectScale() { return GetFloatValue(ObjectFields.ScaleX); }
-        public virtual void SetObjectScale(float scale) { SetFloatValue(ObjectFields.ScaleX, scale); }
+        public float GetObjectScale() { return m_objectData.Scale; }
+        public virtual void SetObjectScale(float scale) { SetUpdateFieldValue(m_values.ModifyValue(m_objectData).ModifyValue(m_objectData.Scale), scale); }
 
-        public TypeId GetTypeId() { return objectTypeId; }
+        public UnitDynFlags GetDynamicFlags() { return (UnitDynFlags)(uint)m_objectData.DynamicFlags; }
+        public bool HasDynamicFlag(UnitDynFlags flag) { return (m_objectData.DynamicFlags & (uint)flag) != 0; }
+        public void AddDynamicFlag(UnitDynFlags flag) { SetUpdateFieldFlagValue(m_values.ModifyValue(m_objectData).ModifyValue(m_objectData.DynamicFlags), (uint)flag); }
+        public void RemoveDynamicFlag(UnitDynFlags flag) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(m_objectData).ModifyValue(m_objectData.DynamicFlags), (uint)flag); }
+        public void SetDynamicFlags(UnitDynFlags flag) { SetUpdateFieldValue(m_values.ModifyValue(m_objectData).ModifyValue(m_objectData.DynamicFlags), (uint)flag); }
+
+        public TypeId GetTypeId() { return ObjectTypeId; }
         public bool IsTypeId(TypeId typeId) { return GetTypeId() == typeId; }
-        public bool isTypeMask(TypeMask mask) { return Convert.ToBoolean(mask & objectTypeMask); }
+        public bool IsTypeMask(TypeMask mask) { return Convert.ToBoolean(mask & ObjectTypeMask); }
 
-        public virtual bool hasQuest(uint questId) { return false; }
-        public virtual bool hasInvolvedQuest(uint questId) { return false; }
-
-        public void SetFieldNotifyFlag(uint flag) { _fieldNotifyFlags |= flag; }
-        public void RemoveFieldNotifyFlag(uint flag) { _fieldNotifyFlags &= ~flag; }
+        public virtual bool HasQuest(uint questId) { return false; }
+        public virtual bool HasInvolvedQuest(uint questId) { return false; }
 
         public bool IsCreature() { return GetTypeId() == TypeId.Unit; }
         public bool IsPlayer() { return GetTypeId() == TypeId.Player; }
         public bool IsGameObject() { return GetTypeId() == TypeId.GameObject; }
-        public bool IsUnit() { return isTypeMask(TypeMask.Unit); }
+        public bool IsUnit() { return IsTypeMask(TypeMask.Unit); }
         public bool IsCorpse() { return GetTypeId() == TypeId.Corpse; }
         public bool IsDynObject() { return GetTypeId() == TypeId.DynamicObject; }
         public bool IsAreaTrigger() { return GetTypeId() == TypeId.AreaTrigger; }
@@ -2313,13 +1731,13 @@ namespace Game.Entities
         public ZoneScript GetZoneScript() { return m_zoneScript; }
 
         public void AddToNotify(NotifyFlags f) { m_notifyflags |= f; }
-        public bool isNeedNotify(NotifyFlags f) { return Convert.ToBoolean(m_notifyflags & f); }
+        public bool IsNeedNotify(NotifyFlags f) { return Convert.ToBoolean(m_notifyflags & f); }
         NotifyFlags GetNotifyFlags() { return m_notifyflags; }
         bool NotifyExecuted(NotifyFlags f) { return Convert.ToBoolean(m_executed_notifies & f); }
         void SetNotified(NotifyFlags f) { m_executed_notifies |= f; }
         public void ResetAllNotifies() { m_notifyflags = 0; m_executed_notifies = 0; }
 
-        public bool isActiveObject() { return m_isActive; }
+        public bool IsActiveObject() { return m_isActive; }
         public bool IsPermanentWorldObject() { return m_isWorldObject; }
 
         public Transport GetTransport() { return m_transport; }
@@ -2391,7 +1809,7 @@ namespace Game.Entities
             return distsq < maxdist * maxdist;
         }
 
-        public bool IsWithinLOSInMap(WorldObject obj)
+        public bool IsWithinLOSInMap(WorldObject obj, ModelIgnoreFlags ignoreFlags = ModelIgnoreFlags.Nothing)
         {
             if (!IsInMap(obj))
                 return false;
@@ -2402,7 +1820,7 @@ namespace Game.Entities
             else
                 obj.GetHitSpherePointFor(GetPosition(), out x, out y, out z);
 
-            return IsWithinLOS(x, y, z);
+            return IsWithinLOS(x, y, z, ignoreFlags);
         }
 
         public float GetDistance(WorldObject obj)
@@ -2444,10 +1862,9 @@ namespace Game.Entities
 
         public bool IsInMap(WorldObject obj)
         {
-            var m = GetMap().GetId();
-            var b = obj.GetMap().GetId();
             if (obj != null)
-                return IsInWorld && obj.IsInWorld && m == b;
+                return IsInWorld && obj.IsInWorld && GetMap().GetId() == obj.GetMap().GetId();
+
             return false;
         }
 
@@ -2481,7 +1898,7 @@ namespace Game.Entities
             return obj && IsInMap(obj) && IsInPhase(obj) && _IsWithinDist(obj, dist2compare, is3D);
         }
 
-        public bool IsWithinLOS(float ox, float oy, float oz)
+        public bool IsWithinLOS(float ox, float oy, float oz, ModelIgnoreFlags ignoreFlags = ModelIgnoreFlags.Nothing)
         {
             if (IsInWorld)
             {
@@ -2491,7 +1908,7 @@ namespace Game.Entities
                 else
                     GetHitSpherePointFor(new Position(ox, oy, oz), out x, out y, out z);
 
-                return GetMap().isInLineOfSight(GetPhaseShift(), x, y, z + 2.0f, ox, oy, oz + 2.0f);
+                return GetMap().IsInLineOfSight(GetPhaseShift(), x, y, z + 2.0f, ox, oy, oz + 2.0f, ignoreFlags);
             }
 
             return true;
@@ -2580,12 +1997,12 @@ namespace Game.Entities
             return (size * size) >= GetExactDist2dSq(pos1.GetPositionX() + (float)Math.Cos(angle) * dist, pos1.GetPositionY() + (float)Math.Sin(angle) * dist);
         }
 
-        public bool isInFront(WorldObject target, float arc = MathFunctions.PI)
+        public bool IsInFront(WorldObject target, float arc = MathFunctions.PI)
         {
             return HasInArc(arc, target);
         }
 
-        public bool isInBack(WorldObject target, float arc = MathFunctions.PI)
+        public bool IsInBack(WorldObject target, float arc = MathFunctions.PI)
         {
             return !HasInArc(2 * MathFunctions.PI - arc, target);
         }
@@ -2775,9 +2192,8 @@ namespace Game.Entities
         public void MovePosition(ref Position pos, float dist, float angle)
         {
             angle += GetOrientation();
-            float destx, desty, destz, ground, floor;
-            destx = pos.posX + dist * (float)Math.Cos(angle);
-            desty = pos.posY + dist * (float)Math.Sin(angle);
+            float destx = pos.posX + dist * (float)Math.Cos(angle);
+            float desty = pos.posY + dist * (float)Math.Sin(angle);
 
             // Prevent invalid coordinates here, position is unchanged
             if (!GridDefines.IsValidMapCoord(destx, desty, pos.posZ))
@@ -2786,9 +2202,9 @@ namespace Game.Entities
                 return;
             }
 
-            ground = GetMap().GetHeight(GetPhaseShift(), destx, desty, MapConst.MaxHeight, true);
-            floor = GetMap().GetHeight(GetPhaseShift(), destx, desty, pos.posZ, true);
-            destz = Math.Abs(ground - pos.posZ) <= Math.Abs(floor - pos.posZ) ? ground : floor;
+            float ground = GetMap().GetHeight(GetPhaseShift(), destx, desty, MapConst.MaxHeight, true);
+            float floor = GetMap().GetHeight(GetPhaseShift(), destx, desty, pos.posZ, true);
+            float destz = Math.Abs(ground - pos.posZ) <= Math.Abs(floor - pos.posZ) ? ground : floor;
 
             float step = dist / 10.0f;
 
@@ -2831,7 +2247,7 @@ namespace Game.Entities
                         return z;
                 }
                 LiquidData liquid_status;
-                ZLiquidStatus res = obj.GetMap().getLiquidStatus(obj.GetPhaseShift(), x, y, z, MapConst.MapAllLiquidTypes, out liquid_status);
+                ZLiquidStatus res = obj.GetMap().GetLiquidStatus(obj.GetPhaseShift(), x, y, z, MapConst.MapAllLiquidTypes, out liquid_status);
                 if (res != 0 && liquid_status.level > helper) // water must be above ground
                 {
                     if (liquid_status.level > z) // z is underwater
@@ -2846,9 +2262,8 @@ namespace Game.Entities
         public void MovePositionToFirstCollision(ref Position pos, float dist, float angle)
         {
             angle += GetOrientation();
-            float destx, desty, destz;
-            destx = pos.posX + dist * (float)Math.Cos(angle);
-            desty = pos.posY + dist * (float)Math.Sin(angle);
+            float destx = pos.posX + dist * (float)Math.Cos(angle);
+            float desty = pos.posY + dist * (float)Math.Sin(angle);
 
             // Prevent invalid coordinates here, position is unchanged
             if (!GridDefines.IsValidMapCoord(destx, desty))
@@ -2857,8 +2272,8 @@ namespace Game.Entities
                 return;
             }
 
-            destz = NormalizeZforCollision(this, destx, desty, pos.GetPositionZ());
-            bool col = Global.VMapMgr.getObjectHitPos(PhasingHandler.GetTerrainMapId(GetPhaseShift(), GetMap(), pos.posX, pos.posY), pos.posX, pos.posY, pos.posZ + 0.5f, destx, desty, destz + 0.5f, out destx, out desty, out destz, -0.5f);
+            float destz = NormalizeZforCollision(this, destx, desty, pos.GetPositionZ());
+            bool col = Global.VMapMgr.GetObjectHitPos(PhasingHandler.GetTerrainMapId(GetPhaseShift(), GetMap(), pos.posX, pos.posY), pos.posX, pos.posY, pos.posZ + 0.5f, destx, desty, destz + 0.5f, out destx, out desty, out destz, -0.5f);
 
             // collision occured
             if (col)
@@ -2870,7 +2285,7 @@ namespace Game.Entities
             }
 
             // check dynamic collision
-            col = GetMap().getObjectHitPos(GetPhaseShift(), pos.posX, pos.posY, pos.posZ + 0.5f, destx, desty, destz + 0.5f, out destx, out desty, out destz, -0.5f);
+            col = GetMap().GetObjectHitPos(GetPhaseShift(), pos.posX, pos.posY, pos.posZ + 0.5f, destx, desty, destz + 0.5f, out destx, out desty, out destz, -0.5f);
 
             // Collided with a gameobject
             if (col)
@@ -2908,26 +2323,22 @@ namespace Game.Entities
         public void SetLocationInstanceId(uint _instanceId) { instanceId = _instanceId; }
 
         #region Fields
-        public TypeMask objectTypeMask { get; set; }
-        protected TypeId objectTypeId { get; set; }
-        protected UpdateFlag m_updateFlag { get; set; }
+        public TypeMask ObjectTypeMask { get; set; }
+        protected TypeId ObjectTypeId { get; set; }
+        protected CreateObjectBits m_updateFlag;
+        ObjectGuid m_guid;
 
-        protected Hashtable UpdateData;
-        protected uint[][] _dynamicValues;
-        protected BitArray _changesMask { get; set; }
-        protected Dictionary<int, DynamicFieldChangeType> _dynamicChangesMask = new Dictionary<int, DynamicFieldChangeType>();
-        protected BitArray[] _dynamicChangesArrayMask;
+        public UpdateFieldHolder m_values;
+        public ObjectFieldData m_objectData;
 
-        public uint valuesCount;
-        protected uint _dynamicValuesCount;
         public uint LastUsedScriptID;
 
-        protected uint _fieldNotifyFlags { get; set; }
         bool m_objectUpdated;
 
         public MovementInfo m_movementInfo;
         string _name;
         protected bool m_isActive;
+        Optional<float> m_visibilityDistanceOverride;
         bool m_isWorldObject;
         public ZoneScript m_zoneScript;
 
@@ -2960,11 +2371,21 @@ namespace Game.Entities
 
     public class MovementInfo
     {
+        public ObjectGuid Guid { get; set; }
+        MovementFlag flags;
+        MovementFlag2 flags2;
+        public Position Pos { get; set; }
+        public uint Time { get; set; }
+        public TransportInfo transport;
+        public float Pitch { get; set; }
+        public JumpInfo jump;
+        public float SplineElevation { get; set; }
+
         public MovementInfo()
         {
             Guid = ObjectGuid.Empty;
-            Flags = MovementFlag.None;
-            Flags2 = MovementFlag2.None;
+            flags = MovementFlag.None;
+            flags2 = MovementFlag2.None;
             Time = 0;
             Pitch = 0.0f;
 
@@ -2973,17 +2394,17 @@ namespace Game.Entities
             jump.Reset();
         }
 
-        public MovementFlag GetMovementFlags() { return Flags; }
-        public void SetMovementFlags(MovementFlag f) { Flags = f; }
-        public void AddMovementFlag(MovementFlag f) { Flags |= f; }
-        public void RemoveMovementFlag(MovementFlag f) { Flags &= ~f; }
-        public bool HasMovementFlag(MovementFlag f) { return Convert.ToBoolean(Flags & f); }
+        public MovementFlag GetMovementFlags() { return flags; }
+        public void SetMovementFlags(MovementFlag f) { flags = f; }
+        public void AddMovementFlag(MovementFlag f) { flags |= f; }
+        public void RemoveMovementFlag(MovementFlag f) { flags &= ~f; }
+        public bool HasMovementFlag(MovementFlag f) { return Convert.ToBoolean(flags & f); }
 
-        public MovementFlag2 GetMovementFlags2() { return Flags2; }
-        public void SetMovementFlags2(MovementFlag2 f) { Flags2 = f; }
-        public void AddMovementFlag2(MovementFlag2 f) { Flags2 |= f; }
-        public void RemoveMovementFlag2(MovementFlag2 f) { Flags2 &= ~f; }
-        public bool HasMovementFlag2(MovementFlag2 f) { return Convert.ToBoolean(Flags2 & f); }
+        public MovementFlag2 GetMovementFlags2() { return flags2; }
+        public void SetMovementFlags2(MovementFlag2 f) { flags2 = f; }
+        public void AddMovementFlag2(MovementFlag2 f) { flags2 |= f; }
+        public void RemoveMovementFlag2(MovementFlag2 f) { flags2 &= ~f; }
+        public bool HasMovementFlag2(MovementFlag2 f) { return Convert.ToBoolean(flags2 & f); }
 
         public void SetFallTime(uint time) { jump.fallTime = time; }
 
@@ -2997,15 +2418,7 @@ namespace Game.Entities
             jump.Reset();
         }
 
-        public ObjectGuid Guid { get; set; }
-        MovementFlag Flags { get; set; }
-        MovementFlag2 Flags2 { get; set; }
-        public Position Pos { get; set; }
-        public uint Time { get; set; }
-        public TransportInfo transport;
-        public float Pitch { get; set; }
-        public JumpInfo jump;
-        public float SplineElevation { get; set; }
+
 
         public struct TransportInfo
         {
@@ -3039,6 +2452,118 @@ namespace Game.Entities
             public float sinAngle;
             public float cosAngle;
             public float xyspeed;
+        }
+    }
+
+    public class MovementForce
+    {
+        public ObjectGuid ID;
+        public Vector3 Origin;
+        public Vector3 Direction;
+        public uint TransportID;
+        public float Magnitude;
+        public byte Type;
+
+        public void Read(WorldPacket data)
+        {
+            ID = data.ReadPackedGuid();
+            Origin = data.ReadVector3();
+            Direction = data.ReadVector3();
+            TransportID = data.ReadUInt32();
+            Magnitude = data.ReadFloat();
+            Type = data.ReadBits<byte>(2);
+            
+        }
+
+        public void Write(WorldPacket data)
+        {
+            MovementExtensions.WriteMovementForceWithDirection(this, data);
+        }
+    }
+
+    public class MovementForces
+    {
+        List<MovementForce> _forces = new List<MovementForce>();
+        float _modMagnitude = 1.0f;
+
+        public List<MovementForce> GetForces() { return _forces; }
+
+        public bool Add(MovementForce newForce)
+        {
+            var movementForce = FindMovementForce(newForce.ID);
+            if (movementForce == null)
+            {
+                _forces.Add(newForce);
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool Remove(ObjectGuid id)
+        {
+            var movementForce = FindMovementForce(id);
+            if (movementForce != null)
+            {
+                _forces.Remove(movementForce);
+                return true;
+            }
+
+            return false;
+        }
+
+        public float GetModMagnitude() { return _modMagnitude; }
+        public void SetModMagnitude(float modMagnitude) { _modMagnitude = modMagnitude; }
+
+        public bool IsEmpty() { return _forces.Empty() && _modMagnitude == 1.0f; }
+
+        MovementForce FindMovementForce(ObjectGuid id)
+        {
+            return _forces.Find(force => force.ID == id);
+        }
+    }
+
+    public struct CreateObjectBits
+    {
+        public bool NoBirthAnim;
+        public bool EnablePortals;
+        public bool PlayHoverAnim;
+        public bool MovementUpdate;
+        public bool MovementTransport;
+        public bool Stationary;
+        public bool CombatVictim;
+        public bool ServerTime;
+        public bool Vehicle;
+        public bool AnimKit;
+        public bool Rotation;
+        public bool AreaTrigger;
+        public bool GameObject;
+        public bool SmoothPhasing;
+        public bool ThisIsYou;
+        public bool SceneObject;
+        public bool ActivePlayer;
+        public bool Conversation;
+
+        public void Clear()
+        {
+            NoBirthAnim = false;
+            EnablePortals = false;
+            PlayHoverAnim = false;
+            MovementUpdate = false;
+            MovementTransport = false;
+            Stationary = false;
+            CombatVictim = false;
+            ServerTime = false;
+            Vehicle = false;
+            AnimKit = false;
+            Rotation = false;
+            AreaTrigger = false;
+            GameObject = false;
+            SmoothPhasing = false;
+            ThisIsYou = false;
+            SceneObject = false;
+            ActivePlayer = false;
+            Conversation = false;
         }
     }
 }

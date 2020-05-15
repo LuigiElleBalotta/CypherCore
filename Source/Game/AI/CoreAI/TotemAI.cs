@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,10 +54,9 @@ namespace Game.AI
             Unit victim = !i_victimGuid.IsEmpty() ? Global.ObjAccessor.GetUnit(me, i_victimGuid) : null;
 
             // Search victim if no, not attackable, or out of range, or friendly (possible in case duel end)
-            if (victim == null || !victim.isTargetableForAttack() || !me.IsWithinDistInMap(victim, max_range) ||
+            if (victim == null || !victim.IsTargetableForAttack() || !me.IsWithinDistInMap(victim, max_range) ||
                 me.IsFriendlyTo(victim) || !me.CanSeeOrDetect(victim))
             {
-                victim = null;
                 var u_check = new NearestAttackableUnitInObjectRangeCheck(me, me.GetCharmerOrOwnerOrSelf(), max_range);
                 var checker = new UnitLastSearcher(me, u_check);
                 Cell.VisitAllObjects(me, checker, max_range);

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -128,7 +128,7 @@ namespace Scripts.Northrend.Gundrak
 
         class instance_gundrak_InstanceMapScript : InstanceScript
         {
-            public instance_gundrak_InstanceMapScript(Map map) : base(map)
+            public instance_gundrak_InstanceMapScript(InstanceMap map) : base(map)
             {
                 SetHeaders("GD");
                 SetBossNumber(5);
@@ -163,7 +163,7 @@ namespace Scripts.Northrend.Gundrak
                         if (GetBossState(GDDataTypes.SladRan) == EncounterState.Done)
                         {
                             if (SladRanStatueState == GameObjectState.Active)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                             else
                                 go.SetGoState(GameObjectState.Active);
                         }
@@ -172,7 +172,7 @@ namespace Scripts.Northrend.Gundrak
                         if (GetBossState(GDDataTypes.Moorabi) == EncounterState.Done)
                         {
                             if (MoorabiStatueState == GameObjectState.Active)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                             else
                                 go.SetGoState(GameObjectState.Active);
                         }
@@ -181,7 +181,7 @@ namespace Scripts.Northrend.Gundrak
                         if (GetBossState(GDDataTypes.DrakkariColossus) == EncounterState.Done)
                         {
                             if (DrakkariColossusStatueState == GameObjectState.Active)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                             else
                                 go.SetGoState(GameObjectState.Active);
                         }
@@ -239,7 +239,7 @@ namespace Scripts.Northrend.Gundrak
                         {
                             GameObject go = GetGameObject(GDDataTypes.SladRanAltar);
                             if (go)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                         }
                         break;
                     case GDDataTypes.DrakkariColossus:
@@ -247,7 +247,7 @@ namespace Scripts.Northrend.Gundrak
                         {
                             GameObject go = GetGameObject(GDDataTypes.DrakkariColossusAltar);
                             if (go)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                         }
                         break;
                     case GDDataTypes.Moorabi:
@@ -255,7 +255,7 @@ namespace Scripts.Northrend.Gundrak
                         {
                             GameObject go = GetGameObject(GDDataTypes.MoorabiAltar);
                             if (go)
-                                go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                go.RemoveFlag(GameObjectFlags.NotSelectable);
                         }
                         break;
                     default:
@@ -423,7 +423,7 @@ namespace Scripts.Northrend.Gundrak
 
         public override bool OnGossipHello(Player player, GameObject go)
         {
-            go.SetFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+            go.AddFlag(GameObjectFlags.NotSelectable);
             go.SetGoState(GameObjectState.Active);
 
             InstanceScript instance = go.GetInstanceScript();

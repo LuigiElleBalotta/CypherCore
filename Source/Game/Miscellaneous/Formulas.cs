@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,16 +24,16 @@ namespace Game
 {
     public class Formulas
     {
-        public static float hk_honor_at_level_f(uint level, float multiplier = 1.0f)
+        public static float HKHonorAtLevelF(uint level, float multiplier = 1.0f)
         {
             float honor = multiplier * level * 1.55f;
             Global.ScriptMgr.OnHonorCalculation(honor, level, multiplier);
             return honor;
         }
 
-        public static uint hk_honor_at_level(uint level, float multiplier = 1.0f)
+        public static uint HKHonorAtLevel(uint level, float multiplier = 1.0f)
         {
-            return (uint)Math.Ceiling(hk_honor_at_level_f(level, multiplier));
+            return (uint)Math.Ceiling(HKHonorAtLevelF(level, multiplier));
         }
 
         public static uint GetGrayLevel(uint pl_level)
@@ -149,15 +149,15 @@ namespace Game
             {
                 float xpMod = 1.0f;
 
-                gain = BaseGain(player.getLevel(), u.GetLevelForTarget(player));
+                gain = BaseGain(player.GetLevel(), u.GetLevelForTarget(player));
 
                 if (gain != 0 && creature)
                 {
                     // Players get only 10% xp for killing creatures of lower expansion levels than himself
-                    if ((creature.GetCreatureTemplate().HealthScalingExpansion < (int)GetExpansionForLevel(player.getLevel())))
+                    if ((creature.GetCreatureTemplate().HealthScalingExpansion < (int)GetExpansionForLevel(player.GetLevel())))
                         gain = (uint)Math.Round(gain / 10.0f);
 
-                    if (creature.isElite())
+                    if (creature.IsElite())
                     {
                         // Elites in instances have a 2.75x XP bonus instead of the regular 2x world bonus.
                         if (u.GetMap().IsDungeon())

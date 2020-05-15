@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,9 +100,9 @@ class FileAppender : Appender, IDisposable
     }
 
     #region IDisposable Support
-    private bool disposedValue = false;
+    private bool disposedValue;
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (!disposedValue)
         {
@@ -164,7 +164,7 @@ class DBAppender : Appender
 
 abstract class Appender
 {
-    public Appender(byte id, string name, LogLevel level = LogLevel.Disabled, AppenderFlags flags = AppenderFlags.None)
+    protected Appender(byte id, string name, LogLevel level = LogLevel.Disabled, AppenderFlags flags = AppenderFlags.None)
     {
         _id = id;
         _name = name;
@@ -180,7 +180,7 @@ abstract class Appender
         StringBuilder ss = new StringBuilder();
 
         if (_flags.HasAnyFlag(AppenderFlags.PrefixTimestamp))
-            ss.AppendFormat("{0} ", message.mtime.ToString("MM/dd/yyyy HH:mm:ss"));
+            ss.AppendFormat("{0:MM/dd/yyyy HH:mm:ss} ", message.mtime);
 
         if (_flags.HasAnyFlag(AppenderFlags.PrefixLogLevel))
             ss.AppendFormat("{0}: ", message.level);

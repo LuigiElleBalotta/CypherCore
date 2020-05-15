@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,10 +32,10 @@ namespace Game
                 response.SuccessInfo.HasValue = true;
 
                 response.SuccessInfo.Value = new AuthResponse.AuthSuccessInfo();
-                response.SuccessInfo.Value.AccountExpansionLevel = (byte)GetAccountExpansion();
                 response.SuccessInfo.Value.ActiveExpansionLevel = (byte)GetExpansion();
+                response.SuccessInfo.Value.AccountExpansionLevel = (byte)GetAccountExpansion();
                 response.SuccessInfo.Value.VirtualRealmAddress = Global.WorldMgr.GetVirtualRealmAddress();
-                response.SuccessInfo.Value.Time = (uint)Time.UnixTime;
+                response.SuccessInfo.Value.Time = (uint)GameTime.GetGameTime();
 
                 var realm = Global.WorldMgr.GetRealm();
 
@@ -81,7 +81,7 @@ namespace Game
 
         public void SendSetTimeZoneInformation()
         {
-            /// @todo: replace dummy values
+            // @todo: replace dummy values
             SetTimeZoneInformation packet = new SetTimeZoneInformation();
             packet.ServerTimeTZ = "Europe/Paris";
             packet.GameTimeTZ = "Europe/Paris";
@@ -96,6 +96,9 @@ namespace Game
             features.BpayStoreDisabledByParentalControls = false;
             features.CharUndeleteEnabled = WorldConfig.GetBoolValue(WorldCfg.FeatureSystemCharacterUndeleteEnabled);
             features.BpayStoreEnabled = WorldConfig.GetBoolValue(WorldCfg.FeatureSystemBpayStoreEnabled);
+            features.MaxCharactersPerRealm = WorldConfig.GetIntValue(WorldCfg.CharactersPerRealm);
+            features.MinimumExpansionLevel = (int)Expansion.Classic;
+            features.MaximumExpansionLevel = WorldConfig.GetIntValue(WorldCfg.Expansion);
 
             SendPacket(features);
         }

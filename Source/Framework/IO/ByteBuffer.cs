@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -162,30 +162,30 @@ namespace Framework.IO
         //BitPacking
         public byte ReadBit()
         {
-            if (BitPosition == 8)
+            if (_bitPosition == 8)
             {
                 BitValue = ReadUInt8();
-                BitPosition = 0;
+                _bitPosition = 0;
             }
 
             int returnValue = BitValue;
             BitValue = (byte)(2 * returnValue);
-            ++BitPosition;
+            ++_bitPosition;
 
             return (byte)(returnValue >> 7);
         }
 
         public bool HasBit()
         {
-            if (BitPosition == 8)
+            if (_bitPosition == 8)
             {
                 BitValue = ReadUInt8();
-                BitPosition = 0;
+                _bitPosition = 0;
             }
 
             int returnValue = BitValue;
             BitValue = (byte)(2 * returnValue);
-            ++BitPosition;
+            ++_bitPosition;
 
             return Convert.ToBoolean(returnValue >> 7);
         }
@@ -203,70 +203,70 @@ namespace Framework.IO
         #endregion
 
         #region Write Methods
-        public void WriteInt8<T>(T data)
+        public void WriteInt8(sbyte data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToSByte(data));
+            writeStream.Write(data);
         }
 
-        public void WriteInt16<T>(T data)
+        public void WriteInt16(short data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToInt16(data));
+            writeStream.Write(data);
         }
 
-        public void WriteInt32<T>(T data)
+        public void WriteInt32(int data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToInt32(data));
+            writeStream.Write(data);
         }
 
-        public void WriteInt64<T>(T data)
+        public void WriteInt64(long data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToInt64(data));
+            writeStream.Write(data);
         }
 
-        public void WriteUInt8<T>(T data)
+        public void WriteUInt8(byte data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToByte(data));
+            writeStream.Write(data);
         }
 
-        public void WriteUInt16<T>(T data)
+        public void WriteUInt16(ushort data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToUInt16(data));
+            writeStream.Write(data);
         }
 
-        public void WriteUInt32<T>(T data)
+        public void WriteUInt32(uint data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToUInt32(data));
+            writeStream.Write(data);
         }
 
-        public void WriteUInt64<T>(T data)
+        public void WriteUInt64(ulong data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToUInt64(data));
+            writeStream.Write(data);
         }
 
-        public void WriteFloat<T>(T data)
+        public void WriteFloat(float data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToSingle(data));
+            writeStream.Write(data);
         }
 
-        public void WriteDouble<T>(T data)
+        public void WriteDouble(double data)
         {
             FlushBits();
-            writeStream.Write(Convert.ToDouble(data));
+            writeStream.Write(data);
         }
 
         /// <summary>
         /// Writes a string to the packet with a null terminated (0)
         /// </summary>
-        /// <param name="data"></param>
+        /// <param name="str"></param>
         public void WriteCString(string str)
         {
             if (string.IsNullOrEmpty(str))
@@ -281,6 +281,9 @@ namespace Framework.IO
 
         public void WriteString(string str)
         {
+            if (str.IsEmpty())
+                return;
+
             byte[] sBytes = Encoding.UTF8.GetBytes(str);
             WriteBytes(sBytes);
         }
@@ -300,44 +303,6 @@ namespace Framework.IO
         public void WriteBytes(ByteBuffer buffer)
         {
             WriteBytes(buffer.GetData());
-        }
-
-        public void Replace<T>(int pos, T value)
-        {
-            int retpos = (int)writeStream.BaseStream.Position;
-
-            writeStream.Seek(pos, SeekOrigin.Begin);
-            switch (typeof(T).Name)
-            {
-                case "Byte":
-                    WriteUInt8(Convert.ToByte(value));
-                    break;
-                case "SByte":
-                    WriteInt8(Convert.ToSByte(value));
-                    break;
-                case "Float":
-                    WriteFloat(Convert.ToSingle(value));
-                    break;
-                case "Int16":
-                    WriteInt16(Convert.ToInt16(value));
-                    break;
-                case "UInt16":
-                    WriteUInt16(Convert.ToUInt16(value));
-                    break;
-                case "Int32":
-                    WriteInt32(Convert.ToInt32(value));
-                    break;
-                case "UInt32":
-                    WriteUInt32(Convert.ToUInt32(value));
-                    break;
-                case "Int64":
-                    WriteInt64(Convert.ToInt64(value));
-                    break;
-                case "UInt64":
-                    WriteUInt64(Convert.ToUInt64(value));
-                    break;
-            }
-            writeStream.Seek(retpos, SeekOrigin.Begin);
         }
 
         public void WriteVector3(Vector3 pos)
@@ -364,16 +329,16 @@ namespace Framework.IO
 
         public bool WriteBit(object bit)
         {
-            --BitPosition;
+            --_bitPosition;
 
             if (Convert.ToBoolean(bit))
-                BitValue |= (byte)(1 << BitPosition);
+                BitValue |= (byte)(1 << _bitPosition);
 
-            if (BitPosition == 0)
+            if (_bitPosition == 0)
             {
                 writeStream.Write(BitValue);
 
-                BitPosition = 8;
+                _bitPosition = 8;
                 BitValue = 0;
             }
             return Convert.ToBoolean(bit);
@@ -382,7 +347,7 @@ namespace Framework.IO
         public void WriteBits(object bit, int count)
         {
             for (int i = count - 1; i >= 0; --i)
-                WriteBit((Convert.ToInt32(bit) >> i) & 1);
+                WriteBit((Convert.ToUInt32(bit) >> i) & 1);
         }
 
         public void WritePackedTime(long time)
@@ -398,52 +363,37 @@ namespace Framework.IO
         }
         #endregion
 
-        public int GetPosition()
+        public bool HasUnfinishedBitPack()
         {
-            long pos = 0;
-            if (writeStream != null)
-                pos = writeStream.BaseStream.Position;
-            else if (readStream != null)
-                pos = readStream.BaseStream.Position;
-
-            return (int)pos;
-        }
-
-        public void SetPosition(long pos)
-        {
-            if (writeStream != null)
-                writeStream.BaseStream.Position = pos;
-            else if (readStream != null)
-                readStream.BaseStream.Position = pos;
+            return _bitPosition != 8;
         }
 
         public void FlushBits()
         {
-            if (BitPosition == 8)
+            if (_bitPosition == 8)
                 return;
 
             writeStream.Write(BitValue);
             BitValue = 0;
-            BitPosition = 8;
+            _bitPosition = 8;
         }
 
         public void ResetBitPos()
         {
-            if (BitPosition > 7)
+            if (_bitPosition > 7)
                 return;
 
-            BitPosition = 8;
+            _bitPosition = 8;
             BitValue = 0;
         }
 
         public byte[] GetData()
         {
-            long pos;
             Stream stream = GetCurrentStream();
 
             var data = new byte[stream.Length];
 
-            pos = stream.Position;
+            long pos = stream.Position;
             stream.Seek(0, SeekOrigin.Begin);
             for (int i = 0; i < data.Length; i++)
                 data[i] = (byte)stream.ReadByte();
@@ -467,12 +417,12 @@ namespace Framework.IO
 
         public void Clear()
         {
-            BitPosition = 8;
+            _bitPosition = 8;
             BitValue = 0;
             writeStream = new BinaryWriter(new MemoryStream());
         }
 
-        byte BitPosition = 8;
+        byte _bitPosition = 8;
         byte BitValue;
         BinaryWriter writeStream;
         BinaryReader readStream;
