@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,11 +30,12 @@ namespace Game.Chat
 {
     public class Channel
     {
-        public Channel(uint channelId, Team team = 0, AreaTableRecord zoneEntry = null)
+        public Channel(ObjectGuid guid, uint channelId, Team team = 0, AreaTableRecord zoneEntry = null)
         {
             _channelFlags = ChannelFlags.General;
             _channelId = channelId;
             _channelTeam = team;
+            _channelGuid = guid;
             _zoneEntry = zoneEntry;
 
             ChatChannelsRecord channelEntry = CliDB.ChatChannelsStorage.LookupByKey(channelId);
@@ -50,12 +51,13 @@ namespace Game.Chat
                 _channelFlags |= ChannelFlags.NotLfg;
         }
 
-        public Channel(string name, Team team = 0)
+        public Channel(ObjectGuid guid, string name, Team team = 0)
         {
             _announceEnabled = true;
             _ownershipEnabled = true;
             _channelFlags = ChannelFlags.Custom;
             _channelTeam = team;
+            _channelGuid = guid;
             _channelName = name;
 
             // If storing custom channels in the db is enabled either load or save the channel
@@ -218,7 +220,7 @@ namespace Game.Chat
             bool newChannel = _playersStore.Empty();
 
             PlayerInfo playerInfo = new PlayerInfo();
-            playerInfo.SetInvisible(!player.isGMVisible());
+            playerInfo.SetInvisible(!player.IsGMVisible());
             _playersStore[guid] = playerInfo;
 
             /*
@@ -574,7 +576,7 @@ namespace Game.Chat
             Log.outDebug(LogFilter.ChatSystem, "SMSG_CHANNEL_LIST {0} Channel: {1}", player.GetSession().GetPlayerInfo(), channelName);
 
             ChannelListResponse list = new ChannelListResponse();
-            list.Display = true; /// always true?
+            list.Display = true; // always true?
             list.Channel = channelName;
             list.ChannelFlags = GetFlags();
 
@@ -659,7 +661,7 @@ namespace Game.Chat
             SendToAll(new ChannelSayBuilder(this, lang, what, guid), !playerInfo.IsModerator() ? guid : ObjectGuid.Empty);
         }
 
-        public void AddonSay(ObjectGuid guid, string prefix, string what)
+        public void AddonSay(ObjectGuid guid, string prefix, string what, bool isLogged)
         {
             if (what.IsEmpty())
                 return;
@@ -681,7 +683,7 @@ namespace Game.Chat
                 return;
             }
 
-            SendToAllWithAddon(new ChannelWhisperBuilder(this, Language.Addon, what, prefix, guid), prefix, !playerInfo.IsModerator() ? guid : ObjectGuid.Empty);
+            SendToAllWithAddon(new ChannelWhisperBuilder(this, isLogged ? Language.AddonLogged : Language.Addon, what, prefix, guid), prefix, !playerInfo.IsModerator() ? guid : ObjectGuid.Empty);
         }
 
         public void Invite(Player player, string newname)
@@ -696,7 +698,7 @@ namespace Game.Chat
             }
 
             Player newp = Global.ObjAccessor.FindPlayerByName(newname);
-            if (!newp || !newp.isGMVisible())
+            if (!newp || !newp.IsGMVisible())
             {
                 ChannelNameBuilder builder = new ChannelNameBuilder(this, new PlayerNotFoundAppend(newname));
                 SendToOne(builder, guid);
@@ -830,7 +832,7 @@ namespace Game.Chat
             }
         }
 
-        void SendToAll(MessageBuilder builder, ObjectGuid guid = default(ObjectGuid))
+        void SendToAll(MessageBuilder builder, ObjectGuid guid = default)
         {
             LocalizedPacketDo localizer = new LocalizedPacketDo(builder);
 
@@ -867,7 +869,7 @@ namespace Game.Chat
                 localizer.Invoke(player);
         }
 
-        void SendToAllWithAddon(MessageBuilder builder, string addonPrefix, ObjectGuid guid = default(ObjectGuid))
+        void SendToAllWithAddon(MessageBuilder builder, string addonPrefix, ObjectGuid guid = default)
         {
             LocalizedPacketDo localizer = new LocalizedPacketDo(builder);
 
@@ -881,6 +883,7 @@ namespace Game.Chat
         }
 
         public uint GetChannelId() { return _channelId; }
+        public ObjectGuid GetChannelGuid() { return _channelGuid; }
         public bool IsConstant() { return _channelId != 0; }
 
         public bool IsLFG() { return GetFlags().HasAnyFlag(ChannelFlags.Lfg); }
@@ -924,6 +927,7 @@ namespace Game.Chat
         ChannelFlags _channelFlags;
         uint _channelId;
         Team _channelTeam;
+        ObjectGuid _channelGuid;
         ObjectGuid _ownerGuid;
         string _channelName;
         string _channelPassword;

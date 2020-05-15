@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,10 +37,10 @@ namespace Scripts.Pets
 
             _isViper = Info.Entry == NpcViper ? true : false;
 
-            me.SetMaxHealth((uint)(107 * (me.getLevel() - 40) * 0.025f));
+            me.SetMaxHealth((uint)(107 * (me.GetLevel() - 40) * 0.025f));
             // Add delta to make them not all hit the same time
             uint delta = (RandomHelper.Rand32() % 7) * 100;
-            me.SetStatFloatValue(UnitFields.BaseAttackTime, Info.BaseAttackTime + delta);
+            me.SetBaseAttackTime(WeaponAttackType.BaseAttack, Info.BaseAttackTime + delta);
             //me.SetStatFloatValue(UnitFields.RangedAttackPower, (float)Info.AttackPower);
 
             // Start attacking attacker of owner on first ai update after spawn - move in line of sight may choose better target
@@ -48,8 +48,8 @@ namespace Scripts.Pets
             {
                 Unit owner = me.ToTempSummon().GetSummoner();
                 if (owner)
-                    if (owner.getAttackerForHelper())
-                        AttackStart(owner.getAttackerForHelper());
+                    if (owner.GetAttackerForHelper())
+                        AttackStart(owner.GetAttackerForHelper());
             }
 
             if (!_isViper)
@@ -69,7 +69,7 @@ namespace Scripts.Pets
                 {
                     if ((RandomHelper.Rand32() % 5) == 0)
                     {
-                        me.setAttackTimer(WeaponAttackType.BaseAttack, (RandomHelper.Rand32() % 10) * 100);
+                        me.SetAttackTimer(WeaponAttackType.BaseAttack, (RandomHelper.Rand32() % 10) * 100);
                         _spellTimer = (RandomHelper.Rand32() % 10) * 100;
                         AttackStart(who);
                     }

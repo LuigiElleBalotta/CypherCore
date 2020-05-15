@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +59,7 @@ namespace Scripts.Northrend
     {
         public npc_mageguard_dalaran(Creature creature) : base(creature)
         {
-            creature.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+            creature.AddUnitFlag(UnitFlags.NonAttackable);
             creature.ApplySpellImmune(0, SpellImmunity.Damage, (uint)SpellSchools.Normal, true);
             creature.ApplySpellImmune(0, SpellImmunity.Damage, SpellSchoolMask.Magic, true);
         }
@@ -93,7 +93,7 @@ namespace Scripts.Northrend
                     {
                         if (GetClosestCreatureWithEntry(me, DalaranConst.NpcAplleboughA, 32.0f))
                         {
-                            if (me.isInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
+                            if (me.IsInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
                                 DoCast(who, DalaranConst.SpellTrespasserA); // Teleport the Horde unit out
                         }
                         else                                      // In my line of sight, and "indoors"
@@ -105,7 +105,7 @@ namespace Scripts.Northrend
                     {
                         if (GetClosestCreatureWithEntry(me, DalaranConst.NpcSweetberryH, 32.0f))
                         {
-                            if (me.isInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
+                            if (me.IsInBackInMap(who, 12.0f))   // In my line of sight, "outdoors", and behind me
                                 DoCast(who, DalaranConst.SpellTrespasserH); // Teleport the Alliance unit out
                         }
                         else                                      // In my line of sight, and "indoors"
@@ -125,7 +125,7 @@ namespace Scripts.Northrend
     {
         public npc_minigob_manabonk(Creature creature) : base(creature)
         {
-            me.setActive(true);
+            me.SetActive(true);
         }
 
         public override void Reset()

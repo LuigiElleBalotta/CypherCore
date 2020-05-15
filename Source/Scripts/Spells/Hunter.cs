@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -246,7 +246,7 @@ namespace Scripts.Spells.Hunter
 
             // Do a mini Spell::CheckCasterAuras on the pet, no other way of doing this
             SpellCastResult result = SpellCastResult.SpellCastOk;
-            UnitFlags unitflag = (UnitFlags)pet.GetUInt32Value(UnitFields.Flags);
+            UnitFlags unitflag = (UnitFlags)(uint)pet.m_unitData.Flags;
             if (!pet.GetCharmerGUID().IsEmpty())
                 result = SpellCastResult.Charmed;
             else if (unitflag.HasAnyFlag(UnitFlags.Stunned))
@@ -298,7 +298,10 @@ namespace Scripts.Spells.Hunter
 
         void OnRemove(AuraEffect aurEff, AuraEffectHandleModes mode)
         {
-            if (GetTargetApplication().GetRemoveMode() != AuraRemoveMode.Default || !GetTarget().HasAura(SpellIds.MisdirectionProc))
+            if (GetTargetApplication().GetRemoveMode() == AuraRemoveMode.Default || GetTargetApplication().GetRemoveMode() == AuraRemoveMode.Interrupt)
+                return;
+            
+            if (!GetTarget().HasAura(SpellIds.MisdirectionProc))
                 GetTarget().ResetRedirectThreat();
         }
 
@@ -433,7 +436,7 @@ namespace Scripts.Spells.Hunter
             {
                 SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(p.Key);
 
-                ///! If spellId in cooldown map isn't valid, the above will return a null pointer.
+                //! If spellId in cooldown map isn't valid, the above will return a null pointer.
                 if (spellInfo.SpellFamilyName == SpellFamilyNames.Hunter &&
                 spellInfo.Id != SpellIds.Readiness &&
                 spellInfo.Id != SpellIds.BestialWrath &&
@@ -566,7 +569,7 @@ namespace Scripts.Spells.Hunter
             if (playerTarget)
             {
                 int baseAmount = aurEff.GetBaseAmount();
-                int amount = playerTarget.isMoving() ?
+                int amount = playerTarget.IsMoving() ?
                 playerTarget.CalculateSpellDamage(playerTarget, GetSpellInfo(), aurEff.GetEffIndex(), baseAmount) :
                 aurEff.GetAmount() - 1;
                 aurEff.SetAmount(amount);
@@ -621,7 +624,7 @@ namespace Scripts.Spells.Hunter
             Creature target = GetExplTargetUnit().ToCreature();
             if (target)
             {
-                if (target.getLevel() > caster.getLevel())
+                if (target.GetLevel() > caster.GetLevel())
                     return SpellCastResult.Highlevel;
 
                 // use SMSG_PET_TAME_FAILURE?

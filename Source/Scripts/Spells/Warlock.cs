@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -136,7 +136,7 @@ namespace Scripts.Spells.Warlock
             }
 
             // You take ${$s2/3}% reduced damage
-            float damageReductionPct = effect1.GetAmount() / 3;
+            float damageReductionPct = (float)effect1.GetAmount() / 3;
             // plus a random amount of up to ${$s2/3}% additional reduced damage
             damageReductionPct += RandomHelper.FRand(0.0f, damageReductionPct);
 
@@ -192,10 +192,10 @@ namespace Scripts.Spells.Warlock
                 return;
 
             AuraRemoveMode removeMode = GetTargetApplication().GetRemoveMode();
-            if (removeMode != AuraRemoveMode.ByDeath || !IsExpired())
+            if (removeMode != AuraRemoveMode.Death || !IsExpired())
                 return;
 
-            if (GetCaster().ToPlayer().isHonorOrXPTarget(GetTarget()))
+            if (GetCaster().ToPlayer().IsHonorOrXPTarget(GetTarget()))
                 GetCaster().CastSpell(GetTarget(), SpellIds.BaneOfDoomEffect, true, null, aurEff);
         }
 
@@ -257,7 +257,7 @@ namespace Scripts.Spells.Warlock
                 if (circle)
                 {
                     player.NearTeleportTo(circle.GetPositionX(), circle.GetPositionY(), circle.GetPositionZ(), circle.GetOrientation());
-                    player.RemoveMovementImpairingAuras();
+                    player.RemoveMovementImpairingAuras(false);
                 }
             }
         }
@@ -831,7 +831,7 @@ namespace Scripts.Spells.Warlock
 
 
         List<uint> _dotList = new List<uint>();
-        Unit _swapCaster = null;
+        Unit _swapCaster;
     }
 
     [Script] //! Soul Swap Copy Spells - 92795 - Simply copies spell IDs.
@@ -953,7 +953,7 @@ namespace Scripts.Spells.Warlock
             Unit caster = GetCaster();
             Unit target = GetHitUnit();
             if (target)
-                if (target.CanHaveThreatList() && target.GetThreatManager().getThreat(caster) > 0.0f)
+                if (target.CanHaveThreatList() && target.GetThreatManager().GetThreat(caster) > 0.0f)
                     caster.CastSpell(target, SpellIds.Soulshatter, true);
         }
 

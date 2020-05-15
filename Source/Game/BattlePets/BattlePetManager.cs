@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -195,7 +195,7 @@ namespace Game.BattlePets
         {
             PreparedStatement stmt;
 
-            foreach (var pair in _pets.ToList())
+            foreach (var pair in _pets)
             {
                 switch (pair.Value.SaveInfo)
                 {
@@ -406,7 +406,7 @@ namespace Game.BattlePets
                 return;
 
             // TODO: set proper CreatureID for spell DEFAULT_SUMMON_BATTLE_PET_SPELL (default EffectMiscValueA is 40721 - Murkimus the Gladiator)
-            _owner.GetPlayer().SetGuidValue(PlayerFields.SummonedBattlePetId, guid);
+            _owner.GetPlayer().SetSummonedBattlePetGUID(guid);
             _owner.GetPlayer().CastSpell(_owner.GetPlayer(), speciesEntry.SummonSpellID != 0 ? speciesEntry.SummonSpellID : SharedConst.DefaultSummonBattlePetSpell);
 
             // TODO: set pet level, quality... update fields
@@ -416,10 +416,10 @@ namespace Game.BattlePets
         {
             Player ownerPlayer = _owner.GetPlayer();
             Creature pet = ObjectAccessor.GetCreatureOrPetOrVehicle(ownerPlayer, ownerPlayer.GetCritterGUID());
-            if (pet && ownerPlayer.GetGuidValue(PlayerFields.SummonedBattlePetId) == pet.GetGuidValue(UnitFields.BattlePetCompanionGuid))
+            if (pet && ownerPlayer.m_activePlayerData.SummonedBattlePetGUID == pet.GetBattlePetCompanionGUID())
             {
                 pet.DespawnOrUnsummon();
-                ownerPlayer.SetGuidValue(PlayerFields.SummonedBattlePetId, ObjectGuid.Empty);
+                ownerPlayer.SetSummonedBattlePetGUID(ObjectGuid.Empty);
             }
         }
 
@@ -454,7 +454,7 @@ namespace Game.BattlePets
             _owner.SendPacket(battlePetError);
         }
 
-        public BattlePetSlot GetSlot(byte slot) { return _slots[slot]; }
+        public BattlePetSlot GetSlot(byte slot) { return slot < _slots.Count ? _slots[slot] : null; }
         WorldSession GetOwner() { return _owner; }
 
         public ushort GetTrapLevel() { return _trapLevel; }
@@ -474,18 +474,14 @@ namespace Game.BattlePets
         {
             public void CalculateStats()
             {
-                float health = 0.0f;
-                float power = 0.0f;
-                float speed = 0.0f;
-
                 // get base breed stats
                 var breedState = _battlePetBreedStates.LookupByKey(PacketInfo.Breed);
                 if (breedState == null) // non existing breed id
                     return;
 
-                health = breedState[BattlePetState.StatStamina];
-                power = breedState[BattlePetState.StatPower];
-                speed = breedState[BattlePetState.StatSpeed];
+                float health = breedState[BattlePetState.StatStamina];
+                float power = breedState[BattlePetState.StatPower];
+                float speed = breedState[BattlePetState.StatSpeed];
 
                 // modify stats depending on species - not all pets have this
                 var speciesState = _battlePetSpeciesStates.LookupByKey(PacketInfo.Species);

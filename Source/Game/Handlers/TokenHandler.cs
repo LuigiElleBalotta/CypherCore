@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ namespace Game
         {
             UpdateListedAuctionableTokensResponse response = new UpdateListedAuctionableTokensResponse();
 
-            /// @todo: fix 6.x implementation
+            // @todo: fix 6.x implementation
             response.UnkInt = updateListedAuctionableTokens.UnkInt;
             response.Result = TokenResult.Success;
 
@@ -40,7 +40,7 @@ namespace Game
         {
             WowTokenMarketPriceResponse response = new WowTokenMarketPriceResponse();
 
-            /// @todo: 6.x fix implementation
+            // @todo: 6.x fix implementation
             response.CurrentMarketPrice = 300000000;
             response.UnkInt = requestWowTokenMarketPrice.UnkInt;
             response.Result = TokenResult.Success;

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ namespace Game.Mails
             return this;
         }
 
-        void prepareItems(Player receiver, SQLTransaction trans)
+        void PrepareItems(Player receiver, SQLTransaction trans)
         {
             if (m_mailTemplateId == 0 || !m_mailTemplateItemsNeed)
                 return;
@@ -59,7 +59,7 @@ namespace Game.Mails
             Loot mailLoot = new Loot();
 
             // can be empty
-            mailLoot.FillLoot(m_mailTemplateId, LootStorage.Mail, receiver, true, true);
+            mailLoot.FillLoot(m_mailTemplateId, LootStorage.Mail, receiver, true, true, LootModes.Default, ItemContext.None);
 
             uint max_slot = mailLoot.GetMaxSlotInLootFor(receiver);
             for (uint i = 0; m_items.Count < SharedConst.MaxMailItems && i < max_slot; ++i)
@@ -67,7 +67,7 @@ namespace Game.Mails
                 LootItem lootitem = mailLoot.LootItemInSlot(i, receiver);
                 if (lootitem != null)
                 {
-                    Item item = Item.CreateItem(lootitem.itemid, lootitem.count, receiver);
+                    Item item = Item.CreateItem(lootitem.itemid, lootitem.count, lootitem.context, receiver);
                     if (item != null)
                     {
                         item.SaveToDB(trans);                           // save for prevent lost at next mail load, if send fail then item will deleted
@@ -77,16 +77,12 @@ namespace Game.Mails
             }
         }
 
-        void deleteIncludedItems(SQLTransaction trans, bool inDB = false)
+        void DeleteIncludedItems(SQLTransaction trans, bool inDB = false)
         {
             foreach (var item in m_items.Values)
             {
                 if (inDB)
-                {
-                    PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEM_INSTANCE);
-                    stmt.AddValue(0, item.GetGUID().GetCounter());
-                    trans.Append(stmt);
-                }
+                    item.DeleteFromDB(trans);
             }
 
             m_items.Clear();
@@ -99,11 +95,11 @@ namespace Game.Mails
 
             uint rc_account = 0;
             if (receiver == null)
-                rc_account = ObjectManager.GetPlayerAccountIdByGUID(receiverGuid);
+                rc_account = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(receiverGuid);
 
             if (receiver == null && rc_account == 0)                            // sender not exist
             {
-                deleteIncludedItems(trans, true);
+                DeleteIncludedItems(trans, true);
                 return;
             }
 
@@ -144,7 +140,7 @@ namespace Game.Mails
             Player pSender = Global.ObjAccessor.FindPlayer(ObjectGuid.Create(HighGuid.Player, sender.GetSenderId()));
 
             if (pReceiver != null)
-                prepareItems(pReceiver, trans);                            // generate mail template items
+                PrepareItems(pReceiver, trans);                            // generate mail template items
 
             uint mailId = Global.ObjectMgr.GenerateMailID();
 
@@ -229,10 +225,10 @@ namespace Game.Mails
                     }
                 }
                 else if (!m_items.Empty())
-                    deleteIncludedItems(null);
+                    DeleteIncludedItems(null);
             }
             else if (!m_items.Empty())
-                deleteIncludedItems(null);
+                DeleteIncludedItems(null);
         }
 
         uint GetMailTemplateId() { return m_mailTemplateId; }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ namespace Game.Chat.Commands
         [Command("god", RBACPermissions.CommandCheatGod)]
         static bool HandleGodModeCheat(StringArguments args, CommandHandler handler)
         {
-            if (handler.GetSession() == null || handler.GetSession().GetPlayer())
+            if (handler.GetSession() == null || !handler.GetSession().GetPlayer())
                 return false;
 
             string argstr = args.NextString();
@@ -53,7 +53,7 @@ namespace Game.Chat.Commands
         [Command("casttime", RBACPermissions.CommandCheatCasttime)]
         static bool HandleCasttimeCheat(StringArguments args, CommandHandler handler)
         {
-            if (handler.GetSession() == null || handler.GetSession().GetPlayer())
+            if (handler.GetSession() == null || !handler.GetSession().GetPlayer())
                 return false;
 
             string argstr = args.NextString();
@@ -80,7 +80,7 @@ namespace Game.Chat.Commands
         [Command("cooldown", RBACPermissions.CommandCheatCooldown)]
         static bool HandleCoolDownCheat(StringArguments args, CommandHandler handler)
         {
-            if (handler.GetSession() == null || handler.GetSession().GetPlayer())
+            if (handler.GetSession() == null || !handler.GetSession().GetPlayer())
                 return false;
 
             string argstr = args.NextString();
@@ -107,7 +107,7 @@ namespace Game.Chat.Commands
         [Command("power", RBACPermissions.CommandCheatPower)]
         static bool HandlePowerCheat(StringArguments args, CommandHandler handler)
         {
-            if (handler.GetSession() == null || handler.GetSession().GetPlayer())
+            if (handler.GetSession() == null || !handler.GetSession().GetPlayer())
                 return false;
 
             string argstr = args.NextString();
@@ -145,14 +145,14 @@ namespace Game.Chat.Commands
             handler.SendSysMessage(CypherStrings.CommandCheatCt, player.GetCommandStatus(PlayerCommandStates.Casttime) ? enabled : disabled);
             handler.SendSysMessage(CypherStrings.CommandCheatPower, player.GetCommandStatus(PlayerCommandStates.Power) ? enabled : disabled);
             handler.SendSysMessage(CypherStrings.CommandCheatWw, player.GetCommandStatus(PlayerCommandStates.Waterwalk) ? enabled : disabled);
-            handler.SendSysMessage(CypherStrings.CommandCheatTaxinodes, player.isTaxiCheater() ? enabled : disabled);
+            handler.SendSysMessage(CypherStrings.CommandCheatTaxinodes, player.IsTaxiCheater() ? enabled : disabled);
             return true;
         }
 
         [Command("waterwalk", RBACPermissions.CommandCheatWaterwalk)]
         static bool HandleWaterWalkCheat(StringArguments args, CommandHandler handler)
         {
-            if (handler.GetSession() == null || handler.GetSession().GetPlayer())
+            if (handler.GetSession() == null || !handler.GetSession().GetPlayer())
                 return false;
 
             string argstr = args.NextString();
@@ -184,20 +184,20 @@ namespace Game.Chat.Commands
         {
             string argstr = args.NextString();
 
-            Player chr = handler.getSelectedPlayer();
+            Player chr = handler.GetSelectedPlayer();
             if (!chr)
                 chr = handler.GetSession().GetPlayer();
             else if (handler.HasLowerSecurity(chr, ObjectGuid.Empty)) // check online security
                 return false;
 
             if (args.Empty())
-                argstr = (chr.isTaxiCheater()) ? "off" : "on";
+                argstr = (chr.IsTaxiCheater()) ? "off" : "on";
 
             if (argstr == "off")
             {
                 chr.SetTaxiCheater(false);
                 handler.SendSysMessage(CypherStrings.YouRemoveTaxis, handler.GetNameLink(chr));
-                if (handler.needReportToTarget(chr))
+                if (handler.NeedReportToTarget(chr))
                     chr.SendSysMessage(CypherStrings.YoursTaxisRemoved, handler.GetNameLink());
 
                 return true;
@@ -206,7 +206,7 @@ namespace Game.Chat.Commands
             {
                 chr.SetTaxiCheater(true);
                 handler.SendSysMessage(CypherStrings.YouGiveTaxis, handler.GetNameLink(chr));
-                if (handler.needReportToTarget(chr))
+                if (handler.NeedReportToTarget(chr))
                     chr.SendSysMessage(CypherStrings.YoursTaxisAdded, handler.GetNameLink());
                 return true;
             }
@@ -222,7 +222,7 @@ namespace Game.Chat.Commands
                 return false;
 
             int flag = args.NextInt32();
-            Player chr = handler.getSelectedPlayer();
+            Player chr = handler.GetSelectedPlayer();
             if (!chr)
             {
                 handler.SendSysMessage(CypherStrings.NoCharSelected);
@@ -232,22 +232,22 @@ namespace Game.Chat.Commands
             if (flag != 0)
             {
                 handler.SendSysMessage(CypherStrings.YouSetExploreAll, handler.GetNameLink(chr));
-                if (handler.needReportToTarget(chr))
+                if (handler.NeedReportToTarget(chr))
                     chr.SendSysMessage(CypherStrings.YoursExploreSetAll, handler.GetNameLink());
             }
             else
             {
                 handler.SendSysMessage(CypherStrings.YouSetExploreNothing, handler.GetNameLink(chr));
-                if (handler.needReportToTarget(chr))
+                if (handler.NeedReportToTarget(chr))
                     chr.SendSysMessage(CypherStrings.YoursExploreSetNothing, handler.GetNameLink());
             }
 
             for (ushort i = 0; i < PlayerConst.ExploredZonesSize; ++i)
             {
                 if (flag != 0)
-                    handler.GetSession().GetPlayer().SetFlag(PlayerFields.ExploredZones1 + i, 0xFFFFFFFF);
+                    handler.GetSession().GetPlayer().AddExploredZones(i, 0xFFFFFFFFFFFFFFFF);
                 else
-                    handler.GetSession().GetPlayer().SetFlag(PlayerFields.ExploredZones1 + i, 0);
+                    handler.GetSession().GetPlayer().RemoveExploredZones(i, 0xFFFFFFFFFFFFFFFF);
             }
 
             return true;

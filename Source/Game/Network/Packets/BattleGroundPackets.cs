@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,12 +30,16 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(CurrentSeason);
-            _worldPacket.WriteUInt32(PreviousSeason);
+            _worldPacket.WriteInt32(MythicPlusSeasonID);
+            _worldPacket.WriteInt32(CurrentSeason);
+            _worldPacket.WriteInt32(PreviousSeason);
+            _worldPacket.WriteInt32(PvpSeasonID);
         }
 
-        public uint PreviousSeason = 0;
-        public uint CurrentSeason = 0;
+        public int MythicPlusSeasonID;
+        public int PreviousSeason;
+        public int CurrentSeason;
+        public int PvpSeasonID;
     }
 
     public class AreaSpiritHealerQuery : ClientPacket
@@ -83,23 +87,18 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteBit(Ratings.HasValue);
-            _worldPacket.WriteBit(Winner.HasValue);
-            _worldPacket.WriteUInt32(Players.Count);
+            _worldPacket.WriteInt32(Statistics.Count);
             foreach (var id in PlayerCount)
                 _worldPacket.WriteInt8(id);
 
             if (Ratings.HasValue)
                 Ratings.Value.Write(_worldPacket);
 
-            if (Winner.HasValue)
-                _worldPacket.WriteUInt8(Winner.Value);
-
-            foreach (PlayerData player in Players)
+            foreach (PVPMatchPlayerStatistics player in Statistics)
                 player.Write(_worldPacket);
         }
 
-        public Optional<byte> Winner;
-        public List<PlayerData> Players = new List<PlayerData>();
+        public List<PVPMatchPlayerStatistics> Statistics = new List<PVPMatchPlayerStatistics>();
         public Optional<RatingData> Ratings;
         public sbyte[] PlayerCount = new sbyte[2];
 
@@ -136,7 +135,26 @@ namespace Game.Network.Packets
             public uint ContributionPoints;
         }
 
-        public class PlayerData
+        public struct PVPMatchPlayerPVPStat
+        {
+            public int PvpStatID;
+            public uint PvpStatValue;
+
+            public PVPMatchPlayerPVPStat(int pvpStatID, uint pvpStatValue)
+            {
+                PvpStatID = pvpStatID;
+                PvpStatValue = pvpStatValue;
+            }
+
+            public void Write(WorldPacket data)
+            {
+                data.WriteInt32(PvpStatID);
+                data.WriteUInt32(PvpStatValue);
+            }
+
+        }
+
+        public class PVPMatchPlayerStatistics
         {
             public void Write(WorldPacket data)
             {
@@ -144,12 +162,16 @@ namespace Game.Network.Packets
                 data.WriteUInt32(Kills);
                 data.WriteUInt32(DamageDone);
                 data.WriteUInt32(HealingDone);
-                data.WriteUInt32(Stats.Count);
+                data.WriteInt32(Stats.Count);
                 data.WriteInt32(PrimaryTalentTree);
-                data.WriteInt32(PrimaryTalentTreeNameIndex);
-                data.WriteInt32(PlayerRace);
-                if (!Stats.Empty())
-                    Stats.ForEach(id => data.WriteUInt32(id));
+                data.WriteInt32(Sex);
+                data.WriteUInt32((uint)PlayerRace);
+                data.WriteInt32(PlayerClass);
+                data.WriteInt32(CreatureID);
+                data.WriteInt32(HonorLevel);
+
+                foreach (var pvpStat in Stats)
+                        pvpStat.Write(data);
 
                 data.WriteBit(Faction);
                 data.WriteBit(IsInWorld);
@@ -187,11 +209,13 @@ namespace Game.Network.Packets
             public Optional<int> RatingChange;
             public Optional<uint> PreMatchMMR;
             public Optional<int> MmrChange;
-            public List<uint> Stats = new List<uint>();
+            public List<PVPMatchPlayerPVPStat> Stats = new List<PVPMatchPlayerPVPStat>();
             public int PrimaryTalentTree;
-            public int PrimaryTalentTreeNameIndex;  // controls which name field from ChrSpecialization.dbc will be sent to lua
+            public int Sex;
             public Race PlayerRace;
-            public uint Prestige;
+            public int PlayerClass;
+            public int CreatureID;
+            public int HonorLevel;
         }
     }
 
@@ -279,7 +303,7 @@ namespace Game.Network.Packets
         {
             Ticket.Write(_worldPacket);
             _worldPacket.WriteUInt64(QueueID);
-            _worldPacket.WriteUInt32(Reason);
+            _worldPacket.WriteInt32(Reason);
             _worldPacket.WritePackedGuid(ClientID);
         }
 
@@ -295,16 +319,17 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            QueueID = _worldPacket.ReadUInt64();
+            var queueCount = _worldPacket.ReadUInt32();
             Roles = _worldPacket.ReadUInt8();
             BlacklistMap[0] = _worldPacket.ReadInt32();
             BlacklistMap[1] = _worldPacket.ReadInt32();
-            JoinAsGroup = _worldPacket.HasBit();
+
+            for (var i = 0; i < queueCount; ++i)
+                QueueIDs[i] = _worldPacket.ReadUInt64();
         }
 
-        public bool JoinAsGroup = false;
-        public byte Roles = 0;
-        public ulong QueueID = 0;
+        public Array<ulong> QueueIDs = new Array<ulong>(1);
+        public byte Roles;
         public int[] BlacklistMap = new int[2];
     }
 
@@ -365,9 +390,10 @@ namespace Game.Network.Packets
             _worldPacket.WriteInt32(BattlemasterListID);
             _worldPacket.WriteUInt8(MinLevel);
             _worldPacket.WriteUInt8(MaxLevel);
-            _worldPacket.WriteUInt32(Battlefields.Count);
-            if (!Battlefields.Empty())
-                Battlefields.ForEach(field => _worldPacket.WriteInt32(field));
+            _worldPacket.WriteInt32(Battlefields.Count);
+
+            foreach (var field in Battlefields)
+                _worldPacket.WriteInt32(field);
 
             _worldPacket.WriteBit(PvpAnywhere);
             _worldPacket.WriteBit(HasRandomWinToday);
@@ -439,7 +465,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(Offender);
-            _worldPacket.WriteUInt8(Result);
+            _worldPacket.WriteUInt8((byte)Result);
             _worldPacket.WriteUInt8(NumBlackMarksOnOffender);
             _worldPacket.WriteUInt8(NumPlayersIHaveReported);
         }
@@ -464,8 +490,9 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket .WriteUInt32(FlagCarriers.Count);
-            FlagCarriers.ForEach(pos => pos.Write(_worldPacket));
+            _worldPacket.WriteInt32(FlagCarriers.Count);
+            foreach (var pos in FlagCarriers)
+                pos.Write(_worldPacket);
         }
 
         public List<BattlegroundPlayerPosition> FlagCarriers = new List<BattlegroundPlayerPosition>();
@@ -540,21 +567,6 @@ namespace Game.Network.Packets
         public RequestRatedBattlefieldInfo(WorldPacket packet) : base(packet) { }
 
         public override void Read() { }
-    }
-
-    public class ArenaError : ServerPacket
-    {
-        public ArenaError() : base(ServerOpcodes.ArenaError) { }
-
-        public override void Write()
-        {
-            _worldPacket.WriteUInt32(ErrorType);
-            if (ErrorType == ArenaErrorType.NoTeam)
-                _worldPacket.WriteUInt8(TeamSize);
-        }
-
-        public ArenaErrorType ErrorType;
-        public byte TeamSize;
     }
 
     //Structs

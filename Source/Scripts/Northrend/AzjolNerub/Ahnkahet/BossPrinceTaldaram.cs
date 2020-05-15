@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -262,7 +262,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.PrinceTaldaram
 
         void RemovePrison()
         {
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.RemoveUnitFlag(UnitFlags.NotSelectable);
             me.RemoveAurasDueToSpell(SpellIds.BeamVisual);
             me.SetHomePosition(me.GetPositionX(), me.GetPositionY(), Misc.DataGroundPositionZ, me.GetOrientation());
             DoCast(SpellIds.HoverFall);
@@ -316,7 +316,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.PrinceTaldaram
                         {
                             DoCast(me, SpellIds.FlameSpherePeriodic, true);
 
-                            /// @todo: find correct values
+                            // @todo: find correct values
                             float angleOffset = 0.0f;
                             float distOffset = Misc.DataSphereDistance;
 
@@ -342,7 +342,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.PrinceTaldaram
                             float x = me.GetPositionX() + distOffset * (float)Math.Cos(angle);
                             float y = me.GetPositionY() + distOffset * (float)Math.Sin(angle);
 
-                            /// @todo: correct speed
+                            // @todo: correct speed
                             me.GetMotionMaster().MovePoint(0, x, y, me.GetPositionZ());
                             break;
                         }
@@ -373,7 +373,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.PrinceTaldaram
             Creature PrinceTaldaram = ObjectAccessor.GetCreature(go, instance.GetGuidData(DataTypes.PrinceTaldaram));
             if (PrinceTaldaram && PrinceTaldaram.IsAlive())
             {
-                go.SetFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                go.AddFlag(GameObjectFlags.NotSelectable);
                 go.SetGoState(GameObjectState.Active);
 
                 switch (go.GetEntry())

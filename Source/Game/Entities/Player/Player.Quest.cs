@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,6 @@ using Game.Network.Packets;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.Entities
 {
@@ -42,8 +41,37 @@ namespace Game.Entities
         void AddTimedQuest(uint questId) { m_timedquests.Add(questId); }
         public void RemoveTimedQuest(uint questId) { m_timedquests.Remove(questId); }
 
-        public List<uint> getRewardedQuests() { return m_RewardedQuests; }
-        Dictionary<uint, QuestStatusData> getQuestStatusMap() { return m_QuestStatus; }
+        public List<uint> GetRewardedQuests() { return m_RewardedQuests; }
+        Dictionary<uint, QuestStatusData> GetQuestStatusMap() { return m_QuestStatus; }
+
+        public int GetQuestMinLevel(Quest quest)
+        {
+            if (quest.Level == -1 && quest.ScalingFactionGroup != 0)
+            {
+                ChrRacesRecord race = CliDB.ChrRacesStorage.LookupByKey(GetRace());
+                FactionTemplateRecord raceFaction = CliDB.FactionTemplateStorage.LookupByKey(race.FactionID);
+                if (raceFaction == null || raceFaction.FactionGroup != quest.ScalingFactionGroup)
+                    return quest.MaxScalingLevel;
+            }
+            return quest.MinLevel;
+        }
+
+        public int GetQuestLevel(Quest quest)
+        {
+            if (quest == null)
+                return 0;
+
+            if (quest.Level == -1)
+            {
+                int minLevel = GetQuestMinLevel(quest);
+                int maxLevel = quest.MaxScalingLevel;
+                int level = (int)GetLevel();
+                if (level >= minLevel)
+                    return Math.Min(level, maxLevel);
+                return minLevel;
+            }
+            return quest.Level;
+        }
 
         public int GetRewardedQuestCount() { return m_RewardedQuests.Count; }
 
@@ -117,7 +145,7 @@ namespace Game.Entities
 
         public void DailyReset()
         {
-            foreach (uint questId in GetDynamicValues(PlayerDynamicFields.DailyQuests))
+            foreach (uint questId in m_activePlayerData.DailyQuestsCompleted)
             {
                 uint questBit = Global.DB2Mgr.GetQuestUniqueBitFlag(questId);
                 if (questBit != 0)
@@ -125,10 +153,10 @@ namespace Game.Entities
             }
 
             DailyQuestsReset dailyQuestsReset = new DailyQuestsReset();
-            dailyQuestsReset.Count = GetDynamicValues(PlayerDynamicFields.DailyQuests).Length;
+            dailyQuestsReset.Count = m_activePlayerData.DailyQuestsCompleted.Size();
             SendPacket(dailyQuestsReset);
 
-            ClearDynamicValue(PlayerDynamicFields.DailyQuests);
+            ClearDynamicUpdateFieldValues(m_values.ModifyValue(m_activePlayerData).ModifyValue(m_activePlayerData.DailyQuestsCompleted));
 
             m_DFQuests.Clear(); // Dungeon Finder Quests.
 
@@ -198,7 +226,7 @@ namespace Game.Entities
             switch (questGiver.GetTypeId())
             {
                 case TypeId.Unit:
-                    return GetNPCIfCanInteractWith(questGiver.GetGUID(), NPCFlags.QuestGiver) != null;
+                    return GetNPCIfCanInteractWith(questGiver.GetGUID(), NPCFlags.QuestGiver, NPCFlags2.None) != null;
                 case TypeId.GameObject:
                     return GetGameObjectIfCanInteractWith(questGiver.GetGUID(), GameObjectTypes.QuestGiver) != null;
                 case TypeId.Player:
@@ -209,14 +237,6 @@ namespace Game.Entities
                     break;
             }
             return false;
-        }
-
-        public uint GetQuestLevel(Quest quest)
-        {
-            if (quest == null)
-                return getLevel();
-            
-            return (uint)(quest.Level > 0 ? quest.Level : Math.Min((int)getLevel(), quest.MaxScalingLevel));
         }
 
         public bool IsQuestRewarded(uint quest_id)
@@ -241,7 +261,7 @@ namespace Game.Entities
                 //we should obtain map from GetMap() in 99% of cases. Special case
                 //only for quests which cast teleport spells on player
                 Map _map = IsInWorld ? GetMap() : Global.MapMgr.FindMap(GetMapId(), GetInstanceId());
-                Contract.Assert(_map != null);
+                Cypher.Assert(_map != null);
                 GameObject gameObject = _map.GetGameObject(guid);
                 if (gameObject != null)
                 {
@@ -280,7 +300,7 @@ namespace Game.Entities
             }
         }
 
-        public void SendPreparedQuest(ObjectGuid guid)
+        public void SendPreparedQuest(WorldObject source)
         {
             QuestMenu questMenu = PlayerTalkClass.GetQuestMenu();
             if (questMenu.IsEmpty())
@@ -298,36 +318,35 @@ namespace Game.Entities
                 {
                     if (qmi0.QuestIcon == 4)
                     {
-                        PlayerTalkClass.SendQuestGiverRequestItems(quest, guid, CanRewardQuest(quest, false), true);
+                        PlayerTalkClass.SendQuestGiverRequestItems(quest, source.GetGUID(), CanRewardQuest(quest, false), true);
                         return;
                     }
                     // Send completable on repeatable and autoCompletable quest if player don't have quest
                     // @todo verify if check for !quest.IsDaily() is really correct (possibly not)
                     else
                     {
-                        WorldObject obj = Global.ObjAccessor.GetObjectByTypeMask(this, guid, TypeMask.Unit | TypeMask.GameObject | TypeMask.Item);
-                        if (!obj || (!obj.hasQuest(questId) && !obj.hasInvolvedQuest(questId)))
+                        if (!source.HasQuest(questId) && !source.HasInvolvedQuest(questId))
                         {
                             PlayerTalkClass.SendCloseGossip();
                             return;
                         }
 
-                        if (!obj.IsTypeId(TypeId.Unit) || obj.HasFlag64(UnitFields.NpcFlags, NPCFlags.Gossip))
+                        if (!source.IsTypeId(TypeId.Unit) || source.ToUnit().HasNpcFlag(NPCFlags.Gossip))
                         {
                             if (quest.IsAutoAccept() && CanAddQuest(quest, true) && CanTakeQuest(quest, true))
-                                AddQuestAndCheckCompletion(quest, obj);
+                                AddQuestAndCheckCompletion(quest, source);
 
                             if (quest.IsAutoComplete() && quest.IsRepeatable() && !quest.IsDailyOrWeekly())
-                                PlayerTalkClass.SendQuestGiverRequestItems(quest, guid, CanCompleteRepeatableQuest(quest), true);
+                                PlayerTalkClass.SendQuestGiverRequestItems(quest, source.GetGUID(), CanCompleteRepeatableQuest(quest), true);
                             else
-                                PlayerTalkClass.SendQuestGiverQuestDetails(quest, guid, true, false);
+                                PlayerTalkClass.SendQuestGiverQuestDetails(quest, source.GetGUID(), true, false);
                             return;
                         }
                     }
                 }
             }
 
-            PlayerTalkClass.SendQuestGiverQuestListMessage(guid);
+            PlayerTalkClass.SendQuestGiverQuestListMessage(source);
         }
 
         public bool IsActiveQuest(uint quest_id)
@@ -343,7 +362,7 @@ namespace Game.Entities
             switch (guid.GetHigh())
             {
                 case HighGuid.Player:
-                    Contract.Assert(quest.HasFlag(QuestFlags.AutoComplete));
+                    Cypher.Assert(quest.HasFlag(QuestFlags.AutoComplete));
                     return Global.ObjectMgr.GetQuestTemplate(nextQuestID);
                 case HighGuid.Creature:
                 case HighGuid.Pet:
@@ -361,7 +380,7 @@ namespace Game.Entities
                         //we should obtain map from GetMap() in 99% of cases. Special case
                         //only for quests which cast teleport spells on player
                         Map _map = IsInWorld ? GetMap() : Global.MapMgr.FindMap(GetMapId(), GetInstanceId());
-                        Contract.Assert(_map != null);
+                        Cypher.Assert(_map != null);
                         GameObject gameObject = _map.GetGameObject(guid);
                         if (gameObject != null)
                             objectQR = Global.ObjectMgr.GetGOQuestRelationBounds(gameObject.GetEntry());
@@ -391,7 +410,7 @@ namespace Game.Entities
                 SatisfyQuestPrevChain(quest, false) && SatisfyQuestDay(quest, false) && SatisfyQuestWeek(quest, false) &&
                 SatisfyQuestMonth(quest, false) && SatisfyQuestSeasonal(quest, false))
             {
-                return getLevel() + WorldConfig.GetIntValue(WorldCfg.QuestHighLevelHideDiff) >= quest.MinLevel;
+                return GetLevel() + WorldConfig.GetIntValue(WorldCfg.QuestHighLevelHideDiff) >= GetQuestMinLevel(quest);
             }
 
             return false;
@@ -561,10 +580,12 @@ namespace Game.Entities
             {
                 case TypeId.Unit:
                     Global.ScriptMgr.OnQuestAccept(this, (questGiver.ToCreature()), quest);
-                    questGiver.ToCreature().GetAI().sQuestAccept(this, quest);
+                    questGiver.ToCreature().GetAI().QuestAccept(this, quest);
                     break;
                 case TypeId.Item:
                 case TypeId.Container:
+                case TypeId.AzeriteItem:
+                case TypeId.AzeriteEmpoweredItem:
                     {
                         Item item = (Item)questGiver;
                         Global.ScriptMgr.OnQuestAccept(this, item, quest);
@@ -755,6 +776,20 @@ namespace Game.Entities
                 UpdatePvPState();
             }
 
+            if (quest.SourceSpellID > 0)
+            {
+                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(quest.SourceSpellID);
+                Unit caster = this;
+                if (questGiver != null && questGiver.IsTypeMask(TypeMask.Unit) && !quest.HasFlag(QuestFlags.PlayerCastOnAccept) && !spellInfo.HasTargetType(Targets.UnitCaster) && !spellInfo.HasTargetType(Targets.DestCasterSummon))
+                {
+                    Unit unit = questGiver.ToUnit();
+                    if (unit != null)
+                        unit.CastSpell(this, quest.SourceSpellID, true);
+                }
+
+                caster.CastSpell(this, quest.SourceSpellID, true);
+            }
+
             SetQuestSlot(log_slot, quest_id, qtime);
 
             m_QuestStatusSave[quest_id] = QuestSaveType.Default;
@@ -798,7 +833,7 @@ namespace Game.Entities
 
         public uint GetQuestMoneyReward(Quest quest)
         {
-            return (uint)(quest.MoneyValue(getLevel()) * WorldConfig.GetFloatValue(WorldCfg.RateMoneyQuest));
+            return (uint)(quest.MoneyValue(this) * WorldConfig.GetFloatValue(WorldCfg.RateMoneyQuest));
         }
 
         public uint GetQuestXPReward(Quest quest)
@@ -809,7 +844,7 @@ namespace Game.Entities
             if (rewarded && !quest.IsDFQuest())
                 return 0;
 
-            uint XP = (uint)(quest.XPValue(getLevel()) * WorldConfig.GetFloatValue(WorldCfg.RateXpQuest));
+            uint XP = (uint)(quest.XPValue(this) * WorldConfig.GetFloatValue(WorldCfg.RateXpQuest));
 
             // handle SPELL_AURA_MOD_XP_QUEST_PCT auras
             var ModXPPctAuras = GetAuraEffectsByType(AuraType.ModXpQuestPct);
@@ -834,7 +869,7 @@ namespace Game.Entities
                 case QuestPackageFilter.LootSpecialization:
                     return rewardProto.IsUsableByLootSpecialization(this, true);
                 case QuestPackageFilter.Class:
-                    return rewardProto.ItemSpecClassMask == 0 || (rewardProto.ItemSpecClassMask & getClassMask()) != 0;
+                    return rewardProto.ItemSpecClassMask == 0 || (rewardProto.ItemSpecClassMask & GetClassMask()) != 0;
                 case QuestPackageFilter.Everyone:
                     return true;
                 default:
@@ -861,7 +896,7 @@ namespace Game.Entities
                         List<ItemPosCount> dest = new List<ItemPosCount>();
                         if (CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, questPackageItem.ItemID, questPackageItem.ItemQuantity) == InventoryResult.Ok)
                         {
-                            Item item = StoreNewItem(dest, questPackageItem.ItemID, true, ItemEnchantment.GenerateItemRandomPropertyId(questPackageItem.ItemID));
+                            Item item = StoreNewItem(dest, questPackageItem.ItemID, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(questPackageItem.ItemID));
                             SendNewItem(item, questPackageItem.ItemQuantity, true, false);
                         }
                     }
@@ -881,7 +916,7 @@ namespace Game.Entities
                         List<ItemPosCount> dest = new List<ItemPosCount>();
                         if (CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, questPackageItem.ItemID, questPackageItem.ItemQuantity) == InventoryResult.Ok)
                         {
-                            Item item = StoreNewItem(dest, questPackageItem.ItemID, true, ItemEnchantment.GenerateItemRandomPropertyId(questPackageItem.ItemID));
+                            Item item = StoreNewItem(dest, questPackageItem.ItemID, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(questPackageItem.ItemID));
                             SendNewItem(item, questPackageItem.ItemQuantity, true, false);
                         }
                     }
@@ -935,7 +970,7 @@ namespace Game.Entities
                         List<ItemPosCount> dest = new List<ItemPosCount>();
                         if (CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, reward, quest.RewardChoiceItemCount[i]) == InventoryResult.Ok)
                         {
-                            Item item = StoreNewItem(dest, reward, true, ItemEnchantment.GenerateItemRandomPropertyId(reward));
+                            Item item = StoreNewItem(dest, reward, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(reward));
                             SendNewItem(item, quest.RewardChoiceItemCount[i], true, false);
                         }
                     }
@@ -956,11 +991,11 @@ namespace Game.Entities
                         List<ItemPosCount> dest = new List<ItemPosCount>();
                         if (CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, itemId, quest.RewardItemCount[i]) == InventoryResult.Ok)
                         {
-                            Item item = StoreNewItem(dest, itemId, true, ItemEnchantment.GenerateItemRandomPropertyId(itemId));
+                            Item item = StoreNewItem(dest, itemId, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(itemId));
                             SendNewItem(item, quest.RewardItemCount[i], true, false);
                         }
                         else if (quest.IsDFQuest())
-                            SendItemRetrievalMail(quest.RewardItemId[i], quest.RewardItemCount[i]);
+                            SendItemRetrievalMail(quest.RewardItemId[i], quest.RewardItemCount[i], ItemContext.QuestReward);
                     }
                 }
             }
@@ -984,7 +1019,7 @@ namespace Game.Entities
             uint XP = GetQuestXPReward(quest);
 
             int moneyRew = 0;
-            if (getLevel() < WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
+            if (GetLevel() < WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
                 GiveXP(XP, null);
             else
                 moneyRew = (int)(quest.GetRewMoneyMaxLevel() * WorldConfig.GetFloatValue(WorldCfg.RateDropMoney));
@@ -1000,7 +1035,7 @@ namespace Game.Entities
             }
 
             // honor reward
-            uint honor = quest.CalculateHonorGain(getLevel());
+            uint honor = quest.CalculateHonorGain(GetLevel());
             if (honor != 0)
                 RewardHonor(null, 0, (int)honor);
 
@@ -1057,17 +1092,15 @@ namespace Game.Entities
             if (quest.RewardSpell > 0)
             {
                 SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(quest.RewardSpell);
-                if (questGiver && questGiver.isTypeMask(TypeMask.Unit) 
-                    && !spellInfo.HasEffect(Difficulty.None, SpellEffectName.LearnSpell) 
-                    && !spellInfo.HasEffect(Difficulty.None, SpellEffectName.CreateItem) 
-                    && !spellInfo.HasEffect(Difficulty.None, SpellEffectName.ApplyAura))
+                Unit caster = this;
+                if (questGiver != null && questGiver.IsTypeMask(TypeMask.Unit) && !quest.HasFlag(QuestFlags.PlayerCastOnComplete) && !spellInfo.HasTargetType(Targets.UnitCaster))
                 {
                     Unit unit = questGiver.ToUnit();
-                    if (unit)
-                        unit.CastSpell(this, quest.RewardSpell, true);
+                    if (unit != null)
+                        caster = unit;
                 }
-                else
-                    CastSpell(this, quest.RewardSpell, true);
+
+                caster.CastSpell(this, quest.RewardSpell, true);
             }
             else
             {
@@ -1076,22 +1109,21 @@ namespace Game.Entities
                     if (quest.RewardDisplaySpell[i] > 0)
                     {
                         SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(quest.RewardDisplaySpell[i]);
-                        if (questGiver && questGiver.IsTypeId(TypeId.Unit)
-                            && !spellInfo.HasEffect(Difficulty.None, SpellEffectName.LearnSpell)
-                            && !spellInfo.HasEffect(Difficulty.None, SpellEffectName.CreateItem))
+                        Unit caster = this;
+                        if (questGiver != null && questGiver.IsTypeMask(TypeMask.Unit) && !quest.HasFlag(QuestFlags.PlayerCastOnComplete) && !spellInfo.HasTargetType(Targets.UnitCaster))
                         {
                             Unit unit = questGiver.ToUnit();
-                            if (unit)
-                                unit.CastSpell(this, quest.RewardDisplaySpell[i], true);
+                            if (unit != null)
+                                caster = unit;
                         }
-                        else
-                            CastSpell(this, quest.RewardDisplaySpell[i], true);
+
+                        caster.CastSpell(this, quest.RewardDisplaySpell[i], true);
                     }
                 }
             }
 
             if (quest.QuestSortID > 0)
-                UpdateCriteria(CriteriaTypes.CompleteQuestsInZone, (ulong)quest.QuestSortID);
+                UpdateCriteria(CriteriaTypes.CompleteQuestsInZone, quest.Id);
 
             UpdateCriteria(CriteriaTypes.CompleteQuestCount);
             UpdateCriteria(CriteriaTypes.CompleteQuest, quest.Id);
@@ -1233,7 +1265,7 @@ namespace Game.Entities
 
         public bool SatisfyQuestLevel(Quest qInfo, bool msg)
         {
-            if (getLevel() < qInfo.MinLevel)
+            if (GetLevel() < GetQuestMinLevel(qInfo))
             {
                 if (msg)
                 {
@@ -1243,7 +1275,7 @@ namespace Game.Entities
                 return false;
             }
 
-            if (qInfo.MaxLevel > 0 && getLevel() > qInfo.MaxLevel)
+            if (qInfo.MaxLevel > 0 && GetLevel() > qInfo.MaxLevel)
             {
                 if (msg)
                 {
@@ -1362,7 +1394,7 @@ namespace Game.Entities
             if (reqClass == 0)
                 return true;
 
-            if ((reqClass & getClassMask()) == 0)
+            if ((reqClass & GetClassMask()) == 0)
             {
                 if (msg)
                 {
@@ -1382,7 +1414,7 @@ namespace Game.Entities
             if (reqraces == -1)
                 return true;
 
-            if ((reqraces & (long)getRaceMask()) == 0)
+            if ((reqraces & (long)GetRaceMask()) == 0)
             {
                 if (msg)
                 {
@@ -1590,12 +1622,7 @@ namespace Game.Entities
                 return true;
             }
 
-            var dailies = GetDynamicValues(PlayerDynamicFields.DailyQuests);
-            foreach (var dailyQuestId in dailies)
-                if (dailyQuestId == qInfo.Id)
-                    return false;
-
-            return true;
+            return m_activePlayerData.DailyQuestsCompleted.FindIndex(qInfo.Id) == -1;
         }
 
         public bool SatisfyQuestWeek(Quest qInfo, bool msg)
@@ -1612,12 +1639,12 @@ namespace Game.Entities
             if (!qInfo.IsSeasonal() || m_seasonalquests.Empty())
                 return true;
 
-            ushort eventId = Global.GameEventMgr.GetEventIdForQuest(qInfo);
-            if (!m_seasonalquests.ContainsKey(eventId) || m_seasonalquests[eventId].Empty())
+            var list = m_seasonalquests.LookupByKey(qInfo.GetEventIdForQuest());
+            if (list == null || list.Empty())
                 return true;
 
             // if not found in cooldown list
-            return !m_seasonalquests[eventId].Contains(qInfo.Id);
+            return !list.Contains(qInfo.Id);
         }
 
         public bool SatisfyQuestMonth(Quest qInfo, bool msg)
@@ -1684,9 +1711,12 @@ namespace Game.Entities
                     }
 
                     bool destroyItem = true;
-                    foreach (QuestObjective obj in quest.Objectives)
-                        if (obj.Type == QuestObjectiveType.Item && srcItemId == obj.ObjectID)
-                            destroyItem = false;
+                    if (item.GetStartQuest() == questId)
+                    {
+                        foreach (QuestObjective obj in quest.Objectives)
+                            if (obj.Type == QuestObjectiveType.Item && srcItemId == obj.ObjectID)
+                                destroyItem = false;
+                    }
 
                     if (destroyItem)
                         DestroyItemCount(srcItemId, count, true, true);
@@ -1702,13 +1732,7 @@ namespace Game.Entities
             if (qInfo != null)
             {
                 if (qInfo.IsSeasonal() && !qInfo.IsRepeatable())
-                {
-                    ushort eventId = Global.GameEventMgr.GetEventIdForQuest(qInfo);
-                    if (m_seasonalquests.ContainsKey(eventId))
-                        return m_seasonalquests[eventId].Contains(quest_id);
-
-                    return false;
-                }
+                    return !SatisfyQuestSeasonal(qInfo, false);
 
                 // for repeatable quests: rewarded field is set after first reward only to prevent getting XP more than once
                 if (!qInfo.IsRepeatable())
@@ -1731,12 +1755,9 @@ namespace Game.Entities
                 if (quest != null)
                 {
                     if (quest.IsSeasonal() && !quest.IsRepeatable())
-                    {
-                        ushort eventId = Global.GameEventMgr.GetEventIdForQuest(quest);
-                        if (!m_seasonalquests.ContainsKey(eventId) || !m_seasonalquests[eventId].Contains(questId))
-                            return QuestStatus.None;
-                    }
-                    if (!quest.IsRepeatable() && m_RewardedQuests.Contains(questId))
+                        return SatisfyQuestSeasonal(quest, false) ? QuestStatus.None : QuestStatus.Rewarded;
+
+                    if (!quest.IsRepeatable() && IsQuestRewarded(questId))
                         return QuestStatus.Rewarded;
                 }
             }
@@ -1810,7 +1831,7 @@ namespace Game.Entities
                 {
                     if (spell.flags.HasAnyFlag(SpellAreaFlag.AutoRemove) && !spell.IsFitToRequirements(this, zone, area))
                         RemoveAurasDueToSpell(spell.spellId);
-                    else if (spell.flags.HasAnyFlag(SpellAreaFlag.AutoCast))
+                    else if (spell.flags.HasAnyFlag(SpellAreaFlag.AutoCast) && !spell.flags.HasAnyFlag(SpellAreaFlag.IgnoreAutocastOnQuestStatusChange))
                         if (!HasAura(spell.spellId))
                             CastSpell(this, spell.spellId, true);
                 }
@@ -1860,9 +1881,6 @@ namespace Game.Entities
                 if (quest == null)
                     continue;
 
-                if (!Global.ConditionMgr.IsObjectMeetingNotGroupedConditions(ConditionSourceType.QuestAvailable, quest.Id, this))
-                    continue;
-
                 QuestStatus status = GetQuestStatus(questId);
                 if (status == QuestStatus.Complete && !GetQuestRewardStatus(questId))
                     result2 = QuestGiverStatus.Reward;
@@ -1893,7 +1911,7 @@ namespace Game.Entities
                     {
                         if (SatisfyQuestLevel(quest, false))
                         {
-                            if (getLevel() <= (GetQuestLevel(quest) + WorldConfig.GetIntValue(WorldCfg.QuestLowLevelHideDiff)))
+                            if (GetLevel() <= (GetQuestLevel(quest) + WorldConfig.GetIntValue(WorldCfg.QuestLowLevelHideDiff)))
                             {
                                 if (quest.IsDaily())
                                     result2 = QuestGiverStatus.AvailableRep;
@@ -1955,34 +1973,37 @@ namespace Game.Entities
 
         public uint GetQuestSlotQuestId(ushort slot)
         {
-            return GetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.Id);
+            return m_playerData.QuestLog[slot].QuestID;
         }
 
         public uint GetQuestSlotState(ushort slot, byte counter)
         {
-            return GetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.State);
+            return m_playerData.QuestLog[slot].StateFlags;
         }
 
         public ushort GetQuestSlotCounter(ushort slot, byte counter)
         {
             if (counter < SharedConst.MaxQuestCounts)
-                return GetUInt16Value(PlayerFields.QuestLog + slot * QuestSlotOffsets.Max + QuestSlotOffsets.Counts + counter /2, (byte)(counter % 2));
+                return m_playerData.QuestLog[slot].ObjectiveProgress[counter];
 
             return 0;
         }
 
         public uint GetQuestSlotTime(ushort slot)
         {
-            return GetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.Time);
+            return m_playerData.QuestLog[slot].EndTime;
         }
 
         public void SetQuestSlot(ushort slot, uint quest_id, uint timer = 0)
         {
-            SetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.Id, quest_id);
-            SetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.State, 0);
-            for (int i = 0; i < SharedConst.MaxQuestCounts / 2; ++i)
-                SetUInt32Value(PlayerFields.QuestLog + slot * QuestSlotOffsets.Max + QuestSlotOffsets.Counts + i, 0);
-            SetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.Time, timer);
+            var questLogField = m_values.ModifyValue(m_playerData).ModifyValue(m_playerData.QuestLog, slot);
+            SetUpdateFieldValue(questLogField.ModifyValue(questLogField.QuestID), quest_id);
+            SetUpdateFieldValue(questLogField.ModifyValue(questLogField.StateFlags), 0u);
+
+            for (int i = 0; i < SharedConst.MaxQuestCounts; ++i)
+                SetUpdateFieldValue(ref questLogField.ModifyValue(questLogField.ObjectiveProgress, i), (ushort)0);
+
+            SetUpdateFieldValue(questLogField.ModifyValue(questLogField.EndTime), timer);
         }
 
         public void SetQuestSlotCounter(ushort slot, byte counter, ushort count)
@@ -1990,22 +2011,24 @@ namespace Game.Entities
             if (counter >= SharedConst.MaxQuestCounts)
                 return;
 
-            SetUInt16Value(PlayerFields.QuestLog + slot * QuestSlotOffsets.Max + QuestSlotOffsets.Counts + counter / 2, (byte)(counter % 2), count);
+            SetUpdateFieldValue(ref m_playerData.ModifyValue(m_playerData.QuestLog, slot).ModifyValue((QuestLog questLogField) => questLogField.ObjectiveProgress, counter), count);
         }
 
         public void SetQuestSlotState(ushort slot, QuestSlotStateMask state)
         {
-            SetFlag(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.State, state);
+            QuestLog questLogField = m_playerData.ModifyValue(m_playerData.QuestLog, slot);
+            SetUpdateFieldFlagValue(questLogField.ModifyValue(questLogField.StateFlags), (uint)state);
         }
 
         public void RemoveQuestSlotState(ushort slot, QuestSlotStateMask state)
         {
-            RemoveFlag(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.State, state);
+            QuestLog questLogField = m_playerData.ModifyValue(m_playerData.QuestLog, slot);
+            RemoveUpdateFieldFlagValue(questLogField.ModifyValue(questLogField.StateFlags), (uint)state);
         }
 
         public void SetQuestSlotTimer(ushort slot, uint timer)
         {
-            SetUInt32Value(PlayerFields.QuestLog + (slot * QuestSlotOffsets.Max) + QuestSlotOffsets.Time, timer);
+            SetUpdateFieldValue(m_values.ModifyValue(m_playerData).ModifyValue(m_playerData.QuestLog, slot).ModifyValue((QuestLog questLog) => questLog.EndTime), timer);
         }
 
         void SetQuestCompletedBit(uint questBit, bool completed)
@@ -2013,11 +2036,15 @@ namespace Game.Entities
             if (questBit == 0)
                 return;
 
-            int fieldOffset = ((int)questBit - 1) >> 5;
+            uint fieldOffset = (questBit - 1) >> 6;
             if (fieldOffset >= PlayerConst.QuestsCompletedBitsSize)
                 return;
 
-            ApplyModFlag(PlayerFields.QuestCompleted + fieldOffset, (uint)(1 << (((int)questBit - 1) & 31)), completed);
+            ulong flag = 1ul << (((int)questBit - 1) & 63);
+            if (completed)
+                SetUpdateFieldFlagValue(ref m_values.ModifyValue(m_activePlayerData).ModifyValue(m_activePlayerData.QuestCompleted, (int)fieldOffset), flag);
+            else
+                RemoveUpdateFieldFlagValue(ref m_values.ModifyValue(m_activePlayerData).ModifyValue(m_activePlayerData.QuestCompleted, (int)fieldOffset), flag);
         }
 
         public void AreaExploredOrEventHappens(uint questId)
@@ -2052,7 +2079,7 @@ namespace Game.Entities
             var group = GetGroup();
             if (group)
             {
-                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                 {
                     Player player = refe.GetSource();
 
@@ -2154,7 +2181,7 @@ namespace Game.Entities
 
         public void KilledMonster(CreatureTemplate cInfo, ObjectGuid guid)
         {
-            Contract.Assert(cInfo != null);
+            Cypher.Assert(cInfo != null);
 
             if (cInfo.Entry != 0)
                 KilledMonsterCredit(cInfo.Entry, guid);
@@ -2164,7 +2191,7 @@ namespace Game.Entities
                     KilledMonsterCredit(cInfo.KillCredit[i]);
         }
 
-        public void KilledMonsterCredit(uint entry, ObjectGuid guid = default(ObjectGuid))
+        public void KilledMonsterCredit(uint entry, ObjectGuid guid = default)
         {
             ushort addKillCount = 1;
             uint real_entry = entry;
@@ -2191,7 +2218,7 @@ namespace Game.Entities
 
                 // just if !ingroup || !noraidgroup || raidgroup
                 QuestStatusData q_status = m_QuestStatus[questid];
-                if (q_status.Status == QuestStatus.Incomplete && (GetGroup() == null || !GetGroup().isRaidGroup() || qInfo.IsAllowedInRaid(GetMap().GetDifficultyID())))
+                if (q_status.Status == QuestStatus.Incomplete && (GetGroup() == null || !GetGroup().IsRaidGroup() || qInfo.IsAllowedInRaid(GetMap().GetDifficultyID())))
                 {
                     if (qInfo.HasSpecialFlag(QuestSpecialFlags.Kill))// && !qInfo.HasSpecialFlag(QuestSpecialFlags.Cast))
                     {
@@ -2238,7 +2265,7 @@ namespace Game.Entities
 
                 // just if !ingroup || !noraidgroup || raidgroup
                 QuestStatusData q_status = m_QuestStatus[questid];
-                if (q_status.Status == QuestStatus.Incomplete && (GetGroup() == null || !GetGroup().isRaidGroup() || qInfo.IsAllowedInRaid(GetMap().GetDifficultyID())))
+                if (q_status.Status == QuestStatus.Incomplete && (GetGroup() == null || !GetGroup().IsRaidGroup() || qInfo.IsAllowedInRaid(GetMap().GetDifficultyID())))
                 {
                     foreach (QuestObjective obj in qInfo.Objectives)
                     {
@@ -2262,7 +2289,7 @@ namespace Game.Entities
             }
         }
 
-        public void KillCreditGO(uint entry, ObjectGuid guid = default(ObjectGuid))
+        public void KillCreditGO(uint entry, ObjectGuid guid = default)
         {
             ushort addCastCount = 1;
             for (byte i = 0; i < SharedConst.MaxQuestLogSize; ++i)
@@ -2525,7 +2552,7 @@ namespace Game.Entities
                         continue;
 
                     // hide quest if player is in raid-group and quest is no raid quest
-                    if (GetGroup() != null && GetGroup().isRaidGroup() && !qInfo.IsAllowedInRaid(GetMap().GetDifficultyID()))
+                    if (GetGroup() != null && GetGroup().IsRaidGroup() && !qInfo.IsAllowedInRaid(GetMap().GetDifficultyID()))
                         if (!InBattleground()) //there are two ways.. we can make every bg-quest a raidquest, or add this code here.. i don't know if this can be exploited by other quests, but i think all other quests depend on a specific area.. but keep this in mind, if something strange happens later
                             continue;
 
@@ -2722,7 +2749,7 @@ namespace Game.Entities
 
             uint moneyReward;
 
-            if (getLevel() < WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
+            if (GetLevel() < WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
             {
                 moneyReward = GetQuestMoneyReward(quest);
             }
@@ -2863,7 +2890,7 @@ namespace Game.Entities
                     if (!questgiver || questgiver.IsHostileTo(this))
                         continue;
 
-                    if (!questgiver.HasFlag64(UnitFields.NpcFlags, NPCFlags.QuestGiver))
+                    if (!questgiver.HasNpcFlag(NPCFlags.QuestGiver))
                         continue;
 
                     response.QuestGiver.Add(new QuestGiverInfo(questgiver.GetGUID(), GetQuestDialogStatus(questgiver)));
@@ -2918,7 +2945,7 @@ namespace Game.Entities
                     if (qInfo == null)
                         continue;
 
-                    if (GetGroup() != null && GetGroup().isRaidGroup() && !qInfo.IsAllowedInRaid(GetMap().GetDifficultyID()))
+                    if (GetGroup() != null && GetGroup().IsRaidGroup() && !qInfo.IsAllowedInRaid(GetMap().GetDifficultyID()))
                         continue;
 
                     foreach (QuestObjective obj in qInfo.Objectives)
@@ -2956,7 +2983,7 @@ namespace Game.Entities
                         continue;
 
                     // check if this unit requires quest specific flags
-                    if (!obj.HasFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick))
+                    if (!obj.HasNpcFlag(NPCFlags.SpellClick))
                         continue;
 
                     var clickPair = Global.ObjectMgr.GetSpellClickInfoMapBounds(obj.GetEntry());
@@ -2992,7 +3019,7 @@ namespace Game.Entities
             {
                 if (!qQuest.IsDFQuest())
                 {
-                    AddDynamicValue(PlayerDynamicFields.DailyQuests, quest_id);
+                    AddDynamicUpdateFieldValue(m_values.ModifyValue(m_activePlayerData).ModifyValue(m_activePlayerData.DailyQuestsCompleted), quest_id);
                     m_lastDailyQuestTime = Time.UnixTime;              // last daily quest time
                     m_DailyQuestChanged = true;
 
@@ -3008,21 +3035,7 @@ namespace Game.Entities
 
         public bool IsDailyQuestDone(uint quest_id)
         {
-            bool found = false;
-            if (Global.ObjectMgr.GetQuestTemplate(quest_id) != null)
-            {
-                var dailies = GetDynamicValues(PlayerDynamicFields.DailyQuests);
-                foreach (uint dailyQuestId in dailies)
-                {
-                    if (dailyQuestId == quest_id)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-
-            return found;
+            return m_activePlayerData.DailyQuestsCompleted.FindIndex(quest_id) >= 0;
         }
 
         void SetWeeklyQuestStatus(uint quest_id)
@@ -3037,7 +3050,7 @@ namespace Game.Entities
             if (quest == null)
                 return;
 
-            m_seasonalquests.Add(Global.GameEventMgr.GetEventIdForQuest(quest), quest_id);
+            m_seasonalquests.Add(quest.GetEventIdForQuest(), quest_id);
             m_SeasonalQuestChanged = true;
         }
 

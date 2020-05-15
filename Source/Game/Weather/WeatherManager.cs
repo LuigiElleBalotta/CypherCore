@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -136,7 +136,7 @@ namespace Game
                 return false;
             }
 
-            /// Weather statistics:
+            // Weather statistics:
             // 30% - no change
             // 30% - weather gets better (if not fine) or change weather type
             // 30% - weather worsens (if not fine)
@@ -150,7 +150,7 @@ namespace Game
             WeatherType old_type = m_type;
             float old_grade = m_grade;
 
-            long gtime = Global.WorldMgr.GetGameTime();
+            long gtime = GameTime.GetGameTime();
             var ltime = Time.UnixTimeToDateTime(gtime).ToLocalTime();
             uint season = (uint)((ltime.DayOfYear - 78 + 365) / 91) % 4;
 
@@ -178,7 +178,7 @@ namespace Game
 
             if (m_type != WeatherType.Fine)
             {
-                /// Radical change:
+                // Radical change:
                 // if light . heavy
                 // if medium . change weather type
                 // if heavy . 50% light, 50% change weather type

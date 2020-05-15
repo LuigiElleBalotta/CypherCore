@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,19 +53,19 @@ namespace Game
         }
 
         [WorldPacketHandler(ClientOpcodes.LearnPvpTalents)]
-        void HandleLearnPvpTalentsOpcode(LearnPvpTalents packet)
+        void HandleLearnPvpTalents(LearnPvpTalents packet)
         {
             LearnPvpTalentsFailed learnPvpTalentsFailed = new LearnPvpTalentsFailed();
             bool anythingLearned = false;
-            foreach (ushort talentId in packet.Talents)
+            foreach (var pvpTalent in packet.Talents)
             {
-                TalentLearnResult result = _player.LearnPvpTalent(talentId, ref learnPvpTalentsFailed.SpellID);
+                TalentLearnResult result = _player.LearnPvpTalent(pvpTalent.PvPTalentID, pvpTalent.Slot, ref learnPvpTalentsFailed.SpellID);
                 if (result != 0)
                 {
                     if (learnPvpTalentsFailed.Reason == 0)
                         learnPvpTalentsFailed.Reason = (uint)result;
 
-                    learnPvpTalentsFailed.Talents.Add(talentId);
+                    learnPvpTalentsFailed.Talents.Add(pvpTalent);
                 }
                 else
                     anythingLearned = true;
@@ -81,7 +81,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.ConfirmRespecWipe)]
         void HandleConfirmRespecWipe(ConfirmRespecWipe confirmRespecWipe)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(confirmRespecWipe.RespecMaster, NPCFlags.Trainer);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(confirmRespecWipe.RespecMaster, NPCFlags.Trainer, NPCFlags2.None);
             if (unit == null)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleTalentWipeConfirm - {0} not found or you can't interact with him.", confirmRespecWipe.RespecMaster.ToString());

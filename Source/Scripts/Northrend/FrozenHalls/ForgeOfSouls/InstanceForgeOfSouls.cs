@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -110,7 +110,7 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls
 
         class instance_forge_of_souls_InstanceScript : InstanceScript
         {
-            public instance_forge_of_souls_InstanceScript(Map map) : base(map)
+            public instance_forge_of_souls_InstanceScript(InstanceMap map) : base(map)
             {
                 SetHeaders("FOS");
                 SetBossNumber(2);
@@ -206,7 +206,7 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls
         public npc_sylvanas_fos(Creature creature) : base(creature)
         {
             Initialize();
-            me.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+            me.AddNpcFlag(NPCFlags.Gossip);
         }
 
         void Initialize()
@@ -220,13 +220,13 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls
             Initialize();
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
             if (menuId == Misc.MenuIdSylvanas && gossipListId == Misc.GossipOptionId)
             {
                 player.CLOSE_GOSSIP_MENU();
                 phase = Phase.Intro;
-                me.RemoveFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                me.RemoveNpcFlag(NPCFlags.Gossip);
 
                 _events.Reset();
                 _events.ScheduleEvent(EventIds.Intro1, 1000);
@@ -290,7 +290,7 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls
         public npc_jaina_fos(Creature creature) : base(creature)
         {
             Initialize();
-            me.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+            me.AddNpcFlag(NPCFlags.Gossip);
         }
 
         void Initialize()
@@ -304,13 +304,13 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls
             Initialize();
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
             if (menuId == Misc.MenuIdJaina && gossipListId == Misc.GossipOptionId)
             {
                 player.CLOSE_GOSSIP_MENU();
                 phase = Phase.Intro;
-                me.RemoveFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                me.RemoveNpcFlag(NPCFlags.Gossip);
                 _events.Reset();
                 _events.ScheduleEvent(EventIds.Intro1, 1000);
             }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ namespace Game.Chat
                 "Unknown security level: Notify technician for details."));
 
             // RBAC required display - is not displayed for console
-            if (pwConfig == 2 && session != null && hasRBAC)
+            if (pwConfig == 2 && hasRBAC)
                 handler.SendSysMessage(CypherStrings.RbacEmailRequired);
 
             // Email display if sufficient rights
@@ -467,7 +467,7 @@ namespace Game.Chat
 
                 if (string.IsNullOrEmpty(exp))
                 {
-                    Player player = handler.getSelectedPlayer();
+                    Player player = handler.GetSelectedPlayer();
                     if (!player)
                         return false;
 
@@ -521,9 +521,10 @@ namespace Game.Chat
                 }
 
                 string targetAccountName = "";
-                uint targetAccountId = 0;
-                AccountTypes targetSecurity = 0;
-                uint gm = 0;
+                uint targetAccountId;
+                AccountTypes targetSecurity;
+                uint gm;
+
                 string arg1 = args.NextString();
                 string arg2 = args.NextString();
                 string arg3 = args.NextString();
@@ -531,7 +532,7 @@ namespace Game.Chat
 
                 if (string.IsNullOrEmpty(arg3))
                 {
-                    if (!handler.getSelectedPlayer())
+                    if (!handler.GetSelectedPlayer())
                         return false;
                     isAccountNameGiven = false;
                 }
@@ -560,7 +561,7 @@ namespace Game.Chat
                 }
 
                 // command.getSession() == NULL only for console
-                targetAccountId = (isAccountNameGiven) ? Global.AccountMgr.GetId(targetAccountName) : handler.getSelectedPlayer().GetSession().GetAccountId();
+                targetAccountId = (isAccountNameGiven) ? Global.AccountMgr.GetId(targetAccountName) : handler.GetSelectedPlayer().GetSession().GetAccountId();
                 if (!int.TryParse(isAccountNameGiven ? arg3 : arg2, out int gmRealmID))
                     return false;
 
@@ -602,7 +603,7 @@ namespace Game.Chat
                     return false;
                 }
 
-                RBACData rbac = isAccountNameGiven ? null : handler.getSelectedPlayer().GetSession().GetRBACData();
+                RBACData rbac = isAccountNameGiven ? null : handler.GetSelectedPlayer().GetSession().GetRBACData();
                 Global.AccountMgr.UpdateAccountAccess(rbac, targetAccountId, (byte)gm, gmRealmID);
                 handler.SendSysMessage(CypherStrings.YouChangeSecurity, targetAccountName, gm);
                 return true;
@@ -635,8 +636,8 @@ namespace Game.Chat
                         return false;
                     }
 
-                    /// can set email only for target with less security
-                    /// This also restricts setting handler's own email.
+                    // can set email only for target with less security
+                    // This also restricts setting handler's own email.
                     if (handler.HasLowerSecurityAccount(null, targetAccountId, true))
                         return false;
 
@@ -696,8 +697,8 @@ namespace Game.Chat
                         return false;
                     }
 
-                    /// can set email only for target with less security
-                    /// This also restricts setting handler's own email.
+                    // can set email only for target with less security
+                    // This also restricts setting handler's own email.
                     if (handler.HasLowerSecurityAccount(null, targetAccountId, true))
                         return false;
 
@@ -750,14 +751,14 @@ namespace Game.Chat
                         var ipBytes = System.Net.IPAddress.Parse(handler.GetSession().GetRemoteAddress()).GetAddressBytes();
                         Array.Reverse(ipBytes);
 
-                        PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_LOGON_COUNTRY);
+                        /*PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_LOGON_COUNTRY);
                         stmt.AddValue(0, BitConverter.ToUInt32(ipBytes, 0));
 
                         SQLResult result = DB.Login.Query(stmt);
                         if (!result.IsEmpty())
                         {
                             string country = result.Read<string>(0);
-                            stmt = DB.Login.GetPreparedStatement(LoginStatements.UPD_ACCOUNT_LOCK_CONTRY);
+                            stmt = DB.Login.GetPreparedStatement(LoginStatements.UPD_ACCOUNT_LOCK_COUNTRY);
                             stmt.AddValue(0, country);
                             stmt.AddValue(1, handler.GetSession().GetAccountId());
                             DB.Login.Execute(stmt);
@@ -767,11 +768,11 @@ namespace Game.Chat
                         {
                             handler.SendSysMessage("[IP2NATION] Table empty");
                             Log.outDebug(LogFilter.Server, "[IP2NATION] Table empty");
-                        }
+                        }*/
                     }
                     else if (param == "off")
                     {
-                        PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.UPD_ACCOUNT_LOCK_CONTRY);
+                        PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.UPD_ACCOUNT_LOCK_COUNTRY);
                         stmt.AddValue(0, "00");
                         stmt.AddValue(1, handler.GetSession().GetAccountId());
                         DB.Login.Execute(stmt);

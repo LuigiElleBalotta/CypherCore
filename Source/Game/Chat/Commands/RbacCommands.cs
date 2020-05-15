@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -225,10 +225,9 @@ namespace Game.Chat.Commands
             string param3 = args.NextString();
 
             int realmId = -1;
-            uint accountId = 0;
+            uint accountId;
             string accountName;
             uint id = 0;
-            RBACCommandData data;
             RBACData rdata = null;
             bool useSelectedPlayer = false;
 
@@ -270,7 +269,7 @@ namespace Game.Chat.Commands
 
             if (useSelectedPlayer)
             {
-                Player player = handler.getSelectedPlayer();
+                Player player = handler.GetSelectedPlayer();
                 if (!player)
                     return null;
 
@@ -293,7 +292,7 @@ namespace Game.Chat.Commands
             if (checkParams && handler.HasLowerSecurityAccount(null, accountId, true))
                 return null;
 
-            data = new RBACCommandData();
+            RBACCommandData data = new RBACCommandData();
 
             if (rdata == null)
             {

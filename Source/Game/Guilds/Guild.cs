@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@ using Game.Network;
 using Game.Network.Packets;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Guilds
@@ -228,7 +227,7 @@ namespace Game.Guilds
                 memberData.AreaID = (int)member.GetZoneId();
                 memberData.PersonalAchievementPoints = (int)member.GetAchievementPoints();
                 memberData.GuildReputation = (int)member.GetTotalReputation();
-                memberData.LastSave = (member.IsOnline() ? 0.0f : ((ulong)Time.UnixTime - member.GetLogoutTime()) / Time.Day);
+                memberData.LastSave = member.GetInactiveDays();
 
                 //GuildRosterProfessionData
 
@@ -255,10 +254,11 @@ namespace Game.Guilds
                 session.SendPacket(roster);
         }
 
-        public void SendQueryResponse(WorldSession session)
+        public void SendQueryResponse(WorldSession session, ObjectGuid playerGuid)
         {
             QueryGuildInfoResponse response = new QueryGuildInfoResponse();
             response.GuildGUID = GetGUID();
+            response.PlayerGuid = playerGuid;
             response.HasGuildInfo = true;
 
             response.Info.GuildGuid = GetGUID();
@@ -293,7 +293,7 @@ namespace Game.Guilds
                 rankData.RankID = rankInfo.GetId();
                 rankData.RankOrder = i;
                 rankData.Flags = (uint)rankInfo.GetRights();
-                rankData.WithdrawGoldLimit = rankInfo.GetBankMoneyPerDay();
+                rankData.WithdrawGoldLimit = (rankInfo.GetId() == GuildDefaultRanks.Master ? uint.MaxValue : (rankInfo.GetBankMoneyPerDay() / MoneyConstants.Gold));
                 rankData.RankName = rankInfo.GetName();
 
                 for (byte j = 0; j < GuildConst.MaxBankTabs; ++j)
@@ -327,7 +327,7 @@ namespace Game.Guilds
                             CriteriaManager.WalkCriteriaTree(tree, node =>
                             {
                                 if (node.Criteria != null)
-                                    criteriaIds.Add(node.Criteria.ID);
+                                    criteriaIds.Add(node.Criteria.Id);
                             });
                         }
                     }
@@ -401,30 +401,49 @@ namespace Game.Guilds
 
                 SendSaveEmblemResult(session, GuildEmblemError.Success); // "Guild Emblem saved."
 
-                SendQueryResponse(session);
+                SendQueryResponse(session, ObjectGuid.Empty);
             }
         }
 
-        public void HandleSetNewGuildMaster(WorldSession session, string name)
+        public void HandleSetNewGuildMaster(WorldSession session, string name, bool isSelfPromote)
         {
             Player player = session.GetPlayer();
-            // Only the guild master can throne a new guild master
-            if (!_IsLeader(player))
-                SendCommandResult(session, GuildCommandType.ChangeLeader, GuildCommandError.Permissions);
-            // Old GM must be a guild member
-            Member oldGuildMaster = GetMember(player.GetGUID());
-            if (oldGuildMaster != null)
-            {
-                // Same for the new one
-                Member newGuildMaster = GetMember(name);
-                if (newGuildMaster != null)
-                {
-                    _SetLeaderGUID(newGuildMaster);
-                    oldGuildMaster.ChangeRank(null, GuildDefaultRanks.Initiate);
+            Member oldGuildMaster = GetMember(GetLeaderGUID());
 
-                    SendEventNewLeader(newGuildMaster, oldGuildMaster);
+            Member newGuildMaster;
+            if (isSelfPromote)
+            {
+                newGuildMaster = GetMember(player.GetGUID());
+                if (newGuildMaster == null)
+                    return;
+
+                if (!newGuildMaster.IsRankNotLower(GuildDefaultRanks.Member) || oldGuildMaster.GetInactiveDays() < GuildConst.MasterDethroneInactiveDays)
+                {
+                    SendCommandResult(session, GuildCommandType.ChangeLeader, GuildCommandError.Permissions);
+                    return;
                 }
             }
+            else
+            {
+                if (!_IsLeader(player))
+                {
+                    SendCommandResult(session, GuildCommandType.ChangeLeader, GuildCommandError.Permissions);
+                    return;
+                }
+
+                newGuildMaster = GetMember(name);
+                if (newGuildMaster == null)
+                    return;
+            }
+
+            SQLTransaction trans = new SQLTransaction();
+
+            _SetLeader(trans, newGuildMaster);
+            oldGuildMaster.ChangeRank(trans, GuildDefaultRanks.Initiate);
+
+            SendEventNewLeader(newGuildMaster, oldGuildMaster, isSelfPromote);
+
+            DB.Characters.CommitTransaction(trans);
         }
 
         public void HandleSetBankTabInfo(WorldSession session, byte tabId, string name, string icon)
@@ -459,17 +478,15 @@ namespace Game.Guilds
                 else
                     member.SetOfficerNote(note);
 
-                HandleRoster(session); // FIXME - We should send SMSG_GUILD_MEMBER_UPDATE_NOTE
-
                 GuildMemberUpdateNote updateNote = new GuildMemberUpdateNote();
                 updateNote.Member = guid;
                 updateNote.IsPublic = isPublic;
                 updateNote.Note = note;
-                session.SendPacket(updateNote); // @todo - Verify receiver of this packet...
+                BroadcastPacket(updateNote);
             }
         }
 
-        public void HandleSetRankInfo(WorldSession session, uint rankId, string name, GuildRankRights rights, uint moneyPerDay, List<GuildBankRightsAndSlots> rightsAndSlots)
+        public void HandleSetRankInfo(WorldSession session, uint rankId, string name, GuildRankRights rights, uint moneyPerDay, GuildBankRightsAndSlots[] rightsAndSlots)
         {
             // Only leader can modify ranks
             if (!_IsLeader(session.GetPlayer()))
@@ -482,7 +499,7 @@ namespace Game.Guilds
 
                 rankInfo.SetName(name);
                 rankInfo.SetRights(rights);
-                _SetRankBankMoneyPerDay(rankId, moneyPerDay);
+                _SetRankBankMoneyPerDay(rankId, moneyPerDay * MoneyConstants.Gold);
 
                 foreach (var rightsAndSlot in rightsAndSlots)
                     _SetRankBankTabRightsAndSlots(rankId, rightsAndSlot);
@@ -608,7 +625,7 @@ namespace Game.Guilds
         {
             Player player = session.GetPlayer();
             if (!WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideInteractionGuild) &&
-                player.GetTeam() != ObjectManager.GetPlayerTeamByGUID(GetLeaderGUID()))
+                player.GetTeam() != Global.CharacterCacheStorage.GetCharacterTeamByGuid(GetLeaderGUID()))
                 return;
 
             AddMember(null, player.GetGUID());
@@ -922,7 +939,7 @@ namespace Game.Guilds
             GuildChallengeUpdate updatePacket = new GuildChallengeUpdate();
 
             for (int i = 0; i < GuildConst.ChallengesTypes; ++i)
-                updatePacket.CurrentCount[i] = 0; /// @todo current count
+                updatePacket.CurrentCount[i] = 0; // @todo current count
 
             for (int i = 0; i < GuildConst.ChallengesTypes; ++i)
                 updatePacket.MaxCount[i] = GuildConst.ChallengesMaxCount[i];
@@ -1074,6 +1091,29 @@ namespace Game.Guilds
             member.AddFlag(GuildMemberFlags.Online);
         }
 
+        public void SendEventAwayChanged(ObjectGuid memberGuid, bool afk, bool dnd)
+        {
+            Member member = GetMember(memberGuid);
+            if (member == null)
+                return;
+
+            if (afk)
+                member.AddFlag(GuildMemberFlags.AFK);
+            else
+                member.RemoveFlag(GuildMemberFlags.AFK);
+
+            if (dnd)
+                member.AddFlag(GuildMemberFlags.DND);
+            else
+                member.RemoveFlag(GuildMemberFlags.DND);
+
+            GuildEventAwayChange awayChange = new GuildEventAwayChange();
+            awayChange.Guid = memberGuid;
+            awayChange.AFK = afk;
+            awayChange.DND = dnd;
+            BroadcastPacket(awayChange);
+        }
+
         void SendEventBankMoneyChanged()
         {
             GuildEventBankMoneyChanged eventPacket = new GuildEventBankMoneyChanged();
@@ -1192,12 +1232,14 @@ namespace Game.Guilds
         public bool LoadMemberFromDB(SQLFields field)
         {
             ulong lowguid = field.Read<ulong>(1);
-            Member member = new Member(m_id, ObjectGuid.Create(HighGuid.Player, lowguid), field.Read<byte>(2));
+            ObjectGuid playerGuid = ObjectGuid.Create(HighGuid.Player, lowguid);
+            Member member = new Member(m_id, playerGuid, field.Read<byte>(2));
             if (!member.LoadFromDB(field))
             {
                 _DeleteMemberFromDB(null, lowguid);
                 return false;
             }
+            Global.CharacterCacheStorage.UpdateCharacterGuildId(playerGuid, GetId());
             m_members[member.GetGUID()] = member;
             return true;
         }
@@ -1296,7 +1338,7 @@ namespace Game.Guilds
 
         public bool LoadBankItemFromDB(SQLFields field)
         {
-            byte tabId = field.Read<byte>(46);
+            byte tabId = field.Read<byte>(44);
             if (tabId >= _GetPurchasedTabsSize())
             {
                 Log.outError(LogFilter.Guild, "Invalid tab for item (GUID: {0}, id: {1}) in guild bank, skipped.",
@@ -1353,8 +1395,8 @@ namespace Game.Guilds
             // Repair the structure of the guild.
             // If the guildmaster doesn't exist or isn't member of the guild
             // attempt to promote another member.
-            Member pLeader = GetMember(m_leaderGuid);
-            if (pLeader == null)
+            Member leader = GetMember(m_leaderGuid);
+            if (leader == null)
             {
                 DeleteMember(trans, m_leaderGuid);
                 // If no more members left, disband guild
@@ -1364,8 +1406,8 @@ namespace Game.Guilds
                     return false;
                 }
             }
-            else if (!pLeader.IsRank(GuildDefaultRanks.Master))
-                _SetLeaderGUID(pLeader);
+            else if (!leader.IsRank(GuildDefaultRanks.Master))
+                _SetLeader(trans, leader);
 
             if (trans.commands.Count > 0)
                 DB.Characters.CommitTransaction(trans);
@@ -1390,12 +1432,12 @@ namespace Game.Guilds
             }
         }
 
-        public void BroadcastAddonToGuild(WorldSession session, bool officerOnly, string msg, string prefix)
+        public void BroadcastAddonToGuild(WorldSession session, bool officerOnly, string msg, string prefix, bool isLogged)
         {
             if (session != null && session.GetPlayer() != null && _HasRankRight(session.GetPlayer(), officerOnly ? GuildRankRights.OffChatSpeak : GuildRankRights.GChatSpeak))
             {
                 ChatPkt data = new ChatPkt();
-                data.Initialize(officerOnly ? ChatMsg.Officer : ChatMsg.Guild, Language.Addon, session.GetPlayer(), null, msg, 0, "", LocaleConstant.enUS, prefix);
+                data.Initialize(officerOnly ? ChatMsg.Officer : ChatMsg.Guild, isLogged ? Language.AddonLogged : Language.Addon, session.GetPlayer(), null, msg, 0, "", LocaleConstant.enUS, prefix);
                 foreach (var member in m_members.Values)
                 {
                     Player player = member.FindPlayer();
@@ -1460,7 +1502,7 @@ namespace Game.Guilds
                     return;
                 }
 
-                uint level = Player.GetLevelFromDB(member.GetGUID());
+                uint level = Global.CharacterCacheStorage.GetCharacterLevelByGuid(member.GetGUID());
 
                 if (member.GetGUID() != session.GetPlayer().GetGUID() && level >= minLevel && level <= maxLevel && member.IsRankNotLower(minRank))
                     packet.Invites.Add(new CalendarEventInitialInviteInfo(member.GetGUID(), (byte)level));
@@ -1478,7 +1520,7 @@ namespace Game.Guilds
                 if (player.GetGuildId() != 0)
                     return false;
             }
-            else if (Player.GetGuildIdFromDB(guid) != 0)
+            else if (Global.CharacterCacheStorage.GetCharacterGuildIdByGuid(guid) != 0)
                 return false;
 
             // Remove all player signs from another petitions
@@ -1498,7 +1540,7 @@ namespace Game.Guilds
                 m_members[guid] = member;
                 player.SetInGuild(m_id);
                 player.SetGuildIdInvited(0);
-                player.SetRank(rankId);
+                player.SetGuildRank(rankId);
                 player.SetGuildLevel(GetLevel());
                 SendLoginInfo(player.GetSession());
                 name = player.GetName();
@@ -1531,6 +1573,7 @@ namespace Game.Guilds
                     return false;
 
                 m_members[guid] = member;
+                Global.CharacterCacheStorage.UpdateCharacterGuildId(guid, GetId());
             }
 
             member.SaveToDB(trans);
@@ -1576,12 +1619,7 @@ namespace Game.Guilds
                     return;
                 }
 
-                _SetLeaderGUID(newLeader);
-
-                // If player not online data in data field will be loaded from guild tabs no need to update it !!
-                Player newLeaderPlayer = newLeader.FindPlayer();
-                if (newLeaderPlayer)
-                    newLeaderPlayer.SetRank(GuildDefaultRanks.Master);
+                _SetLeader(trans, newLeader);
 
                 // If leader does not exist (at guild loading with deleted leader) do not send broadcasts
                 if (oldLeader != null)
@@ -1599,12 +1637,14 @@ namespace Game.Guilds
             if (player != null)
             {
                 player.SetInGuild(0);
-                player.SetRank(0);
+                player.SetGuildRank(0);
                 player.SetGuildLevel(0);
 
                 foreach (var entry in CliDB.GuildPerkSpellsStorage.Values)
                         player.RemoveSpell(entry.SpellID, false, false);
             }
+            else
+                Global.CharacterCacheStorage.UpdateCharacterGuildId(guid, 0);
 
             _DeleteMemberFromDB(trans, guid.GetCounter());
             if (!isDisbanding)
@@ -1795,21 +1835,25 @@ namespace Game.Guilds
             return true;
         }
 
-        void _SetLeaderGUID(Member pLeader)
+        void _SetLeader(SQLTransaction trans, Member leader)
         {
-            if (pLeader == null)
+            if (leader == null)
                 return;
 
-            SQLTransaction trans = new SQLTransaction();
-            m_leaderGuid = pLeader.GetGUID();
-            pLeader.ChangeRank(trans, GuildDefaultRanks.Master);
+            bool isInTransaction = trans != null;
+            if (!isInTransaction)
+                trans = new SQLTransaction();
+
+            m_leaderGuid = leader.GetGUID();
+            leader.ChangeRank(trans, GuildDefaultRanks.Master);
 
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.UPD_GUILD_LEADER);
             stmt.AddValue(0, m_leaderGuid.GetCounter());
             stmt.AddValue(1, m_id);
             trans.Append(stmt);
 
-            DB.Characters.CommitTransaction(trans);
+            if (!isInTransaction)
+                DB.Characters.CommitTransaction(trans);
         }
 
         void _SetRankBankMoneyPerDay(uint rankId, uint moneyPerDay)
@@ -2071,7 +2115,7 @@ namespace Game.Guilds
 
         void _SendBankContentUpdate(MoveItemData pSrc, MoveItemData pDest)
         {
-            Contract.Assert(pSrc.IsBank() || pDest.IsBank());
+            Cypher.Assert(pSrc.IsBank() || pDest.IsBank());
 
             byte tabId = 0;
             List<byte> slots = new List<byte>();
@@ -2121,14 +2165,14 @@ namespace Game.Guilds
                     itemInfo.Item.ItemID = tabItem ? tabItem.GetEntry() : 0;
                     itemInfo.Count = (int)(tabItem ? tabItem.GetCount() : 0);
                     itemInfo.Charges = tabItem ? Math.Abs(tabItem.GetSpellCharges()) : 0;
-                    itemInfo.OnUseEnchantmentID = 0/*int32(tabItem->GetItemSuffixFactor())*/;
+                    itemInfo.OnUseEnchantmentID = 0/*int32(tabItem.GetItemSuffixFactor())*/;
                     itemInfo.Flags = 0;
                     itemInfo.Locked = false;
 
                     if (tabItem != null)
                     {
                         byte i = 0;
-                        foreach (ItemDynamicFieldGems gemData in tabItem.GetGems())
+                        foreach (SocketedGem gemData in tabItem.m_itemData.Gems)
                         {
                             if (gemData.ItemId != 0)
                             {
@@ -2202,12 +2246,12 @@ namespace Game.Guilds
                             itemInfo.Item.ItemID = tabItem.GetEntry();
                             itemInfo.Count = (int)tabItem.GetCount();
                             itemInfo.Charges = Math.Abs(tabItem.GetSpellCharges());
-                            itemInfo.EnchantmentID = tabItem.GetItemRandomPropertyId(); // verify that...
-                            itemInfo.OnUseEnchantmentID = 0/*int32(tabItem->GetItemSuffixFactor())*/;
+                            itemInfo.EnchantmentID = (int)tabItem.GetEnchantmentId(EnchantmentSlot.Perm);
+                            itemInfo.OnUseEnchantmentID = (int)tabItem.GetEnchantmentId(EnchantmentSlot.Use);
                             itemInfo.Flags = 0;
 
                             byte i = 0;
-                            foreach (ItemDynamicFieldGems gemData in tabItem.GetGems())
+                            foreach (SocketedGem gemData in tabItem.m_itemData.Gems)
                             {
                                 if (gemData.ItemId != 0)
                                 {
@@ -2233,7 +2277,7 @@ namespace Game.Guilds
         void SendGuildRanksUpdate(ObjectGuid setterGuid, ObjectGuid targetGuid, uint rank)
         {
             Member member = GetMember(targetGuid);
-            Contract.Assert(member != null);
+            Cypher.Assert(member != null);
 
             GuildSendRankChange rankChange = new GuildSendRankChange();
             rankChange.Officer = setterGuid;
@@ -2459,9 +2503,9 @@ namespace Game.Guilds
             public void SetStats(Player player)
             {
                 m_name = player.GetName();
-                m_level = (byte)player.getLevel();
+                m_level = (byte)player.GetLevel();
                 m_class = player.GetClass();
-                _gender = (Gender)player.GetByteValue(PlayerFields.Bytes3, PlayerFieldOffsets.Bytes3OffsetGender);
+                _gender = (Gender)(byte)player.m_playerData.NativeSex;
                 m_zoneId = player.GetZoneId();
                 m_accountId = player.GetSession().GetAccountId();
                 m_achievementPoints = player.GetAchievementPoints();
@@ -2509,9 +2553,9 @@ namespace Game.Guilds
                 m_rankId = (byte)newRank;
 
                 // Update rank information in player's field, if he is online.
-                Player player = FindPlayer();
+                Player player = FindConnectedPlayer();
                 if (player != null)
-                    player.SetRank((byte)newRank);
+                    player.SetGuildRank((byte)newRank);
 
                 PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.UPD_GUILD_MEMBER_RANK);
                 stmt.AddValue(0, newRank);
@@ -2580,6 +2624,13 @@ namespace Game.Guilds
                 return true;
             }
 
+            public float GetInactiveDays()
+            {
+                if (IsOnline())
+                    return 0.0f;
+                return (float)((Time.UnixTime - (long)GetLogoutTime()) / (float)Time.Day);
+            }
+
             // Decreases amount of slots left for today.
             public void UpdateBankTabWithdrawValue(SQLTransaction trans, byte tabId, uint amount)
             {
@@ -2587,7 +2638,7 @@ namespace Game.Guilds
 
                 PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.INS_GUILD_MEMBER_WITHDRAW_TABS);
                 stmt.AddValue(0, m_guid.GetCounter());
-                for (byte i = 0; i < GuildConst.MaxBankTabs; )
+                for (byte i = 0; i < GuildConst.MaxBankTabs;)
                 {
                     uint withdraw = m_bankWithdraw[i++];
                     stmt.AddValue(i, withdraw);
@@ -2653,7 +2704,7 @@ namespace Game.Guilds
 
             public List<uint> GetTrackedCriteriaIds() { return m_trackedCriteriaIds; }
             public void SetTrackedCriteriaIds(List<uint> criteriaIds) { m_trackedCriteriaIds = criteriaIds; }
-            public bool IsTrackingCriteriaId(uint criteriaId) { return m_trackedCriteriaIds.Contains(criteriaId);  }
+            public bool IsTrackingCriteriaId(uint criteriaId) { return m_trackedCriteriaIds.Contains(criteriaId); }
             public bool IsOnline() { return m_flags.HasAnyFlag(GuildMemberFlags.Online); }
 
             public void UpdateLogoutTime() { m_logoutTime = (ulong)Time.UnixTime; }
@@ -2665,6 +2716,7 @@ namespace Game.Guilds
             public ulong GetBankMoneyWithdrawValue() { return m_bankWithdrawMoney; }
 
             public Player FindPlayer() { return Global.ObjAccessor.FindPlayer(m_guid); }
+            Player FindConnectedPlayer() { return Global.ObjAccessor.FindConnectedPlayer(m_guid); }
 
             #region Fields
             ulong m_guildId;
@@ -2763,7 +2815,7 @@ namespace Game.Guilds
                 ObjectGuid playerGUID = ObjectGuid.Create(HighGuid.Player, m_playerGuid1);
                 ObjectGuid otherGUID = ObjectGuid.Create(HighGuid.Player, m_playerGuid2);
 
-                GuildEventEntry eventEntry;
+                GuildEventEntry eventEntry = new GuildEventEntry();
                 eventEntry.PlayerGUID = playerGUID;
                 eventEntry.OtherGUID = otherGUID;
                 eventEntry.TransactionType = (byte)m_eventType;
@@ -3128,17 +3180,16 @@ namespace Game.Guilds
                 if (m_rankId == GuildDefaultRanks.Master)                     // Prevent loss of leader rights
                     rightsAndSlots.SetGuildMasterValues();
 
-                GuildBankRightsAndSlots guildBR = m_bankTabRightsAndSlots[rightsAndSlots.GetTabId()];
-                guildBR = rightsAndSlots;
+                m_bankTabRightsAndSlots[rightsAndSlots.GetTabId()] = rightsAndSlots;
 
                 if (saveToDB)
                 {
                     PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.INS_GUILD_BANK_RIGHT);
                     stmt.AddValue(0, m_guildId);
-                    stmt.AddValue(1, guildBR.GetTabId());
+                    stmt.AddValue(1, rightsAndSlots.GetTabId());
                     stmt.AddValue(2, m_rankId);
-                    stmt.AddValue(3, guildBR.GetRights());
-                    stmt.AddValue(4, guildBR.GetSlots());
+                    stmt.AddValue(3, rightsAndSlots.GetRights());
+                    stmt.AddValue(4, rightsAndSlots.GetSlots());
                     DB.Characters.Execute(stmt);
                 }
             }
@@ -3190,7 +3241,7 @@ namespace Game.Guilds
 
             public bool LoadItemFromDB(SQLFields field)
             {
-                byte slotId = field.Read<byte>(47);
+                byte slotId = field.Read<byte>(45);
                 uint itemGuid = field.Read<uint>(0);
                 uint itemEntry = field.Read<uint>(1);
                 if (slotId >= GuildConst.MaxBankSlots)
@@ -3317,15 +3368,14 @@ namespace Game.Guilds
                     stmt.AddValue(3, item.GetGUID().GetCounter());
                     trans.Append(stmt);
 
-                    item.SetGuidValue(ItemFields.Contained, ObjectGuid.Empty);
-                    item.SetGuidValue(ItemFields.Owner, ObjectGuid.Empty);
+                    item.SetContainedIn(ObjectGuid.Empty);
+                    item.SetOwnerGUID(ObjectGuid.Empty);
                     item.FSetState(ItemUpdateState.New);
                     item.SaveToDB(trans);                                 // Not in inventory and can be saved standalone
                 }
 
                 return true;
             }
-
 
             ulong m_guildId;
             byte m_tabId;
@@ -3432,7 +3482,7 @@ namespace Game.Guilds
 
         public abstract class MoveItemData
         {
-            public MoveItemData(Guild guild, Player player, byte container, byte slotId)
+            protected MoveItemData(Guild guild, Player player, byte container, byte slotId)
             {
                 m_pGuild = guild;
                 m_pPlayer = player;
@@ -3444,7 +3494,7 @@ namespace Game.Guilds
 
             public virtual bool CheckItem(ref uint splitedAmount)
             {
-                Contract.Assert(m_pItem != null);
+                Cypher.Assert(m_pItem != null);
                 if (splitedAmount > m_pItem.GetCount())
                     return false;
                 if (splitedAmount == m_pItem.GetCount())
@@ -3463,7 +3513,7 @@ namespace Game.Guilds
 
             public bool CloneItem(uint count)
             {
-                Contract.Assert(m_pItem != null);
+                Cypher.Assert(m_pItem != null);
                 m_pClonedItem = m_pItem.CloneItem(count);
                 if (m_pClonedItem == null)
                 {
@@ -3475,7 +3525,7 @@ namespace Game.Guilds
 
             public virtual void LogAction(MoveItemData pFrom)
             {
-                Contract.Assert(pFrom.GetItem() != null);
+                Cypher.Assert(pFrom.GetItem() != null);
 
                 Global.ScriptMgr.OnGuildItemMove(m_pGuild, m_pPlayer, pFrom.GetItem(),
                      pFrom.IsBank(), pFrom.GetContainer(), pFrom.GetSlotId(),
@@ -3564,7 +3614,7 @@ namespace Game.Guilds
 
             public override Item StoreItem(SQLTransaction trans, Item pItem)
             {
-                Contract.Assert(pItem != null);
+                Cypher.Assert(pItem != null);
                 m_pPlayer.MoveItemToInventory(m_vec, pItem, true);
                 m_pPlayer.SaveInventoryAndGoldToDB(trans);
                 return pItem;
@@ -3572,7 +3622,7 @@ namespace Game.Guilds
 
             public override void LogBankEvent(SQLTransaction trans, MoveItemData pFrom, uint count)
             {
-                Contract.Assert(pFrom != null);
+                Cypher.Assert(pFrom != null);
                 // Bank . Char
                 m_pGuild._LogBankEvent(trans, GuildBankEventLogTypes.WithdrawItem, pFrom.GetContainer(), m_pPlayer.GetGUID().GetCounter(),
                     pFrom.GetItem().GetEntry(), (ushort)count);
@@ -3598,7 +3648,7 @@ namespace Game.Guilds
             }
             public override bool HasStoreRights(MoveItemData pOther)
             {
-                Contract.Assert(pOther != null);
+                Cypher.Assert(pOther != null);
                 // Do not check rights if item is being swapped within the same bank tab
                 if (pOther.IsBank() && pOther.GetContainer() == m_container)
                     return true;
@@ -3607,7 +3657,7 @@ namespace Game.Guilds
 
             public override bool HasWithdrawRights(MoveItemData pOther)
             {
-                Contract.Assert(pOther != null);
+                Cypher.Assert(pOther != null);
                 // Do not check rights if item is being swapped within the same bank tab
                 if (pOther.IsBank() && pOther.GetContainer() == m_container)
                     return true;
@@ -3622,7 +3672,7 @@ namespace Game.Guilds
 
             public override void RemoveItem(SQLTransaction trans, MoveItemData pOther, uint splitedAmount = 0)
             {
-                Contract.Assert(m_pItem != null);
+                Cypher.Assert(m_pItem != null);
                 if (splitedAmount != 0)
                 {
                     m_pItem.SetCount(m_pItem.GetCount() - splitedAmount);
@@ -3660,7 +3710,7 @@ namespace Game.Guilds
 
             public override void LogBankEvent(SQLTransaction trans, MoveItemData pFrom, uint count)
             {
-               Contract.Assert(pFrom.GetItem() != null);
+               Cypher.Assert(pFrom.GetItem() != null);
                 if (pFrom.IsBank())
                     // Bank . Bank
                     m_pGuild._LogBankEvent(trans, GuildBankEventLogTypes.MoveItem, pFrom.GetContainer(), m_pPlayer.GetGUID().GetCounter(),
@@ -3673,7 +3723,7 @@ namespace Game.Guilds
             public override void LogAction(MoveItemData pFrom)
             {
                 base.LogAction(pFrom);
-                if (!pFrom.IsBank() && m_pPlayer.GetSession().HasPermission(RBACPermissions.LogGmTrade)) /// @todo Move this to scripts
+                if (!pFrom.IsBank() && m_pPlayer.GetSession().HasPermission(RBACPermissions.LogGmTrade)) // @todo Move this to scripts
                 {
                     Log.outCommand(m_pPlayer.GetSession().GetAccountId(), "GM {0} ({1}) (Account: {2}) deposit item: {3} (Entry: {4} Count: {5}) to guild bank named: {6} (Guild ID: {7})",
                         m_pPlayer.GetName(), m_pPlayer.GetGUID().ToString(), m_pPlayer.GetSession().GetAccountId(), pFrom.GetItem().GetTemplate().GetName(),
@@ -3724,7 +3774,7 @@ namespace Game.Guilds
 
                 // Reserve space
                 ItemPosCount pos = new ItemPosCount(slotId, requiredSpace);
-                if (!pos.isContainedIn(m_vec))
+                if (!pos.IsContainedIn(m_vec))
                 {
                     m_vec.Add(pos);
                     count -= requiredSpace;

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ using Game.Scripting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Game.AI;
 
 namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 {
@@ -35,7 +34,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
 
         class instance_trial_of_the_champion_InstanceMapScript : InstanceScript
         {
-            public instance_trial_of_the_champion_InstanceMapScript(Map map) : base(map)
+            public instance_trial_of_the_champion_InstanceMapScript(InstanceMap map) : base(map)
             {
                 SetHeaders("TC");
                 uiMovementDone = 0;
@@ -155,8 +154,8 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                                 if (pAnnouncer)
                                 {
                                     pAnnouncer.GetMotionMaster().MovePoint(0, 748.309f, 619.487f, 411.171f);
-                                    pAnnouncer.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
-                                    pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.CHAMPIONS_LOOT_H : GameObjectIds.CHAMPIONS_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.WAxis, 90000);
+                                    pAnnouncer.AddNpcFlag(NPCFlags.Gossip);
+                                    pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.CHAMPIONS_LOOT_H : GameObjectIds.CHAMPIONS_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.fromEulerAnglesZYX(1.42f, 0.0f, 0.0f), 90000);
                                 }
                             }
                         }
@@ -169,7 +168,7 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                             if (pBoss)
                             {
                                 pBoss.GetMotionMaster().MovePoint(0, 746.88f, 618.74f, 411.06f);
-                                pBoss.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable);
+                                pBoss.RemoveUnitFlag(UnitFlags.NonAttackable);
                                 pBoss.SetReactState(ReactStates.Aggressive);
                             }
                         }
@@ -181,8 +180,8 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                             if (pAnnouncer)
                             {
                                 pAnnouncer.GetMotionMaster().MovePoint(0, 748.309f, 619.487f, 411.171f);
-                                pAnnouncer.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
-                                pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.EADRIC_LOOT_H : GameObjectIds.EADRIC_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.WAxis, 90000);
+                                pAnnouncer.AddNpcFlag(NPCFlags.Gossip);
+                                pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.EADRIC_LOOT_H : GameObjectIds.EADRIC_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.fromEulerAnglesZYX(1.42f, 0.0f, 0.0f), 90000);
                             }
                         }
                         break;
@@ -193,8 +192,8 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
                             if (pAnnouncer)
                             {
                                 pAnnouncer.GetMotionMaster().MovePoint(0, 748.309f, 619.487f, 411.171f);
-                                pAnnouncer.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
-                                pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.PALETRESS_LOOT_H : GameObjectIds.PALETRESS_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.WAxis, 90000);
+                                pAnnouncer.AddNpcFlag(NPCFlags.Gossip);
+                                pAnnouncer.SummonGameObject(instance.IsHeroic() ? GameObjectIds.PALETRESS_LOOT_H : GameObjectIds.PALETRESS_LOOT, 746.59f, 618.49f, 411.09f, 1.42f, Quaternion.fromEulerAnglesZYX(1.42f, 0.0f, 0.0f), 90000);
                             }
                         }
                         break;
@@ -266,7 +265,8 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
             {
                 OUT_SAVE_INST_DATA();
 
-                string str_data = string.Format("T C {0} {1} {2} {3} {4} {5}", m_auiEncounter[0], m_auiEncounter[1], m_auiEncounter[2], m_auiEncounter[3], uiGrandChampionsDeaths, uiMovementDone);
+                string str_data =
+                    $"T C {m_auiEncounter[0]} {m_auiEncounter[1]} {m_auiEncounter[2]} {m_auiEncounter[3]} {uiGrandChampionsDeaths} {uiMovementDone}";
 
                 OUT_SAVE_INST_DATA_COMPLETE();
                 return str_data;
@@ -329,11 +329,6 @@ namespace Scripts.Northrend.CrusadersColiseum.TrialOfTheChampion
         public override InstanceScript GetInstanceScript(InstanceMap map)
         {
             return new instance_trial_of_the_champion_InstanceMapScript(map);
-        }
-
-        public static T GetTrialOfTheChampionAI<T>(Creature creature) where T : CreatureAI
-        {
-            return GetInstanceAI<T>(creature, "instance_trial_of_the_champion");
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,24 +20,23 @@ using Framework.GameMath;
 using Game.Entities;
 using Game.Maps;
 using System;
-using System.Linq;
 
 namespace Game.Movement
 {
     public class Spline
     {
-        public int getPointCount() { return points.Length; }
-        public Vector3 getPoint(int i) { return points[i]; }
-        public Vector3[] getPoints() { return points; }
+        public int GetPointCount() { return points.Length; }
+        public Vector3 GetPoint(int i) { return points[i]; }
+        public Vector3[] GetPoints() { return points; }
 
-        public void clear()
+        public void Clear()
         {
            Array.Clear(points, 0, points.Length);
         }
-        public int first() { return index_lo; }
-        public int last() { return index_hi; }
+        public int First() { return index_lo; }
+        public int Last() { return index_hi; }
 
-        public bool isCyclic() { return cyclic;}
+        public bool IsCyclic() { return _cyclic;}
         
         #region Evaluate
         public void Evaluate_Percent(int Idx, float u, out Vector3 c) 
@@ -64,40 +63,42 @@ namespace Game.Movement
         }
         void EvaluateCatmullRom(int index, float t, out Vector3 result)
         {
-            C_Evaluate(points.Skip(index - 1).ToArray(), t, s_catmullRomCoeffs, out result);
+            Span<Vector3> span = points;
+            C_Evaluate(span.Slice(index - 1), t, s_catmullRomCoeffs, out result);
         }
         void EvaluateBezier3(int index, float t, out Vector3 result)
         {
             index *= (int)3u;
-            C_Evaluate(points.Skip(index).ToArray(), t, s_Bezier3Coeffs, out result);
+            Span<Vector3> span = points;
+            C_Evaluate(span.Slice(index), t, s_Bezier3Coeffs, out result);
         }
         #endregion
 
         #region Init
-        public void init_spline_custom(SplineRawInitializer initializer)
+        public void InitSplineCustom(SplineRawInitializer initializer)
         {
-            initializer.Initialize(ref m_mode, ref cyclic, ref points, ref index_lo, ref index_hi);
+            initializer.Initialize(ref m_mode, ref _cyclic, ref points, ref index_lo, ref index_hi);
         }
-        public void init_cyclic_spline(Vector3[] controls, int count, EvaluationMode m, int cyclic_point)
+        public void InitCyclicSpline(Vector3[] controls, int count, EvaluationMode m, int cyclic_point)
         {
             m_mode = m;
-            cyclic = true;
+            _cyclic = true;
 
-            Init_Spline(controls, count, m);
+            InitSpline(controls, count, m);
         }
-        public void Init_Spline(Vector3[] controls, int count, EvaluationMode m)
+        public void InitSpline(Span<Vector3> controls, int count, EvaluationMode m)
         {
             m_mode = m;
-            cyclic = false;
+            _cyclic = false;
 
             switch (m_mode)
             {
                 case EvaluationMode.Linear:
                 case EvaluationMode.Catmullrom:
-                    InitCatmullRom(controls, count, cyclic, 0);
+                    InitCatmullRom(controls, count, _cyclic, 0);
                     break;
                 case EvaluationMode.Bezier3_Unused:
-                    InitBezier3(controls, count, cyclic, 0);
+                    InitBezier3(controls, count, _cyclic, 0);
                     break;
                 default:
                     break;
@@ -120,7 +121,7 @@ namespace Game.Movement
             index_lo = 0;
             index_hi = cyclic ? count : (count - 1);
         }
-        void InitCatmullRom(Vector3[] controls, int count, bool cyclic, int cyclic_point)
+        void InitCatmullRom(Span<Vector3> controls, int count, bool cyclic, int cyclic_point)
         {
             int real_size = count + (cyclic ? (1 + 2) : (1 + 1));
 
@@ -129,7 +130,7 @@ namespace Game.Movement
             int lo_index = 1;
             int high_index = lo_index + count - 1;
 
-            Array.Copy(controls, 0, points, lo_index, count);
+            Array.Copy(controls.ToArray(), 0, points, lo_index, count);
 
             // first and last two indexes are space for special 'virtual points'
             // these points are required for proper C_Evaluate and C_Evaluate_Derivative methtod work
@@ -152,13 +153,13 @@ namespace Game.Movement
             index_lo = lo_index;
             index_hi = high_index + (cyclic ? 1 : 0);
         }
-        void InitBezier3(Vector3[] controls, int count, bool cyclic, int cyclic_point)
+        void InitBezier3(Span<Vector3> controls, int count, bool cyclic, int cyclic_point)
         {
             int c = (int)(count / 3u * 3u);
             int t = (int)(c / 3u);
 
             Array.Resize(ref points, c);
-            Array.Copy(controls, points, c);
+            Array.Copy(controls.ToArray(), points, c);
 
             index_lo = 0;
             index_hi = t - 1;
@@ -190,12 +191,14 @@ namespace Game.Movement
         }
         void EvaluateDerivativeCatmullRom(int index, float t, out Vector3 result)
         {
-            C_Evaluate_Derivative(points.Skip(index - 1).ToArray(), t, s_catmullRomCoeffs, out result);
+            Span<Vector3> span = points;
+            C_Evaluate_Derivative(span.Slice(index - 1), t, s_catmullRomCoeffs, out result);
         }
         void EvaluateDerivativeBezier3(int index, float t, out Vector3 result)
         {
             index *= (int)3u;
-            C_Evaluate_Derivative(points.Skip(index).ToArray(), t, s_Bezier3Coeffs, out result);
+            Span<Vector3> span = points;
+            C_Evaluate_Derivative(span.Slice(index), t, s_Bezier3Coeffs, out result);
         }
         #endregion
         
@@ -220,9 +223,9 @@ namespace Game.Movement
         }
         float SegLengthCatmullRom(int index)
         {
-            Vector3 curPos, nextPos;
-            var p = points.Skip(index - 1).ToArray();
-            curPos = nextPos = p[1];
+            Vector3 nextPos;
+            Span<Vector3> p = points.AsSpan(index - 1);
+            Vector3 curPos = nextPos = p[1];
 
             int i = 1;
             double length = 0;
@@ -239,11 +242,11 @@ namespace Game.Movement
         {
             index *= (int)3u;
 
-            Vector3 curPos, nextPos;
-            var p = points.Skip(index).ToArray();
+            Vector3 nextPos;
+            Span<Vector3> p = points.AsSpan(index);
 
             C_Evaluate(p, 0.0f, s_Bezier3Coeffs, out nextPos);
-            curPos = nextPos;
+            Vector3 curPos = nextPos;
 
             int i = 1;
             double length = 0;
@@ -258,16 +261,16 @@ namespace Game.Movement
         }
         #endregion
 
-        public void computeIndex(float t, ref int index, ref float u)
+        public void ComputeIndex(float t, ref int index, ref float u)
         {
             //ASSERT(t >= 0.f && t <= 1.f);
-            int length_ = (int)(t * length());
-            index = computeIndexInBounds(length_);
+            int length_ = (int)(t * Length());
+            index = ComputeIndexInBounds(length_);
             //ASSERT(index < index_hi);
-            u = (length_ - length(index)) / (float)length(index, index + 1);
+            u = (length_ - Length(index)) / (float)Length(index, index + 1);
         }
 
-        int computeIndexInBounds(int length_)
+        int ComputeIndexInBounds(int length_)
         {
             // Temporary disabled: causes infinite loop with t = 1.f
             /*
@@ -297,7 +300,7 @@ namespace Game.Movement
 
         private static readonly Matrix4 s_Bezier3Coeffs = new Matrix4(-1.0f, 3.0f, -3.0f, 1.0f, 3.0f, -6.0f, 3.0f, 0.0f, -3.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f);
 
-        void C_Evaluate(Vector3[] vertice, float t, Matrix4 matr, out Vector3 result)
+        void C_Evaluate(Span<Vector3> vertice, float t, Matrix4 matr, out Vector3 result)
         {
             Vector4 tvec = new Vector4(t * t * t, t * t, t, 1.0f);
             Vector4 weights = (tvec * matr);
@@ -305,7 +308,7 @@ namespace Game.Movement
             result = vertice[0] * weights[0] + vertice[1] * weights[1]
                    + vertice[2] * weights[2] + vertice[3] * weights[3];
         }
-        void C_Evaluate_Derivative(Vector3[] vertice, float t, Matrix4 matr, out Vector3 result)
+        void C_Evaluate_Derivative(Span<Vector3> vertice, float t, Matrix4 matr, out Vector3 result)
         {
             Vector4 tvec = new Vector4(3.0f * t * t, 2.0f * t, 1.0f, 0.0f);
             Vector4 weights = (tvec * matr);
@@ -314,15 +317,15 @@ namespace Game.Movement
                    + vertice[2] * weights[2] + vertice[3] * weights[3];
         }
 
-        public int length() { return lengths[index_hi];}
+        public int Length() { return lengths[index_hi];}
 
-        public int length(int first, int last) { return lengths[last] - lengths[first]; }
+        public int Length(int first, int last) { return lengths[last] - lengths[first]; }
 
-        public int length(int Idx) { return lengths[Idx]; }
+        public int Length(int Idx) { return lengths[Idx]; }
 
-        public void set_length(int i, int length) { lengths[i] = length; }
+        public void Set_length(int i, int length) { lengths[i] = length; }
 
-        public void initLengths(Initializer cacher)
+        public void InitLengths(IInitializer cacher)
         {
             int i = index_lo;
             Array.Resize(ref lengths, index_hi+1);
@@ -338,7 +341,7 @@ namespace Game.Movement
             }
         }
 
-        public void initLengths()
+        public void InitLengths()
         {
             int i = index_lo;
             int length = 0;
@@ -350,12 +353,12 @@ namespace Game.Movement
             }
         }
 
-        public bool empty() { return index_lo == index_hi;}
+        public bool Empty() { return index_lo == index_hi;}
 
         int[] lengths = new int[0];
         Vector3[] points = new Vector3[0];
         public EvaluationMode m_mode;
-        bool cyclic;
+        bool _cyclic;
         int index_lo;
         int index_hi;
         public enum EvaluationMode

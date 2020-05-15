@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ namespace Game.Chat
         static bool HandleGroupSummonCommand(StringArguments args, CommandHandler handler)
         {
             Player target;
-            if (!handler.extractPlayerTarget(args, out target))
+            if (!handler.ExtractPlayerTarget(args, out target))
                 return false;
 
             // check online security
@@ -68,7 +68,7 @@ namespace Game.Chat
                 return false;
             }
 
-            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
             {
                 Player player = refe.GetSource();
 
@@ -100,7 +100,7 @@ namespace Game.Chat
                 }
 
                 handler.SendSysMessage(CypherStrings.Summoning, plNameLink, "");
-                if (handler.needReportToTarget(player))
+                if (handler.NeedReportToTarget(player))
                     player.SendSysMessage(CypherStrings.SummonedBy, handler.GetNameLink());
 
                 // stop flight if need
@@ -125,9 +125,9 @@ namespace Game.Chat
         [Command("leader", RBACPermissions.CommandGroupLeader)]
         static bool HandleGroupLeaderCommand(StringArguments args, CommandHandler handler)
         {
-            Player player = null;
-            Group group = null;
-            ObjectGuid guid = ObjectGuid.Empty;
+            Player player;
+            Group group;
+            ObjectGuid guid;
             string nameStr = args.NextString();
 
             if (!handler.GetPlayerGroupAndGUIDByName(nameStr, out player, out group, out guid))
@@ -151,12 +151,11 @@ namespace Game.Chat
         [Command("disband", RBACPermissions.CommandGroupDisband)]
         static bool HandleGroupDisbandCommand(StringArguments args, CommandHandler handler)
         {
-            Player player = null;
-            Group group = null;
-            ObjectGuid guid = ObjectGuid.Empty;
+            Player player;
+            Group group;
             string nameStr = args.NextString();
 
-            if (!handler.GetPlayerGroupAndGUIDByName(nameStr, out player, out group, out guid))
+            if (!handler.GetPlayerGroupAndGUIDByName(nameStr, out player, out group, out _))
                 return false;
 
             if (!group)
@@ -172,9 +171,9 @@ namespace Game.Chat
         [Command("remove", RBACPermissions.CommandGroupRemove)]
         static bool HandleGroupRemoveCommand(StringArguments args, CommandHandler handler)
         {
-            Player player = null;
-            Group group = null;
-            ObjectGuid guid = ObjectGuid.Empty;
+            Player player;
+            Group group;
+            ObjectGuid guid;
             string nameStr = args.NextString();
 
             if (!handler.GetPlayerGroupAndGUIDByName(nameStr, out player, out group, out guid))
@@ -196,16 +195,14 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            Player playerSource = null;
-            Player playerTarget = null;
-            Group groupSource = null;
-            Group groupTarget = null;
-            ObjectGuid guidSource = ObjectGuid.Empty;
-            ObjectGuid guidTarget = ObjectGuid.Empty;
+            Player playerSource;
+            Player playerTarget;
+            Group groupSource;
+            Group groupTarget;
             string nameplgrStr = args.NextString();
             string nameplStr = args.NextString();
 
-            if (!handler.GetPlayerGroupAndGUIDByName(nameplgrStr, out playerSource, out groupSource, out guidSource, true))
+            if (!handler.GetPlayerGroupAndGUIDByName(nameplgrStr, out playerSource, out groupSource, out _, true))
                 return false;
 
             if (!groupSource)
@@ -214,7 +211,7 @@ namespace Game.Chat
                 return false;
             }
 
-            if (!handler.GetPlayerGroupAndGUIDByName(nameplStr, out playerTarget, out groupTarget, out guidTarget, true))
+            if (!handler.GetPlayerGroupAndGUIDByName(nameplStr, out playerTarget, out groupTarget, out _, true))
                 return false;
 
             if (groupTarget || playerTarget.GetGroup() == groupSource)
@@ -243,19 +240,19 @@ namespace Game.Chat
             ObjectGuid guidTarget;
             string nameTarget;
             string zoneName = "";
-            string onlineState = "";
+            string onlineState;
 
             // Parse the guid to uint32...
             ObjectGuid parseGUID = ObjectGuid.Create(HighGuid.Player, args.NextUInt64());
 
             // ... and try to extract a player out of it.
-            if (ObjectManager.GetPlayerNameByGUID(parseGUID, out nameTarget))
+            if (Global.CharacterCacheStorage.GetCharacterNameByGuid(parseGUID, out nameTarget))
             {
                 playerTarget = Global.ObjAccessor.FindPlayer(parseGUID);
                 guidTarget = parseGUID;
             }
             // If not, we return false and end right away.
-            else if (!handler.extractPlayerTarget(args, out playerTarget, out guidTarget, out nameTarget))
+            else if (!handler.ExtractPlayerTarget(args, out playerTarget, out guidTarget, out nameTarget))
                 return false;
 
             // Next, we need a group. So we define a group variable.
@@ -286,7 +283,7 @@ namespace Game.Chat
             var members = groupTarget.GetMemberSlots();
 
             // To avoid a cluster fuck, namely trying multiple queries to simply get a group member count...
-            handler.SendSysMessage(CypherStrings.GroupType, (groupTarget.isRaidGroup() ? "raid" : "party"), members.Count);
+            handler.SendSysMessage(CypherStrings.GroupType, (groupTarget.IsRaidGroup() ? "raid" : "party"), members.Count);
             // ... we simply move the group type and member count print after retrieving the slots and simply output it's size.
 
             // While rather dirty codestyle-wise, it saves space (if only a little). For each member, we look several informations up.

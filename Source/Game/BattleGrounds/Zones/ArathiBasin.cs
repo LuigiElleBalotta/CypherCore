@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Network.Packets;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.BattleGrounds.Zones
 {
@@ -429,7 +428,7 @@ namespace Game.BattleGrounds.Zones
                 return;
 
             source.RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags.EnterPvpCombat);
-            uint sound = 0;
+            uint sound;
             // If node is neutral, change to contested
             if (m_Nodes[node] == ABNodeStatus.Neutral)
             {
@@ -459,7 +458,7 @@ namespace Game.BattleGrounds.Zones
                 {
                     UpdatePlayerScore(source, ScoreType.BasesAssaulted, 1);
                     m_prevNodes[node] = m_Nodes[node];
-                    m_Nodes[node] = (ABNodeStatus.Contested + (int)teamIndex);
+                    m_Nodes[node] = (ABNodeStatus.Contested + teamIndex);
                     // burn current contested banner
                     _DelBanner(node, ABNodeStatus.Contested, (byte)teamIndex);
                     // create new contested banner
@@ -477,7 +476,7 @@ namespace Game.BattleGrounds.Zones
                 {
                     UpdatePlayerScore(source, ScoreType.BasesDefended, 1);
                     m_prevNodes[node] = m_Nodes[node];
-                    m_Nodes[node] = (ABNodeStatus.Occupied + (int)teamIndex);
+                    m_Nodes[node] = (ABNodeStatus.Occupied + teamIndex);
                     // burn current contested banner
                     _DelBanner(node, ABNodeStatus.Contested, (byte)teamIndex);
                     // create new occupied banner
@@ -498,7 +497,7 @@ namespace Game.BattleGrounds.Zones
             {
                 UpdatePlayerScore(source, ScoreType.BasesAssaulted, 1);
                 m_prevNodes[node] = m_Nodes[node];
-                m_Nodes[node] = (ABNodeStatus.Contested + (int)teamIndex);
+                m_Nodes[node] = (ABNodeStatus.Contested + teamIndex);
                 // burn current occupied banner
                 _DelBanner(node, ABNodeStatus.Occupied, (byte)teamIndex);
                 // create new contested banner
@@ -632,17 +631,17 @@ namespace Game.BattleGrounds.Zones
             base.EndBattleground(winner);
         }
 
-        public override WorldSafeLocsRecord GetClosestGraveYard(Player player)
+        public override WorldSafeLocsEntry GetClosestGraveYard(Player player)
         {
             int teamIndex = GetTeamIndexByTeamId(player.GetTeam());
 
             // Is there any occupied node for this team?
             List<byte> nodes = new List<byte>();
             for (byte i = 0; i < ABBattlegroundNodes.DynamicNodesCount; ++i)
-                if (m_Nodes[i] == ABNodeStatus.Occupied + (int)teamIndex)
+                if (m_Nodes[i] == ABNodeStatus.Occupied + teamIndex)
                     nodes.Add(i);
 
-            WorldSafeLocsRecord good_entry = null;
+            WorldSafeLocsEntry good_entry = null;
             // If so, select the closest node to place ghost on
             if (!nodes.Empty())
             {
@@ -652,10 +651,10 @@ namespace Game.BattleGrounds.Zones
                 float mindist = 999999.0f;
                 for (byte i = 0; i < nodes.Count; ++i)
                 {
-                    WorldSafeLocsRecord entry = CliDB.WorldSafeLocsStorage.LookupByKey(GraveyardIds[nodes[i]]);
+                    WorldSafeLocsEntry entry = Global.ObjectMgr.GetWorldSafeLoc(GraveyardIds[nodes[i]]);
                     if (entry == null)
                         continue;
-                    float dist = (entry.Loc.X - plr_x) * (entry.Loc.X - plr_x) + (entry.Loc.Y - plr_y) * (entry.Loc.Y - plr_y);
+                    float dist = (entry.Loc.GetPositionX() - plr_x) * (entry.Loc.GetPositionX() - plr_x) + (entry.Loc.GetPositionY() - plr_y) * (entry.Loc.GetPositionY() - plr_y);
                     if (mindist > dist)
                     {
                         mindist = dist;
@@ -666,14 +665,14 @@ namespace Game.BattleGrounds.Zones
             }
             // If not, place ghost on starting location
             if (good_entry == null)
-                good_entry = CliDB.WorldSafeLocsStorage.LookupByKey(GraveyardIds[teamIndex + 5]);
+                good_entry = Global.ObjectMgr.GetWorldSafeLoc(GraveyardIds[teamIndex + 5]);
 
             return good_entry;
         }
 
-        public override WorldSafeLocsRecord GetExploitTeleportLocation(Team team)
+        public override WorldSafeLocsEntry GetExploitTeleportLocation(Team team)
         {
-            return CliDB.WorldSafeLocsStorage.LookupByKey(team == Team.Alliance ? ExploitTeleportLocationAlliance : ExploitTeleportLocationHorde);
+            return Global.ObjectMgr.GetWorldSafeLoc(team == Team.Alliance ? ExploitTeleportLocationAlliance : ExploitTeleportLocationHorde);
         }
 
         public override bool UpdatePlayerScore(Player player, ScoreType type, uint value, bool doAddHonor = true)
@@ -758,8 +757,8 @@ namespace Game.BattleGrounds.Zones
         public const int WarningNearVictoryScore = 1400;
         public const int MaxTeamScore = 1600;
 
-        public const int ExploitTeleportLocationAlliance = 3705;
-        public const int ExploitTeleportLocationHorde = 3706;
+        public const uint ExploitTeleportLocationAlliance = 3705;
+        public const uint ExploitTeleportLocationHorde = 3706;
 
         public static Position[] NodePositions =
         {
@@ -834,12 +833,12 @@ namespace Game.BattleGrounds.Zones
             }
         }
 
-        public override void BuildPvPLogPlayerDataPacket(out PVPLogData.PlayerData playerData)
+        public override void BuildPvPLogPlayerDataPacket(out PVPLogData.PVPMatchPlayerStatistics playerData)
         {
             base.BuildPvPLogPlayerDataPacket(out playerData);
 
-            playerData.Stats.Add(BasesAssaulted);
-            playerData.Stats.Add(BasesDefended);
+            playerData.Stats.Add(new PVPLogData.PVPMatchPlayerPVPStat((int)ABObjectives.AssaultBase, BasesAssaulted));
+            playerData.Stats.Add(new PVPLogData.PVPMatchPlayerPVPStat((int)ABObjectives.DefendBase, BasesDefended));
         }
 
         public override uint GetAttr1() { return BasesAssaulted; }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -111,7 +111,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
 
 
     [Script]
-    class npc_ruul_snowhoof : npc_escortAI
+    class npc_ruul_snowhoof : NpcEscortAI
     {
         public npc_ruul_snowhoof(Creature creature) : base(creature) { }
 
@@ -129,12 +129,12 @@ namespace Scripts.Kalimdor.ZoneAshenvale
             summoned.GetAI().AttackStart(me);
         }
 
-        public override void sQuestAccept(Player player, Quest quest)
+        public override void QuestAccept(Player player, Quest quest)
         {
             if (quest.Id == QuestIds.FreedomToRuul)
             {
                 me.SetFaction(Misc.FactionQuest);
-                base.Start(true, false, player.GetGUID());
+                Start(true, false, player.GetGUID());
             }
         }
 
@@ -147,7 +147,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
             switch (waypointId)
             {
                 case 0:
-                    me.SetUInt32Value(UnitFields.Bytes1, 0);
+                    me.SetStandState(UnitStandStateType.Stand);
                     GameObject cage = me.FindNearestGameObject(GameObjectIds.Cage, 20);
                     if (cage)
                         cage.SetGoState(GameObjectState.Active);
@@ -167,15 +167,10 @@ namespace Scripts.Kalimdor.ZoneAshenvale
                     break;
             }
         }
-
-        public override void UpdateAI(uint diff)
-        {
-            base.UpdateAI(diff);
-        }
     }
 
     [Script]
-    public class npc_muglash : npc_escortAI
+    public class npc_muglash : NpcEscortAI
     {
         public npc_muglash(Creature creature) : base(creature)
         {
@@ -199,7 +194,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
             Player player = GetPlayerForEscort();
             if (player)
             {
-                if (HasEscortState(eEscortState.Paused))
+                if (HasEscortState(EscortState.Paused))
                 {
                     if (Convert.ToBoolean(RandomHelper.URand(0, 1)))
                         Talk(TextIds.SayMugOnGuard, player);
@@ -210,7 +205,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
 
         public override void JustDied(Unit killer)
         {
-            if (HasEscortState(eEscortState.Escorting))
+            if (HasEscortState(EscortState.Escorting))
             {
                 Player player = GetPlayerForEscort();
                 if (player)
@@ -223,13 +218,13 @@ namespace Scripts.Kalimdor.ZoneAshenvale
             summoned.GetAI().AttackStart(me);
         }
 
-        public override void sQuestAccept(Player player, Quest quest)
+        public override void QuestAccept(Player player, Quest quest)
         {
             if (quest.Id == QuestIds.Vorsha)
             {
                 Talk(TextIds.SayMugStart1);
                 me.SetFaction(Misc.FactionQuest);
-                base.Start(true, false, player.GetGUID());
+                Start(true, false, player.GetGUID());
             }
         }
 
@@ -249,7 +244,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
                         GameObject go = GetClosestGameObjectWithEntry(me, GameObjectIds.NagaBrazier, SharedConst.InteractionDistance * 2);
                         if (go)
                         {
-                            go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                            go.RemoveFlag(GameObjectFlags.NotSelectable);
                             SetEscortPaused(true);
                         }
                         break;
@@ -297,7 +292,7 @@ namespace Scripts.Kalimdor.ZoneAshenvale
 
             if (!me.GetVictim())
             {
-                if (HasEscortState(eEscortState.Paused) && _isBrazierExtinguished)
+                if (HasEscortState(EscortState.Paused) && _isBrazierExtinguished)
                 {
                     if (eventTimer < diff)
                     {

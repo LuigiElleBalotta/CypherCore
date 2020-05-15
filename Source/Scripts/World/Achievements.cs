@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -301,7 +301,7 @@ namespace Scripts.World
 
         public override bool OnCheck(Player player, Unit target)
         {
-            return target && player.isHonorOrXPTarget(target);
+            return target && player.IsHonorOrXPTarget(target);
         }
     }
 }

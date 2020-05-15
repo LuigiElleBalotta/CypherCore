@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,14 +29,13 @@ namespace Framework.Constants
         public const int MaxOutfitItems = 24;
         public const int MaxItemExtCostItems = 5;
         public const int MaxItemExtCostCurrencies = 5;
-        public const int MaxItemRandomProperties = 5;
         public const int MaxItemEnchantmentEffects = 3;
         public const int MaxProtoSpells = 5;
         public const int MaxEquipmentSetIndex = 20;
 
         public const int MaxItemSubclassTotal = 21;
 
-        public const int MaxItemSetItems = 10;
+        public const int MaxItemSetItems = 17;
         public const int MaxItemSetSpells = 8;
 
         public static uint[] ItemQualityColors =
@@ -108,19 +107,19 @@ namespace Framework.Constants
         public const byte BagStart = 19;
         public const byte BagEnd = 23;
         public const byte ItemStart = 23;
-        public const byte ItemEnd = 47;
+        public const byte ItemEnd = 51;
 
-        public const byte BankItemStart = 47;
-        public const byte BankItemEnd = 75;
-        public const byte BankBagStart = 75;
-        public const byte BankBagEnd = 82;
+        public const byte BankItemStart = 51;
+        public const byte BankItemEnd = 79;
+        public const byte BankBagStart = 79;
+        public const byte BankBagEnd = 86;
 
-        public const byte BuyBackStart = 82;
-        public const byte BuyBackEnd = 94;
-        public const byte ReagentStart = 94;
-        public const byte ReagentEnd = 192;
-        public const byte ChildEquipmentStart = 192;
-        public const byte ChildEquipmentEnd = 195;
+        public const byte BuyBackStart = 86;
+        public const byte BuyBackEnd = 98;
+        public const byte ReagentStart = 98;
+        public const byte ReagentEnd = 196;
+        public const byte ChildEquipmentStart = 196;
+        public const byte ChildEquipmentEnd = 199;
 
         public const byte Bag0 = 255;
         public const byte DefaultSize = 16;
@@ -259,7 +258,7 @@ namespace Framework.Constants
         StrInt = 74
     }
 
-    public enum ItemSpelltriggerType : byte
+    public enum ItemSpelltriggerType : sbyte
     {
         OnUse = 0,                  // use after equip cooldown
         OnEquip = 1,
@@ -305,7 +304,7 @@ namespace Framework.Constants
         BattlePetDisplayId = 6,
         EnchantIllusionAllSpecs = 7,
         ArtifactAppearanceId = 8,
-        ScalingStatDistributionFixedLevel = 9,
+        TimewalkerLevel = 9,
         EnchantIllusionSpec1 = 10,
         TransmogAppearanceSpec2 = 11,
         EnchantIllusionSpec2 = 12,
@@ -318,9 +317,11 @@ namespace Framework.Constants
         ChallengeKeystoneAffixId1 = 19,
         ChallengeKeystoneAffixId2 = 20,
         ChallengeKeystoneAffixId3 = 21,
-        ChallengeKeystoneIsCharged = 22,
+        ChallengeKeystoneAffixId4 = 22,
         ArtifactKnowledgeLevel = 23,
         ArtifactTier = 24,
+        Unused25 = 25,
+        PvpRating = 26,
 
         Max
     }
@@ -339,12 +340,77 @@ namespace Framework.Constants
         RepairCostMuliplier = 10,
         ScalingStatDistribution = 11,
         DisenchantLootId = 12,
-        ScalingStatDistribution2 = 13,
+        ScalingStatDistributionFixed = 13,
         ItemLevelCanIncrease = 14, // Displays a + next to item level indicating it can warforge
         RandomEnchantment = 15, // Responsible for showing "<Random additional stats>" or "+%d Rank Random Minor Trait" in the tooltip before item is obtained
         Bounding = 16,
         RelicType = 17,
-        OverrideRequiredLevel = 18
+        OverrideRequiredLevel = 18,
+        AzeriteTierUnlockSet = 19,
+        OverrideCanDisenchant = 21,
+        OverrideCanScrap = 22
+    }
+
+    public enum ItemContext : byte
+    {
+        None = 0,
+        DungeonNormal = 1,
+        DungeonHeroic = 2,
+        RaidNormal = 3,
+        RaidRaidFinder = 4,
+        RaidHeroic = 5,
+        RaidMythic = 6,
+        PvpUnranked1 = 7,
+        PvpRanked1 = 8,
+        ScenarioNormal = 9,
+        ScenarioHeroic = 10,
+        QuestReward = 11,
+        Store = 12,
+        TradeSkill = 13,
+        Vendor = 14,
+        BlackMarket = 15,
+        ChallengeMode1 = 16,
+        DungeonLvlUp1 = 17,
+        DungeonLvlUp2 = 18,
+        DungeonLvlUp3 = 19,
+        DungeonLvlUp4 = 20,
+        ForceToNone = 21,
+        Timewalker = 22,
+        DungeonMythic = 23,
+        PvpHonorReward = 24,
+        WorldQuest1 = 25,
+        WorldQuest2 = 26,
+        WorldQuest3 = 27,
+        WorldQuest4 = 28,
+        WorldQuest5 = 29,
+        WorldQuest6 = 30,
+        MissionReward1 = 31,
+        MissionReward2 = 32,
+        ChallengeMode2 = 33,
+        ChallengeMode3 = 34,
+        ChallengeModeJackpot = 35,
+        WorldQuest7 = 36,
+        WorldQuest8 = 37,
+        PvpRanked2 = 38,
+        PvpRanked3 = 39,
+        PvpRanked4 = 40,
+        PvpUnranked2 = 41,
+        WorldQuest9 = 42,
+        WorldQuest10 = 43,
+        PvpRanked5 = 44,
+        PvpRanked6 = 45,
+        PvpRanked7 = 46,
+        PvpUnranked3 = 47,
+        PvpUnranked4 = 48,
+        PvpUnranked5 = 49,
+        PvpUnranked6 = 50,
+        PvpUnranked7 = 51,
+        PvpRanked8 = 52,
+        WorldQuest11 = 53,
+        WorldQuest12 = 54,
+        WorldQuest13 = 55,
+        PvpRankedJackpot = 56,
+        TournamentRealm = 57
     }
 
     public enum ItemEnchantmentType : byte
@@ -754,6 +820,7 @@ namespace Framework.Constants
         Child = 0x00080000,
         Unk15 = 0x00100000, // ?
         NewItem = 0x00200000, // Item glows in inventory
+        AzeriteEmpoweredItemViewed = 0x00400000, // Won't play azerite powers animation when viewing it
         Unk17 = 0x00400000, // ?
         Unk18 = 0x00800000, // ?
         Unk19 = 0x01000000, // ?
@@ -764,6 +831,11 @@ namespace Framework.Constants
         Unk24 = 0x20000000, // ?
         Unk25 = 0x40000000, // ?
         Unk26 = 0x80000000 // ?
+    }
+
+    public enum ItemFieldFlags2
+    {
+        Equipped = 0x1
     }
 
     public enum ItemFlags : long
@@ -838,7 +910,7 @@ namespace Framework.Constants
         UsedInATradeskill = 0x80000000
     }
 
-    public enum ItemFlags3
+    public enum ItemFlags3 : uint
     {
         DontDestroyOnQuestAccept = 0x01,
         ItemCanBeUpgraded = 0x02,
@@ -864,7 +936,29 @@ namespace Framework.Constants
         ActsAsTransmogHiddenVisualOption = 0x200000,
         ExpireOnWeeklyReset = 0x400000,
         DoesntShowUpInTransmogUntilCollected = 0x800000,
-        CanStoreEnchants = 0x1000000
+        CanStoreEnchants = 0x1000000,
+        HideQuestItemFromObjectTooltip = 0x2000000,
+        DoNotToast = 0x4000000,
+        IgnoreCreationContextForProgressiveWinHistory = 0x8000000,
+        ForceAllSpecsForItemHistory = 0x10000000,
+        SaveOnConsume = 0x20000000,
+        ContainerSavesPlayerData = 0x40000000,
+        NoVoidStorage = 0x80000000
+    }
+
+    public enum ItemFlags4
+    {
+        HandleOnUseEffectImmediately = 0x01,
+        AlwaysShowItemLevelInTooltip = 0x02,
+        ShowsGenerationWithRandomStats = 0x04,
+        ActivateOnEquipEffectsWhenTransmogrified = 0x08,
+        EnforceTransmogWithChildItem = 0x10,
+        Scrapable = 0x20,
+        BypassRepRequirementsForTransmog = 0x40,
+        DisplayOnlyOnDefinedRaces = 0x80,
+        RegulatedCommodity = 0x100,
+        CreateLootImmediately = 0x200,
+        GenerateLootSpecItem = 0x400
     }
 
     public enum ItemFlagsCustom
@@ -905,79 +999,83 @@ namespace Framework.Constants
         TooFewToSplit = 26, // Tried To Split More Than Number In Stack.
         SplitFailed = 27, // Couldn'T Split Those Items.
         SpellFailedReagentsGeneric = 28, // Missing Reagent
-        NotEnoughMoney = 29, // You Don'T Have Enough Money.
-        NotABag = 30, // Not A Bag.
-        DestroyNonemptyBag = 31, // You Can Only Do That With Empty Bags.
-        NotOwner = 32, // You Don'T Own That Item.
-        OnlyOneQuiver = 33, // You Can Only Equip One Quiver.
-        NoBankSlot = 34, // You Must Purchase That Bag Slot First
-        NoBankHere = 35, // You Are Too Far Away From A Bank.
-        ItemLocked = 36, // Item Is Locked.
-        GenericStunned = 37, // You Are Stunned
-        PlayerDead = 38, // You Can'T Do That When You'Re Dead.
-        ClientLockedOut = 39, // You Can'T Do That Right Now.
-        InternalBagError = 40, // Internal Bag Error
-        OnlyOneBolt = 41, // You Can Only Equip One Quiver.
-        OnlyOneAmmo = 42, // You Can Only Equip One Ammo Pouch.
-        CantWrapStackable = 43, // Stackable Items Can'T Be Wrapped.
-        CantWrapEquipped = 44, // Equipped Items Can'T Be Wrapped.
-        CantWrapWrapped = 45, // Wrapped Items Can'T Be Wrapped.
-        CantWrapBound = 46, // Bound Items Can'T Be Wrapped.
-        CantWrapUnique = 47, // Unique Items Can'T Be Wrapped.
-        CantWrapBags = 48, // Bags Can'T Be Wrapped.
-        LootGone = 49, // Already Looted
-        InvFull = 50, // Inventory Is Full.
-        BankFull = 51, // Your Bank Is Full
-        VendorSoldOut = 52, // That Item Is Currently Sold Out.
-        BagFull2 = 53, // That Bag Is Full.
-        ItemNotFound2 = 54, // The Item Was Not Found.
-        CantStack2 = 55, // This Item Cannot Stack.
-        BagFull3 = 56, // That Bag Is Full.
-        VendorSoldOut2 = 57, // That Item Is Currently Sold Out.
-        ObjectIsBusy = 58, // That Object Is Busy.
-        CantBeDisenchanted = 59,
-        NotInCombat = 60, // You Can'T Do That While In Combat
-        NotWhileDisarmed = 61, // You Can'T Do That While Disarmed
-        BagFull4 = 62, // That Bag Is Full.
-        CantEquipRank = 63, // You Don'T Have The Required Rank For That Item
-        CantEquipReputation = 64, // You Don'T Have The Required Reputation For That Item
-        TooManySpecialBags = 65, // You Cannot Equip Another Bag Of That Type
-        LootCantLootThatNow = 66, // You Can'T Loot That Item Now.
-        ItemUniqueEquippable = 67, // You Cannot Equip More Than One Of Those.
-        VendorMissingTurnins = 68, // You Do Not Have The Required Items For That Purchase
-        NotEnoughHonorPoints = 69, // You Don'T Have Enough Honor Points
-        NotEnoughArenaPoints = 70, // You Don'T Have Enough Arena Points
-        ItemMaxCountSocketed = 71, // You Have The Maximum Number Of Those Gems In Your Inventory Or Socketed Into Items.
-        MailBoundItem = 72, // You Can'T Mail Soulbound Items.
-        InternalBagError2 = 73, // Internal Bag Error
-        BagFull5 = 74, // That Bag Is Full.
-        ItemMaxCountEquippedSocketed = 75, // You Have The Maximum Number Of Those Gems Socketed Into Equipped Items.
-        ItemUniqueEquippableSocketed = 76, // You Cannot Socket More Than One Of Those Gems Into A Single Item.
-        TooMuchGold = 77, // At Gold Limit
-        NotDuringArenaMatch = 78, // You Can'T Do That While In An Arena Match
-        TradeBoundItem = 79, // You Can'T Trade A Soulbound Item.
-        CantEquipRating = 80, // You Don'T Have The Personal, Team, Or Battleground Rating Required To Buy That Item
-        EventAutoequipBindConfirm = 81,
-        NotSameAccount = 82, // Account-Bound Items Can Only Be Given To Your Own Characters.
-        NoOutput = 83,
-        ItemMaxLimitCategoryCountExceededIs = 84, // You Can Only Carry %D %S
-        ItemMaxLimitCategorySocketedExceededIs = 85, // You Can Only Equip %D |4item:Items In The %S Category
-        ScalingStatItemLevelExceeded = 86, // Your Level Is Too High To Use That Item
-        PurchaseLevelTooLow = 87, // You Must Reach Level %D To Purchase That Item.
-        CantEquipNeedTalent = 88, // You Do Not Have The Required Talent To Equip That.
-        ItemMaxLimitCategoryEquippedExceededIs = 89, // You Can Only Equip %D |4item:Items In The %S Category
-        ShapeshiftFormCannotEquip = 90, // Cannot Equip Item In This Form
-        ItemInventoryFullSatchel = 91, // Your Inventory Is Full. Your Satchel Has Been Delivered To Your Mailbox.
-        ScalingStatItemLevelTooLow = 92, // Your Level Is Too Low To Use That Item
-        CantBuyQuantity = 93, // You Can'T Buy The Specified Quantity Of That Item.
-        ItemIsBattlePayLocked = 94, // Your purchased item is still waiting to be unlocked
-        ReagentBankFull = 95, // Your reagent bank is full
-        ReagentBankLocked = 96,
-        WrongBagType3 = 97,
-        CantUseItem = 98, // You can't use that item.
-        CantBeObliterated = 99, // You can't obliterate that item
-        GuildBankConjuredItem = 100,// You cannot store conjured items in the guild bank
-        CantDoThatRightNow = 101,// You can't do that right now.
+        CantTradeGold = 29, // Gold May Only Be Offered By One Trader.
+        NotEnoughMoney = 30, // You Don'T Have Enough Money.
+        NotABag = 31, // Not A Bag.
+        DestroyNonemptyBag = 32, // You Can Only Do That With Empty Bags.
+        NotOwner = 33, // You Don'T Own That Item.
+        OnlyOneQuiver = 34, // You Can Only Equip One Quiver.
+        NoBankSlot = 35, // You Must Purchase That Bag Slot First
+        NoBankHere = 36, // You Are Too Far Away From A Bank.
+        ItemLocked = 37, // Item Is Locked.
+        GenericStunned = 38, // You Are Stunned
+        PlayerDead = 39, // You Can'T Do That When You'Re Dead.
+        ClientLockedOut = 40, // You Can'T Do That Right Now.
+        InternalBagError = 41, // Internal Bag Error
+        OnlyOneBolt = 42, // You Can Only Equip One Quiver.
+        OnlyOneAmmo = 43, // You Can Only Equip One Ammo Pouch.
+        CantWrapStackable = 44, // Stackable Items Can'T Be Wrapped.
+        CantWrapEquipped = 45, // Equipped Items Can'T Be Wrapped.
+        CantWrapWrapped = 46, // Wrapped Items Can'T Be Wrapped.
+        CantWrapBound = 47, // Bound Items Can'T Be Wrapped.
+        CantWrapUnique = 48, // Unique Items Can'T Be Wrapped.
+        CantWrapBags = 49, // Bags Can'T Be Wrapped.
+        LootGone = 50, // Already Looted
+        InvFull = 51, // Inventory Is Full.
+        BankFull = 52, // Your Bank Is Full
+        VendorSoldOut = 53, // That Item Is Currently Sold Out.
+        BagFull2 = 54, // That Bag Is Full.
+        ItemNotFound2 = 55, // The Item Was Not Found.
+        CantStack2 = 56, // This Item Cannot Stack.
+        BagFull3 = 57, // That Bag Is Full.
+        VendorSoldOut2 = 58, // That Item Is Currently Sold Out.
+        ObjectIsBusy = 59, // That Object Is Busy.
+        CantBeDisenchanted = 60, // Item Cannot Be Disenchanted
+        NotInCombat = 61, // You Can'T Do That While In Combat
+        NotWhileDisarmed = 62, // You Can'T Do That While Disarmed
+        BagFull4 = 63, // That Bag Is Full.
+        CantEquipRank = 64, // You Don'T Have The Required Rank For That Item
+        CantEquipReputation = 65, // You Don'T Have The Required Reputation For That Item
+        TooManySpecialBags = 66, // You Cannot Equip Another Bag Of That Type
+        LootCantLootThatNow = 67, // You Can'T Loot That Item Now.
+        ItemUniqueEquippable = 68, // You Cannot Equip More Than One Of Those.
+        VendorMissingTurnins = 69, // You Do Not Have The Required Items For That Purchase
+        NotEnoughHonorPoints = 70, // You Don'T Have Enough Honor Points
+        NotEnoughArenaPoints = 71, // You Don'T Have Enough Arena Points
+        ItemMaxCountSocketed = 72, // You Have The Maximum Number Of Those Gems In Your Inventory Or Socketed Into Items.
+        MailBoundItem = 73, // You Can'T Mail Soulbound Items.
+        InternalBagError2 = 74, // Internal Bag Error
+        BagFull5 = 75, // That Bag Is Full.
+        ItemMaxCountEquippedSocketed = 76, // You Have The Maximum Number Of Those Gems Socketed Into Equipped Items.
+        ItemUniqueEquippableSocketed = 77, // You Cannot Socket More Than One Of Those Gems Into A Single Item.
+        TooMuchGold = 78, // At Gold Limit
+        NotDuringArenaMatch = 79, // You Can'T Do That While In An Arena Match
+        TradeBoundItem = 80, // You Can'T Trade A Soulbound Item.
+        CantEquipRating = 81, // You Don'T Have The Personal, Team, Or Battleground Rating Required To Buy That Item
+        EventAutoequipBindConfirm = 82,
+        NotSameAccount = 83, // Account-Bound Items Can Only Be Given To Your Own Characters.
+        EquipNone3 = 84,
+        ItemMaxLimitCategoryCountExceededIs = 85, // You Can Only Carry %D %S
+        ItemMaxLimitCategorySocketedExceededIs = 86, // You Can Only Equip %D |4item:Items In The %S Category
+        ScalingStatItemLevelExceeded = 87, // Your Level Is Too High To Use That Item
+        PurchaseLevelTooLow = 88, // You Must Reach Level %D To Purchase That Item.
+        CantEquipNeedTalent = 89, // You Do Not Have The Required Talent To Equip That.
+        ItemMaxLimitCategoryEquippedExceededIs = 90, // You Can Only Equip %D |4item:Items In The %S Category
+        ShapeshiftFormCannotEquip = 91, // Cannot Equip Item In This Form
+        ItemInventoryFullSatchel = 92, // Your Inventory Is Full. Your Satchel Has Been Delivered To Your Mailbox.
+        ScalingStatItemLevelTooLow = 93, // Your Level Is Too Low To Use That Item
+        CantBuyQuantity = 94, // You Can'T Buy The Specified Quantity Of That Item.
+        ItemIsBattlePayLocked = 95, // Your Purchased Item Is Still Waiting To Be Unlocked
+        ReagentBankFull = 96, // Your Reagent Bank Is Full
+        ReagentBankLocked = 97,
+        WrongBagType3 = 98, // That Item Doesn'T Go In That Container.
+        CantUseItem = 99, // You Can'T Use That Item.
+        CantBeObliterated = 100,// You Can'T Obliterate That Item
+        GuildBankConjuredItem = 101,// You Cannot Store Conjured Items In The Guild Bank
+        CantDoThatRightNow = 102,// You Can'T Do That Right Now.
+        BagFull6 = 103,// That Bag Is Full.
+        CantBeScrapped = 104,// You Can'T Scrap That Item
+        None4 = 105
     }
 
     public enum BuyResult
@@ -1052,7 +1150,7 @@ namespace Framework.Constants
         JusticePoints = 395,
         ValorPoints = 396,
         ApexisCrystals = 823,
-        ArtifactKnowledge = 1171,
+        Azerite = 1553
     }
 
     public enum PlayerCurrencyState
@@ -1075,5 +1173,21 @@ namespace Framework.Constants
         Fist,
 
         Invalid
+    }
+
+    public enum AzeriteEssenceActivateResult
+    {
+        None = 0,
+        EssenceNotUnlocked = 2,    // Arg: AzeriteEssenceID
+        CantDoThatRightNow = 3,
+        AffectingCombat = 4,
+        CantRemoveEssence = 5,    // Arg: SpellID of active essence on cooldown
+        ChallengeModeActive = 6,
+        NotInRestArea = 7,
+        ConditionFailed = 8,
+        SlotLocked = 9,
+        NotAtForge = 10,
+        HeartLevelTooLow = 11,   // Arg: RequiredLevel
+        NotEquipped = 12
     }
 }

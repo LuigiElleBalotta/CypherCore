@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -366,7 +366,7 @@ namespace Game.DungeonFinding
             foreach (var guid in check)
             {
                 if (!(numLfgGroups < 2) && !(numPlayers <= MapConst.MaxGroupSize))
-                    break; ;
+                    break;
 
                 var itQueue = QueueDataStore.LookupByKey(guid);
                 if (itQueue == null)
@@ -471,10 +471,9 @@ namespace Game.DungeonFinding
                     if (guid == itguid)
                         continue;
 
-                    List<uint> temporal;
                     List<uint> dungeons = QueueDataStore[itguid].dungeons;
                     o.AppendFormat(", {0}: ({1})", guid, Global.LFGMgr.ConcatenateDungeons(dungeons));
-                    temporal = proposalDungeons.Intersect(dungeons).ToList();
+                    List<uint> temporal = proposalDungeons.Intersect(dungeons).ToList();
                     proposalDungeons = temporal;
                 }
 
@@ -655,7 +654,7 @@ namespace Game.DungeonFinding
                 }
             }
 
-            return string.Format("Queued Players: {0} (in group: {1}) Groups: {2}\n", players, playersInGroup, groups);
+            return $"Queued Players: {players} (in group: {playersInGroup}) Groups: {groups}\n";
         }
 
         public string DumpCompatibleInfo(bool full = false)

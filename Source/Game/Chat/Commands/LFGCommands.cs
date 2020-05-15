@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,10 +30,8 @@ namespace Game.Chat
         [Command("player", RBACPermissions.CommandLfgPlayer, true)]
         static bool HandleLfgPlayerInfoCommand(StringArguments args, CommandHandler handler)
         {
-            Player target = null;
-            string playerName;
-            ObjectGuid guid;
-            if (!handler.extractPlayerTarget(args, out target, out guid, out playerName))
+            Player target;
+            if (!handler.ExtractPlayerTarget(args, out target))
                 return false;
 
             GetPlayerInfo(handler, target);
@@ -46,17 +44,17 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            Player playerTarget = null;
+            Player playerTarget;
             ObjectGuid guidTarget;
             string nameTarget;
 
             ObjectGuid parseGUID = ObjectGuid.Create(HighGuid.Player, args.NextUInt64());
-            if (ObjectManager.GetPlayerNameByGUID(parseGUID, out nameTarget))
+            if (Global.CharacterCacheStorage.GetCharacterNameByGuid(parseGUID, out nameTarget))
             {
                 playerTarget = Global.ObjAccessor.FindPlayer(parseGUID);
                 guidTarget = parseGUID;
             }
-            else if (!handler.extractPlayerTarget(args, out playerTarget, out guidTarget, out nameTarget))
+            else if (!handler.ExtractPlayerTarget(args, out playerTarget, out guidTarget, out nameTarget))
                 return false;
 
             Group groupTarget = null;
@@ -78,7 +76,7 @@ namespace Game.Chat
             }
 
             ObjectGuid guid = groupTarget.GetGUID();
-            handler.SendSysMessage(CypherStrings.LfgGroupInfo, groupTarget.isLFGGroup(), Global.LFGMgr.GetState(guid), Global.LFGMgr.GetDungeon(guid));
+            handler.SendSysMessage(CypherStrings.LfgGroupInfo, groupTarget.IsLFGGroup(), Global.LFGMgr.GetState(guid), Global.LFGMgr.GetDungeon(guid));
 
             foreach (var slot in groupTarget.GetMemberSlots())
             {

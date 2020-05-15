@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -140,6 +140,11 @@ namespace Game.Scenarios
             return true;
         }
 
+        public ScenarioRecord GetEntry()
+        {
+            return _data.Entry;
+        }
+
         ScenarioStepState GetStepState(ScenarioStepRecord step)
         {
             if (!_stepStates.ContainsKey(step))
@@ -151,7 +156,7 @@ namespace Game.Scenarios
         public override void SendCriteriaUpdate(Criteria criteria, CriteriaProgress progress, uint timeElapsed, bool timedCompleted)
         {
             ScenarioProgressUpdate progressUpdate = new ScenarioProgressUpdate();
-            progressUpdate.CriteriaProgress.Id = criteria.ID;
+            progressUpdate.CriteriaProgress.Id = criteria.Id;
             progressUpdate.CriteriaProgress.Quantity = progress.Counter;
             progressUpdate.CriteriaProgress.Player = progress.PlayerGUID;
             progressUpdate.CriteriaProgress.Date = progress.Date;
@@ -334,7 +339,7 @@ namespace Game.Scenarios
         public virtual void Update(uint diff) { }
 
         public void SetStepState(ScenarioStepRecord step, ScenarioStepState state) { _stepStates[step] = state; }
-        ScenarioStepRecord GetStep()
+        public ScenarioStepRecord GetStep()
         {
             return _currentstep;
         }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,8 +53,8 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
-            ProposedRoles = _worldPacket.ReadInt32();
+            PartyIndex = _worldPacket.ReadUInt8();
+            ProposedRoles = _worldPacket.ReadUInt32();
             TargetGUID = _worldPacket.ReadPackedGuid();
 
             uint targetNameLen = _worldPacket.ReadBits<uint>(9);
@@ -64,8 +64,8 @@ namespace Game.Network.Packets
             TargetRealm = _worldPacket.ReadString(targetRealmLen);
         }
 
-        public sbyte PartyIndex;
-        public int ProposedRoles;
+        public byte PartyIndex;
+        public uint ProposedRoles;
         public string TargetName;
         public string TargetRealm;
         public ObjectGuid TargetGUID;
@@ -75,7 +75,7 @@ namespace Game.Network.Packets
     {
         public PartyInvite() : base(ServerOpcodes.PartyInvite) { }
 
-        public void Initialize(Player inviter, int proposedRoles, bool canAccept)
+        public void Initialize(Player inviter, uint proposedRoles, bool canAccept)
         {
             CanAccept = canAccept;
 
@@ -110,7 +110,7 @@ namespace Game.Network.Packets
             _worldPacket.WritePackedGuid(InviterGUID);
             _worldPacket.WritePackedGuid(InviterBNetAccountId);
             _worldPacket.WriteUInt16(Unk1);
-            _worldPacket.WriteInt32(ProposedRoles);
+            _worldPacket.WriteUInt32(ProposedRoles);
             _worldPacket.WriteInt32(LfgSlots.Count);
             _worldPacket.WriteInt32(LfgCompletedMask);
 
@@ -141,7 +141,7 @@ namespace Game.Network.Packets
         public string InviterRealmNameNormalized;
 
         // Lfg
-        public int ProposedRoles;
+        public uint ProposedRoles;
         public int LfgCompletedMask;
         public List<int> LfgSlots = new List<int>();
     }
@@ -152,18 +152,18 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
 
             Accept = _worldPacket.HasBit();
 
             bool hasRolesDesired = _worldPacket.HasBit();
             if (hasRolesDesired)
-                RolesDesired.Set(_worldPacket.ReadInt32());
+                RolesDesired.Set(_worldPacket.ReadUInt32());
         }
 
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public bool Accept;
-        public Optional<int> RolesDesired;
+        public Optional<uint> RolesDesired;
     }
 
     class PartyUninvite : ClientPacket
@@ -172,14 +172,14 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
             TargetGUID = _worldPacket.ReadPackedGuid();
 
             byte reasonLen = _worldPacket.ReadBits<byte>(8);
             Reason = _worldPacket.ReadString(reasonLen);
         }
 
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public ObjectGuid TargetGUID;
         public string Reason;
     }
@@ -201,17 +201,24 @@ namespace Game.Network.Packets
         public string Name;
     }
 
+    class GroupUninvite : ServerPacket
+    {
+        public GroupUninvite() : base(ServerOpcodes.GroupUninvite) { }
+
+        public override void Write() { }
+    }
+
     class RequestPartyMemberStats : ClientPacket
     {
         public RequestPartyMemberStats(WorldPacket packet) : base(packet) { }
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
             TargetGUID = _worldPacket.ReadPackedGuid();
         }
 
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public ObjectGuid TargetGUID;
     }
 
@@ -242,7 +249,7 @@ namespace Game.Network.Packets
 
             if (!player.IsAlive())
             {
-                if (player.HasFlag(PlayerFields.Flags, PlayerFlags.Ghost))
+                if (player.HasPlayerFlag(PlayerFlags.Ghost))
                     MemberStats.Status |= GroupMemberOnlineStatus.Ghost;
                 else
                     MemberStats.Status |= GroupMemberOnlineStatus.Dead;
@@ -251,17 +258,17 @@ namespace Game.Network.Packets
             if (player.IsFFAPvP())
                 MemberStats.Status |= GroupMemberOnlineStatus.PVPFFA;
 
-            if (player.isAFK())
+            if (player.IsAFK())
                 MemberStats.Status |= GroupMemberOnlineStatus.AFK;
 
-            if (player.isDND())
+            if (player.IsDND())
                 MemberStats.Status |= GroupMemberOnlineStatus.DND;
 
             if (player.GetVehicle())
                 MemberStats.Status |= GroupMemberOnlineStatus.Vehicle;
 
             // Level
-            MemberStats.Level = (ushort)player.getLevel();
+            MemberStats.Level = (ushort)player.GetLevel();
 
             // Health
             MemberStats.CurrentHealth = (int)player.GetHealth();
@@ -279,9 +286,9 @@ namespace Game.Network.Packets
             MemberStats.PositionY = (short)(player.GetPositionY());
             MemberStats.PositionZ = (short)(player.GetPositionZ());
 
-            MemberStats.SpecID = (ushort)player.GetUInt32Value(PlayerFields.CurrentSpecId);
-            MemberStats.PartyType[0] = (sbyte)(player.GetByteValue(PlayerFields.Bytes3, PlayerFieldOffsets.Bytes3OffsetPartyType) & 0xF);
-            MemberStats.PartyType[1] = (sbyte)(player.GetByteValue(PlayerFields.Bytes3, PlayerFieldOffsets.Bytes3OffsetPartyType) >> 4);
+            MemberStats.SpecID = (ushort)player.GetPrimarySpecialization();
+            MemberStats.PartyType[0] = (sbyte)(player.m_playerData.PartyType & 0xF);
+            MemberStats.PartyType[1] = (sbyte)(player.m_playerData.PartyType >> 4);
             MemberStats.WmoGroupID = 0;
             MemberStats.WmoDoodadPlacementID = 0;
 
@@ -420,13 +427,6 @@ namespace Game.Network.Packets
         }
 
         public sbyte PartyIndex;
-    }
-
-    class GroupUninvite : ServerPacket
-    {
-        public GroupUninvite() : base(ServerOpcodes.GroupUninvite) { }
-
-        public override void Write() { }
     }
 
     class GroupDestroyed : ServerPacket
@@ -571,13 +571,13 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
             Target = _worldPacket.ReadPackedGuid();
             Apply = _worldPacket.HasBit();
         }
 
         public ObjectGuid Target;
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public bool Apply;
     }
 
@@ -635,11 +635,11 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
             IsReady = _worldPacket.HasBit();
         }
 
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public bool IsReady;
     }
 
@@ -741,14 +741,14 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt16(PartyFlags);
+            _worldPacket.WriteUInt16((ushort)PartyFlags);
             _worldPacket.WriteUInt8(PartyIndex);
-            _worldPacket.WriteUInt8(PartyType);
+            _worldPacket.WriteUInt8((byte)PartyType);
             _worldPacket.WriteInt32(MyIndex);
             _worldPacket.WritePackedGuid(PartyGUID);
             _worldPacket.WriteInt32(SequenceNum);
             _worldPacket.WritePackedGuid(LeaderGUID);
-            _worldPacket.WriteUInt32(PlayerList.Count);
+            _worldPacket.WriteInt32(PlayerList.Count);
             _worldPacket.WriteBit(LfgInfos.HasValue);
             _worldPacket.WriteBit(LootSettings.HasValue);
             _worldPacket.WriteBit(DifficultySettings.HasValue);
@@ -790,11 +790,11 @@ namespace Game.Network.Packets
 
         public override void Read()
         {
-            PartyIndex = _worldPacket.ReadInt8();
+            PartyIndex = _worldPacket.ReadUInt8();
             EveryoneIsAssistant = _worldPacket.HasBit();
         }
 
-        public sbyte PartyIndex;
+        public byte PartyIndex;
         public bool EveryoneIsAssistant;
     }
 
@@ -905,8 +905,8 @@ namespace Game.Network.Packets
     {
         public void Write(WorldPacket data)
         {
-            data.WriteUInt32(PhaseShiftFlags);
-            data.WriteUInt32(List.Count);
+            data.WriteInt32(PhaseShiftFlags);
+            data.WriteInt32(List.Count);
             data.WritePackedGuid(PersonalGUID);
 
             foreach (PartyMemberPhase phase in List)
@@ -944,7 +944,7 @@ namespace Game.Network.Packets
             data.WriteInt32(ModelId);
             data.WriteInt32(CurrentHealth);
             data.WriteInt32(MaxHealth);
-            data.WriteUInt32(Auras.Count);
+            data.WriteInt32(Auras.Count);
             Auras.ForEach(p => p.Write(data));
 
             data.WriteBits(Name.GetByteCount(), 8);
@@ -969,9 +969,9 @@ namespace Game.Network.Packets
             for (byte i = 0; i < 2; i++)
                 data.WriteInt8(PartyType[i]);
 
-            data.WriteInt16(Status);
+            data.WriteInt16((short)Status);
             data.WriteUInt8(PowerType);
-            data.WriteInt16(PowerDisplayID);
+            data.WriteInt16((short)PowerDisplayID);
             data.WriteInt32(CurrentHealth);
             data.WriteInt32(MaxHealth);
             data.WriteUInt16(CurrentPower);
@@ -1032,25 +1032,30 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteBits(Name.GetByteCount(), 6);
+            data.WriteBits(VoiceStateID.GetByteCount() + 1, 6);
             data.WriteBit(FromSocialQueue);
+            data.WriteBit(VoiceChatSilenced);
             data.WritePackedGuid(GUID);
-            data.WriteUInt8(Status);
+            data.WriteUInt8((byte)Status);
             data.WriteUInt8(Subgroup);
             data.WriteUInt8(Flags);
             data.WriteUInt8(RolesAssigned);
             data.WriteUInt8(Class);
             data.WriteString(Name);
+            if (!VoiceStateID.IsEmpty())
+                data.WriteString(VoiceStateID);
         }
 
         public ObjectGuid GUID;
         public string Name;
+        public string VoiceStateID;   // same as bgs.protocol.club.v1.MemberVoiceState.id
         public byte Class;
-
         public GroupMemberOnlineStatus Status;
         public byte Subgroup;
         public byte Flags;
         public byte RolesAssigned;
         public bool FromSocialQueue;
+        public bool VoiceChatSilenced;
     }
 
     struct PartyLFGInfo

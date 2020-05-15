@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+using Framework.Constants;
 
 namespace Game.DataStorage
 {
@@ -23,24 +24,24 @@ namespace Game.DataStorage
         public uint Cost;
     }
 
-    public sealed class BannedAddOnsRecord
+    public sealed class BannedAddonsRecord
     {
         public uint Id;
         public string Name;
         public string Version;
-        public byte[] Flags = new byte[4];
+        public byte Flags;
     }
 
     public sealed class BarberShopStyleRecord
     {
-        public LocalizedString DisplayName;
-        public LocalizedString Description;
+        public string DisplayName;
+        public string Description;
+        public uint Id;
+        public byte Type;                                                     // value 0 . hair, value 2 . facialhair
         public float CostModifier;
-        public byte Type;
         public byte Race;
         public byte Sex;
-        public byte Data;
-        public uint Id;
+        public byte Data;                                                     // real ID to hair/facial hair
     }
 
     public sealed class BattlePetBreedQualityRecord
@@ -53,31 +54,31 @@ namespace Game.DataStorage
     public sealed class BattlePetBreedStateRecord
     {
         public uint Id;
-        public ushort Value;
         public byte BattlePetStateID;
+        public ushort Value;
         public uint BattlePetBreedID;
     }
 
     public sealed class BattlePetSpeciesRecord
     {
-        public LocalizedString SourceText;
-        public LocalizedString Description;
-        public uint CreatureID;
-        public uint IconFileDataID;
-        public uint SummonSpellID;
-        public ushort Flags;
-        public byte PetTypeEnum;
-        public sbyte SourceTypeEnum;
+        public string Description;
+        public string SourceText;
         public uint Id;
-        public byte CardUIModelSceneID;
-        public byte LoadoutUIModelSceneID;
+        public uint CreatureID;
+        public uint SummonSpellID;
+        public int IconFileDataID;
+        public byte PetTypeEnum;
+        public ushort Flags;
+        public sbyte SourceTypeEnum;
+        public int CardUIModelSceneID;
+        public int LoadoutUIModelSceneID;
     }
 
     public sealed class BattlePetSpeciesStateRecord
     {
         public uint Id;
+        public ushort BattlePetStateID;
         public int Value;
-        public byte BattlePetStateID;
         public uint BattlePetSpeciesID;
     }
 
@@ -85,35 +86,36 @@ namespace Game.DataStorage
     {
         public uint Id;
         public LocalizedString Name;
-        public LocalizedString GameType;
-        public LocalizedString ShortDescription;
-        public LocalizedString LongDescription;
-        public int IconFileDataID;
-        public short[] MapId = new short[16];
+        public string GameType;
+        public string ShortDescription;
+        public string LongDescription;
+        public sbyte InstanceType;
+        public sbyte MinLevel;
+        public sbyte MaxLevel;
+        public sbyte RatedPlayers;
+        public sbyte MinPlayers;
+        public sbyte MaxPlayers;
+        public sbyte GroupsAllowed;
+        public sbyte MaxGroupSize;
         public ushort HolidayWorldState;
-        public ushort RequiredPlayerConditionID;
-        public byte InstanceType;
-        public byte GroupsAllowed;
-        public byte MaxGroupSize;
-        public byte MinLevel;
-        public byte MaxLevel;
-        public byte RatedPlayers;
-        public byte MinPlayers;
-        public byte MaxPlayers;
-        public byte Flags;
+        public BattlemasterListFlags Flags;
+        public int IconFileDataID;
+        public short RequiredPlayerConditionID;
+        public short[] MapId = new short[16];
     }
 
     public sealed class BroadcastTextRecord
     {
-        public uint Id;
         public LocalizedString Text;
         public LocalizedString Text1;
+        public uint Id;
+        public byte LanguageID;
+        public int ConditionID;
+        public ushort EmotesID;
+        public byte Flags;
+        public uint ChatBubbleDurationMs;
+        public uint[] SoundEntriesID = new uint[2];
         public ushort[] EmoteID = new ushort[3];
         public ushort[] EmoteDelay = new ushort[3];
-        public ushort EmotesID;
-        public byte LanguageID;
-        public byte Flags;
-        public uint ConditionID;
-        public uint[] SoundEntriesID = new uint[2];
     }
 }

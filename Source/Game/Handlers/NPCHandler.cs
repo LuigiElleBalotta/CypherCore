@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.TabardVendorActivate)]
         void HandleTabardVendorActivate(Hello packet)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.TabardDesigner);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.TabardDesigner, NPCFlags2.None);
             if (!unit)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleTabardVendorActivateOpcode - {0} not found or you can not interact with him.", packet.Unit.ToString());
@@ -56,7 +56,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.TrainerList)]
         void HandleTrainerList(Hello packet)
         {
-            Creature npc = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Trainer);
+            Creature npc = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Trainer, NPCFlags2.None);
             if (!npc)
             {
                 Log.outDebug(LogFilter.Network, $"WorldSession.SendTrainerList - {packet.Unit.ToString()} not found or you can not interact with him.");
@@ -92,7 +92,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.TrainerBuySpell)]
         void HandleTrainerBuySpell(TrainerBuySpell packet)
         {
-            Creature npc = _player.GetNPCIfCanInteractWith(packet.TrainerGUID, NPCFlags.Trainer);
+            Creature npc = _player.GetNPCIfCanInteractWith(packet.TrainerGUID, NPCFlags.Trainer, NPCFlags2.None);
             if (npc == null)
             {
                 Log.outDebug(LogFilter.Network, $"WORLD: HandleTrainerBuySpell - {packet.TrainerGUID.ToString()} not found or you can not interact with him.");
@@ -129,7 +129,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.TalkToGossip)]
         void HandleGossipHello(Hello packet)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Gossip);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Gossip, NPCFlags2.None);
             if (unit == null)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleGossipHello - {0} not found or you can not interact with him.", packet.Unit.ToString());
@@ -137,14 +137,15 @@ namespace Game
             }
 
             // set faction visible if needed
-            var factionTemplateEntry = CliDB.FactionTemplateStorage.LookupByKey(unit.getFaction());
+            var factionTemplateEntry = CliDB.FactionTemplateStorage.LookupByKey(unit.GetFaction());
             if (factionTemplateEntry != null)
                 GetPlayer().GetReputationMgr().SetVisible(factionTemplateEntry);
 
             GetPlayer().RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags.Talk);
 
-            if (unit.IsArmorer() || unit.IsCivilian() || unit.IsQuestGiver() || unit.IsServiceProvider() || unit.IsGuard())
-                unit.StopMoving();
+            // and if he has pure gossip or is banker and moves or is tabard designer?
+            //if (unit->IsArmorer() || unit->IsCivilian() || unit->IsQuestGiver() || unit->IsServiceProvider() || unit->IsGuard())
+            unit.StopMoving();
 
             // If spiritguide, no need for gossip menu, just put player into resurrect queue
             if (unit.IsSpiritGuide())
@@ -163,7 +164,7 @@ namespace Game
                 GetPlayer().PrepareGossipMenu(unit, unit.GetCreatureTemplate().GossipMenuId, true);
                 GetPlayer().SendPreparedGossip(unit);
             }
-            unit.GetAI().sGossipHello(GetPlayer());
+            unit.GetAI().GossipHello(GetPlayer());
         }
 
         [WorldPacketHandler(ClientOpcodes.GossipSelectOption)]
@@ -180,7 +181,7 @@ namespace Game
             GameObject go = null;
             if (packet.GossipUnit.IsCreatureOrVehicle())
             {
-                unit = GetPlayer().GetNPCIfCanInteractWith(packet.GossipUnit, NPCFlags.Gossip);
+                unit = GetPlayer().GetNPCIfCanInteractWith(packet.GossipUnit, NPCFlags.Gossip, NPCFlags2.None);
                 if (unit == null)
                 {
                     Log.outDebug(LogFilter.Network, "WORLD: HandleGossipSelectOption - {0} not found or you can't interact with him.", packet.GossipUnit.ToString());
@@ -221,7 +222,7 @@ namespace Game
             {
                 if (unit)
                 {
-                    unit.GetAI().sGossipSelectCode(GetPlayer(), packet.GossipID, packet.GossipIndex, packet.PromotionCode);
+                    unit.GetAI().GossipSelectCode(GetPlayer(), packet.GossipID, packet.GossipIndex, packet.PromotionCode);
                     if (!Global.ScriptMgr.OnGossipSelectCode(GetPlayer(), unit, GetPlayer().PlayerTalkClass.GetGossipOptionSender(packet.GossipIndex), GetPlayer().PlayerTalkClass.GetGossipOptionAction(packet.GossipIndex), packet.PromotionCode))
                         GetPlayer().OnGossipSelect(unit, packet.GossipIndex, packet.GossipID);
                 }
@@ -235,7 +236,7 @@ namespace Game
             {
                 if (unit != null)
                 {
-                    unit.GetAI().sGossipSelect(GetPlayer(), packet.GossipID, packet.GossipIndex);
+                    unit.GetAI().GossipSelect(GetPlayer(), packet.GossipID, packet.GossipIndex);
                     if (!Global.ScriptMgr.OnGossipSelect(GetPlayer(), unit, GetPlayer().PlayerTalkClass.GetGossipOptionSender(packet.GossipIndex), GetPlayer().PlayerTalkClass.GetGossipOptionAction(packet.GossipIndex)))
                         GetPlayer().OnGossipSelect(unit, packet.GossipIndex, packet.GossipID);
                 }
@@ -251,7 +252,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.SpiritHealerActivate)]
         void HandleSpiritHealerActivate(SpiritHealerActivate packet)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Healer, NPCFlags.SpiritHealer);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Healer, NPCFlags.SpiritHealer, NPCFlags2.None);
             if (!unit)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleSpiritHealerActivateOpcode - {0} not found or you can not interact with him.", packet.Healer.ToString());
@@ -272,7 +273,7 @@ namespace Game
             GetPlayer().DurabilityLossAll(0.25f, true);
 
             // get corpse nearest graveyard
-            WorldSafeLocsRecord corpseGrave = null;
+            WorldSafeLocsEntry corpseGrave = null;
             WorldLocation corpseLocation = GetPlayer().GetCorpseLocation();
             if (GetPlayer().HasCorpse())
             {
@@ -285,17 +286,11 @@ namespace Game
             // teleport to nearest from corpse graveyard, if different from nearest to player ghost
             if (corpseGrave != null)
             {
-                WorldSafeLocsRecord ghostGrave = Global.ObjectMgr.GetClosestGraveYard(GetPlayer(), GetPlayer().GetTeam(), GetPlayer());
+                WorldSafeLocsEntry ghostGrave = Global.ObjectMgr.GetClosestGraveYard(GetPlayer(), GetPlayer().GetTeam(), GetPlayer());
 
                 if (corpseGrave != ghostGrave)
-                    GetPlayer().TeleportTo(corpseGrave.MapID, corpseGrave.Loc.X, corpseGrave.Loc.Y, corpseGrave.Loc.Z, GetPlayer().GetOrientation());
-                // or update at original position
-                else
-                    GetPlayer().UpdateObjectVisibility();
+                    GetPlayer().TeleportTo(corpseGrave.Loc);
             }
-            // or update at original position
-            else
-                GetPlayer().UpdateObjectVisibility();
         }
 
         [WorldPacketHandler(ClientOpcodes.BinderActivate)]
@@ -304,7 +299,7 @@ namespace Game
             if (!GetPlayer().IsInWorld || !GetPlayer().IsAlive())
                 return;
 
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Innkeeper);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.Unit, NPCFlags.Innkeeper, NPCFlags2.None);
             if (!unit)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleBinderActivate - {0} not found or you can not interact with him.", packet.Unit.ToString());
@@ -371,14 +366,14 @@ namespace Game
 
             uint petSlot = 0;
             // not let move dead pet in slot
-            if (pet && pet.IsAlive() && pet.getPetType() == PetType.Hunter)
+            if (pet && pet.IsAlive() && pet.GetPetType() == PetType.Hunter)
             {
                 PetStableInfo stableEntry;// = new PetStableInfo();
                 stableEntry.PetSlot = petSlot;
                 stableEntry.PetNumber = pet.GetCharmInfo().GetPetNumber();
                 stableEntry.CreatureID = pet.GetEntry();
                 stableEntry.DisplayID = pet.GetDisplayId();
-                stableEntry.ExperienceLevel = pet.getLevel();
+                stableEntry.ExperienceLevel = pet.GetLevel();
                 stableEntry.PetFlags = PetStableinfo.Active;
                 stableEntry.PetName = pet.GetName();
                 ++petSlot;
@@ -417,7 +412,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.RepairItem)]
         void HandleRepairItem(RepairItem packet)
         {
-            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.NpcGUID, NPCFlags.Repair);
+            Creature unit = GetPlayer().GetNPCIfCanInteractWith(packet.NpcGUID, NPCFlags.Repair, NPCFlags2.None);
             if (!unit)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleRepairItemOpcode - {0} not found or you can not interact with him.", packet.NpcGUID.ToString());
@@ -457,7 +452,7 @@ namespace Game
 
         public void SendListInventory(ObjectGuid vendorGuid)
         {
-            Creature vendor = GetPlayer().GetNPCIfCanInteractWith(vendorGuid, NPCFlags.Vendor);
+            Creature vendor = GetPlayer().GetNPCIfCanInteractWith(vendorGuid, NPCFlags.Vendor, NPCFlags2.None);
             if (vendor == null)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: SendListInventory - {0} not found or you can not interact with him.", vendorGuid.ToString());
@@ -503,7 +498,7 @@ namespace Game
                     int leftInStock = vendorItem.maxcount == 0 ? -1 : (int)vendor.GetVendorItemCurrentCount(vendorItem);
                     if (!GetPlayer().IsGameMaster())
                     {
-                        if (!Convert.ToBoolean(itemTemplate.GetAllowableClass() & GetPlayer().getClassMask()) && itemTemplate.GetBonding() == ItemBondingType.OnAcquire)
+                        if (!Convert.ToBoolean(itemTemplate.GetAllowableClass() & GetPlayer().GetClassMask()) && itemTemplate.GetBonding() == ItemBondingType.OnAcquire)
                             continue;
 
                         if ((itemTemplate.GetFlags2().HasAnyFlag(ItemFlags2.FactionHorde) && GetPlayer().GetTeam() == Team.Alliance) ||
@@ -534,6 +529,7 @@ namespace Game
                     item.StackCount = (int)itemTemplate.GetBuyCount();
                     item.Price = (ulong)price;
                     item.DoNotFilterOnVendor = vendorItem.IgnoreFiltering;
+                    item.Refundable = (itemTemplate.GetFlags() & ItemFlags.ItemPurchaseRecord) != 0 && vendorItem.ExtendedCost != 0 && itemTemplate.GetMaxStackSize() == 1;
 
                     item.Item.ItemID = vendorItem.item;
                     if (!vendorItem.BonusListIDs.Empty())

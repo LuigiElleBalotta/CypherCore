@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 using Framework.Constants;
 using Framework.IO;
-using Game.AI;
 using Game.Entities;
 using Game.Maps;
 using Game.Network.Packets;
@@ -68,7 +67,7 @@ namespace Scripts.Northrend.Ulduar
                     if (_algalonTimer != 0 && _algalonTimer <= 60)
                         algalon.GetAI().DoAction((int)InstanceEvents.ActionInitAlgalon);
                     else
-                        algalon.RemoveFlag(UnitFields.Flags, UnitFlags.ImmuneToPc);
+                        algalon.RemoveUnitFlag(UnitFlags.ImmuneToPc);
                 }
 
                 // Keepers at Observation Ring
@@ -435,7 +434,7 @@ namespace Scripts.Northrend.Ulduar
                     case InstanceGameObjectIds.CelestialPlanetariumAccess10:
                     case InstanceGameObjectIds.CelestialPlanetariumAccess25:
                         if (_algalonSummoned)
-                            gameObject.SetFlag(GameObjectFields.Flags, GameObjectFlags.InUse);
+                            gameObject.AddFlag(GameObjectFlags.InUse);
                         break;
                     case InstanceGameObjectIds.DoodadUlSigildoor01:
                         AlgalonSigilDoorGUID[0] = gameObject.GetGUID();
@@ -610,7 +609,7 @@ namespace Scripts.Northrend.Ulduar
                                     if (vehicle != null)
                                     {
                                         vehicle.RemoveAllPassengers();
-                                        vehicleCreature.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                                        vehicleCreature.AddUnitFlag(UnitFlags.NotSelectable);
                                         vehicleCreature.DespawnOrUnsummon(5 * Time.Minute * Time.InMilliseconds);
                                     }
                                 }
@@ -640,7 +639,7 @@ namespace Scripts.Northrend.Ulduar
                             if (gameObject)
                             {
                                 gameObject.SetRespawnTime((int)gameObject.GetRespawnDelay());
-                                gameObject.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                gameObject.RemoveFlag(GameObjectFlags.NotSelectable);
                             }
                             HandleGameObject(KologarnBridgeGUID, false);
                         }
@@ -651,7 +650,7 @@ namespace Scripts.Northrend.Ulduar
                             GameObject HodirRareCache = instance.GetGameObject(HodirRareCacheGUID);
                             if (HodirRareCache)
                                 if (GetData(InstanceData.HodirRareCache) != 0)
-                                    HodirRareCache.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                                    HodirRareCache.RemoveFlag(GameObjectFlags.NotSelectable);
                             GameObject HodirChest = instance.GetGameObject(HodirChestGUID);
                             if (HodirChest)
                                 HodirChest.SetRespawnTime((int)HodirChest.GetRespawnDelay());
@@ -1231,11 +1230,6 @@ namespace Scripts.Northrend.Ulduar
         public override InstanceScript GetInstanceScript(InstanceMap map)
         {
             return new instance_ulduar_InstanceMapScript(map);
-        }
-
-        public static T GetUlduarInstanceAI<T>(WorldObject obj) where T : CreatureAI
-        {
-            return GetInstanceAI<T>(obj, "instance_ulduar");
         }
     }
 }

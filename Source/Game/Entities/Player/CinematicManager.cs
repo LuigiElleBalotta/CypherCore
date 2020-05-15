@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,17 @@ namespace Game.Entities
 {
     public class CinematicManager : IDisposable
     {
+        // Remote location information
+        Player player;
+
+        public uint m_cinematicDiff;
+        public uint m_lastCinematicCheck;
+        public uint m_activeCinematicCameraId;
+        public uint m_cinematicLength;
+        List<FlyByCamera> m_cinematicCamera;
+        Position m_remoteSightPosition;
+        TempSummon m_CinematicObject;
+
         public CinematicManager(Player playerref)
         {
             player = playerref;
@@ -67,7 +78,7 @@ namespace Game.Entities
                     m_CinematicObject = player.SummonCreature(1, pos.posX, pos.posY, pos.posZ, 0.0f, TempSummonType.TimedDespawn, 5 * Time.Minute * Time.InMilliseconds);
                     if (m_CinematicObject)
                     {
-                        m_CinematicObject.setActive(true);
+                        m_CinematicObject.SetActive(true);
                         player.SetViewpoint(m_CinematicObject, true);
                     }
 
@@ -161,8 +172,8 @@ namespace Game.Entities
             float xDiff = nextPosition.posX - lastPosition.posX;
             float yDiff = nextPosition.posY - lastPosition.posY;
             float zDiff = nextPosition.posZ - lastPosition.posZ;
-            Position interPosition = new Position(lastPosition.posX + (xDiff * (interDiff / timeDiff)), lastPosition.posY +
-                (yDiff * (interDiff / timeDiff)), lastPosition.posZ + (zDiff * (interDiff / timeDiff)));
+            Position interPosition = new Position(lastPosition.posX + (xDiff * ((float)interDiff / timeDiff)), lastPosition.posY +
+                (yDiff * ((float)interDiff / timeDiff)), lastPosition.posZ + (zDiff * ((float)interDiff / timeDiff)));
 
             // Advance (at speed) to this position. The remote sight object is used
             // to send update information to player in cinematic
@@ -177,16 +188,5 @@ namespace Game.Entities
         uint GetActiveCinematicCamera() { return m_activeCinematicCameraId; }
         public void SetActiveCinematicCamera(uint cinematicCameraId = 0) { m_activeCinematicCameraId = cinematicCameraId; }
         public bool IsOnCinematic() { return (m_cinematicCamera != null); }
-
-        // Remote location information
-        Player player;
-
-        public uint m_cinematicDiff;
-        public uint m_lastCinematicCheck;
-        public uint m_activeCinematicCameraId;
-        public uint m_cinematicLength;
-        List<FlyByCamera> m_cinematicCamera;
-        Position m_remoteSightPosition;
-        TempSummon m_CinematicObject;
     }
 }

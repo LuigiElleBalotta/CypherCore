@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
  */
 
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Framework.Dynamic
@@ -97,6 +96,20 @@ namespace Framework.Dynamic
             m_events.Add(e_time, Event);
         }
 
+        public void ModifyEventTime(BasicEvent Event, ulong newTime)
+        {
+            foreach (var pair in m_events)
+            {
+                if (pair.Value != Event)
+                    continue;
+
+                Event.m_execTime = newTime;
+                m_events.Remove(pair);
+                m_events.Add(newTime, Event);
+                break;
+            }
+        }
+
         public ulong CalculateTime(ulong t_offset)
         {
             return (m_time + t_offset);
@@ -112,13 +125,13 @@ namespace Framework.Dynamic
 
         public void ScheduleAbort()
         {
-            Contract.Assert(IsRunning(), "Tried to scheduled the abortion of an event twice!");
+            Cypher.Assert(IsRunning(), "Tried to scheduled the abortion of an event twice!");
             m_abortState = AbortState.Scheduled;
         }
 
         public void SetAborted()
         {
-            Contract.Assert(!IsAborted(), "Tried to abort an already aborted event!");
+            Cypher.Assert(!IsAborted(), "Tried to abort an already aborted event!");
             m_abortState = AbortState.Aborted;
         }
 

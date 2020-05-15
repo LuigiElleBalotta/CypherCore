@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2003-2004  Eran Kampf	eran@ekampf.com	http://www.ekampf.com
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -705,8 +705,8 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns>
         public override string ToString()
         {
-            return string.Format("4x4[{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}]",
-                _m11, _m12, _m13, _m14, _m21, _m22, _m23, _m24, _m31, _m32, _m33, _m34, _m41, _m42, _m43, _m44);
+            return
+                $"4x4[{_m11}, {_m12}, {_m13}, {_m14}, {_m21}, {_m22}, {_m23}, {_m24}, {_m31}, {_m32}, {_m33}, {_m34}, {_m41}, {_m42}, {_m43}, {_m44}]";
         }
         #endregion
 
@@ -780,7 +780,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix4"/> instance containing the sum.</returns>
         public static Matrix4 operator +(Matrix4 left, Matrix4 right)
         {
-            return Matrix4.Add(left, right); ;
+            return Matrix4.Add(left, right);
         }
         /// <summary>
         /// Adds a matrix and a scalar.
@@ -810,7 +810,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix4"/> instance containing the difference.</returns>
         public static Matrix4 operator -(Matrix4 left, Matrix4 right)
         {
-            return Matrix4.Subtract(left, right); ;
+            return Matrix4.Subtract(left, right);
         }
         /// <summary>
         /// Subtracts a scalar from a matrix.
@@ -830,7 +830,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix4"/> instance containing the result.</returns>
         public static Matrix4 operator *(Matrix4 left, Matrix4 right)
         {
-            return Matrix4.Multiply(left, right); ;
+            return Matrix4.Multiply(left, right);
         }
         /// <summary>
         /// Transforms a given vector by a matrix.

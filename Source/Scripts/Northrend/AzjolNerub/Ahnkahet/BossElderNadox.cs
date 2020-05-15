@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.ElderNadox
 
             _scheduler.Schedule(TimeSpan.FromSeconds(10), task =>
             {
-                /// @todo: summoned by egg
+                // @todo: summoned by egg
                 DoCast(me, SpellIds.SummonSwarmers);
                 if (RandomHelper.URand(1, 3) == 3) // 33% chance of dialog
                     Talk(TextIds.SayEggSac);
@@ -147,7 +147,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.ElderNadox
 
             if (!GuardianSummoned && me.HealthBelowPct(50))
             {
-                /// @todo: summoned by egg
+                // @todo: summoned by egg
                 Talk(TextIds.EmoteHatches, me);
                 DoCast(me, SpellIds.SummonSwarmGuard);
                 GuardianSummoned = true;

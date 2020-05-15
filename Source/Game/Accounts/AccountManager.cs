@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ using System.Text;
 namespace Game
 {
     public sealed class AccountManager : Singleton<AccountManager>
-    {        
+    {
         const int MaxAccountLength = 16;
         const int MaxEmailLength = 64;
 
@@ -59,7 +59,7 @@ namespace Game
                 stmt.AddValue(4, null);
                 stmt.AddValue(5, null);
             }
-            DB.Login.Execute(stmt); // Enforce saving, otherwise AddGroup can fail
+            DB.Login.DirectExecute(stmt); // Enforce saving, otherwise AddGroup can fail
 
             stmt = DB.Login.GetPreparedStatement(LoginStatements.INS_REALM_CHARACTERS_INIT);
             DB.Login.Execute(stmt);
@@ -73,7 +73,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_ACCOUNT_BY_ID);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Login.Query(stmt);
-
             if (result.IsEmpty())
                 return AccountOpResult.NameNotExist;
 
@@ -81,7 +80,6 @@ namespace Game
             stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_CHARS_BY_ACCOUNT_ID);
             stmt.AddValue(0, accountId);
             result = DB.Characters.Query(stmt);
-
             if (!result.IsEmpty())
             {
                 do
@@ -147,7 +145,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_ACCOUNT_BY_ID);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Login.Query(stmt);
-
             if (result.IsEmpty())
                 return AccountOpResult.NameNotExist;
 
@@ -192,9 +189,7 @@ namespace Game
 
         public AccountOpResult ChangeEmail(uint accountId, string newEmail)
         {
-            string username;
-
-            if (!GetName(accountId, out username))
+            if (!GetName(accountId, out _))
                 return AccountOpResult.NameNotExist;                          // account doesn't exist
 
             if (newEmail.Length > MaxEmailLength)
@@ -210,9 +205,7 @@ namespace Game
 
         public AccountOpResult ChangeRegEmail(uint accountId, string newEmail)
         {
-            string username;
-
-            if (!GetName(accountId, out username))
+            if (!GetName(accountId, out _))
                 return AccountOpResult.NameNotExist;                          // account doesn't exist
 
             if (newEmail.Length > MaxEmailLength)
@@ -231,7 +224,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.GET_ACCOUNT_ID_BY_USERNAME);
             stmt.AddValue(0, username);
             SQLResult result = DB.Login.Query(stmt);
-
             return !result.IsEmpty() ? result.Read<uint>(0) : 0;
         }
 
@@ -240,7 +232,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.GET_ACCOUNT_ACCESS_GMLEVEL);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Login.Query(stmt);
-
             return !result.IsEmpty() ? (AccountTypes)result.Read<byte>(0) : AccountTypes.Player;
         }
 
@@ -250,7 +241,6 @@ namespace Game
             stmt.AddValue(0, accountId);
             stmt.AddValue(1, realmId);
             SQLResult result = DB.Login.Query(stmt);
-
             return !result.IsEmpty() ? (AccountTypes)result.Read<uint>(0) : AccountTypes.Player;
         }
 
@@ -260,7 +250,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.GET_USERNAME_BY_ID);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Login.Query(stmt);
-
             if (!result.IsEmpty())
             {
                 name = result.Read<string>(0);
@@ -276,7 +265,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.GET_EMAIL_BY_ID);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Login.Query(stmt);
-
             if (!result.IsEmpty())
             {
                 email = result.Read<string>(0);
@@ -297,8 +285,7 @@ namespace Game
             stmt.AddValue(0, accountId);
             stmt.AddValue(1, CalculateShaPassHash(username, password));
             SQLResult result = DB.Login.Query(stmt);
-
-            return result.IsEmpty() ? false : true;
+            return !result.IsEmpty();
         }
 
         public bool CheckEmail(uint accountId, string newEmail)
@@ -321,7 +308,6 @@ namespace Game
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_SUM_CHARS);
             stmt.AddValue(0, accountId);
             SQLResult result = DB.Characters.Query(stmt);
-
             return result.IsEmpty() ? 0 : (uint)result.Read<ulong>(0);
         }
 
@@ -336,7 +322,6 @@ namespace Game
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_ACCOUNT_BANNED_BY_USERNAME);
             stmt.AddValue(0, name);
             SQLResult result = DB.Login.Query(stmt);
-
             return !result.IsEmpty();
         }
 

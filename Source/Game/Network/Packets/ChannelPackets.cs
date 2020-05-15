@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,15 +33,15 @@ namespace Game.Network.Packets
         {
             _worldPacket.WriteBit(Display);
             _worldPacket.WriteBits(Channel.GetByteCount(), 7);
-            _worldPacket.WriteUInt32(ChannelFlags);
-            _worldPacket.WriteUInt32(Members.Count);
+            _worldPacket.WriteUInt32((uint)ChannelFlags);
+            _worldPacket.WriteInt32(Members.Count);
             _worldPacket.WriteString(Channel);
 
             foreach (ChannelPlayer player in Members)
             {
                 _worldPacket.WritePackedGuid(player.Guid);
                 _worldPacket.WriteUInt32(player.VirtualRealmAddress);
-                _worldPacket.WriteUInt8(player.Flags);
+                _worldPacket.WriteUInt8((byte)player.Flags);
             }
         }
 
@@ -84,8 +84,8 @@ namespace Game.Network.Packets
 
             if (Type == ChatNotify.ModeChangeNotice)
             {
-                _worldPacket.WriteUInt8(OldFlags);
-                _worldPacket.WriteUInt8(NewFlags);
+                _worldPacket.WriteUInt8((byte)OldFlags);
+                _worldPacket.WriteUInt8((byte)NewFlags);
             }
 
             _worldPacket.WriteString(Channel);
@@ -112,10 +112,11 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteBits(Channel.GetByteCount(), 7);
-            _worldPacket.WriteBits(ChannelWelcomeMsg.GetByteCount(), 10);
-            _worldPacket.WriteUInt32(ChannelFlags);
+            _worldPacket.WriteBits(ChannelWelcomeMsg.GetByteCount(), 11);
+            _worldPacket.WriteUInt32((uint)ChannelFlags);
             _worldPacket.WriteInt32(ChatChannelID);
-            _worldPacket.WriteUInt64(InstanceID);
+            _worldPacket.WriteUInt64((ulong)InstanceID);
+            _worldPacket.WritePackedGuid(ChannelGUID);
             _worldPacket.WriteString(Channel);
             _worldPacket.WriteString(ChannelWelcomeMsg);
         }
@@ -125,6 +126,7 @@ namespace Game.Network.Packets
         public int InstanceID;
         public ChannelFlags ChannelFlags;
         public string Channel = "";
+        public ObjectGuid ChannelGUID;
     }
 
     public class ChannelNotifyLeft : ServerPacket
@@ -151,8 +153,8 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(AddedUserGUID);
-            _worldPacket.WriteUInt8(UserFlags);
-            _worldPacket.WriteUInt32(ChannelFlags);
+            _worldPacket.WriteUInt8((byte)UserFlags);
+            _worldPacket.WriteUInt32((uint)ChannelFlags);
             _worldPacket.WriteUInt32(ChannelID);
 
             _worldPacket.WriteBits(ChannelName.GetByteCount(), 7);
@@ -174,7 +176,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(RemovedUserGUID);
-            _worldPacket.WriteUInt32(ChannelFlags);
+            _worldPacket.WriteUInt32((uint)ChannelFlags);
             _worldPacket.WriteUInt32(ChannelID);
 
             _worldPacket.WriteBits(ChannelName.GetByteCount(), 7);
@@ -195,8 +197,8 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WritePackedGuid(UpdatedUserGUID);
-            _worldPacket.WriteUInt8(UserFlags);
-            _worldPacket.WriteUInt32(ChannelFlags);
+            _worldPacket.WriteUInt8((byte)UserFlags);
+            _worldPacket.WriteUInt32((uint)ChannelFlags);
             _worldPacket.WriteUInt32(ChannelID);
 
             _worldPacket.WriteBits(ChannelName.GetByteCount(), 7);
@@ -221,7 +223,6 @@ namespace Game.Network.Packets
                 case ClientOpcodes.ChatChannelDeclineInvite:
                 case ClientOpcodes.ChatChannelDisplayList:
                 case ClientOpcodes.ChatChannelList:
-                case ClientOpcodes.ChatChannelModerate:
                 case ClientOpcodes.ChatChannelOwner:
                     break;
                 default:
@@ -248,12 +249,10 @@ namespace Game.Network.Packets
                 case ClientOpcodes.ChatChannelInvite:
                 case ClientOpcodes.ChatChannelKick:
                 case ClientOpcodes.ChatChannelModerator:
-                case ClientOpcodes.ChatChannelMute:
                 case ClientOpcodes.ChatChannelSetOwner:
                 case ClientOpcodes.ChatChannelSilenceAll:
                 case ClientOpcodes.ChatChannelUnban:
                 case ClientOpcodes.ChatChannelUnmoderator:
-                case ClientOpcodes.ChatChannelUnmute:
                 case ClientOpcodes.ChatChannelUnsilenceAll:
                     break;
                 default:

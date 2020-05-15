@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,16 +16,17 @@
  */
 
 using Framework.GameMath;
-using System.Collections.Generic;
+using Framework.Constants;
 
 namespace Game.Collision
 {
     public class IModel
     {
-        public virtual Vector3 getPosition() { return default(Vector3); }
-        public virtual AxisAlignedBox getBounds() { return default(AxisAlignedBox); }
+        public virtual Vector3 GetPosition() { return default; }
+        public virtual AxisAlignedBox GetBounds() { return default; }
 
-        public virtual bool IntersectRay(Ray ray, ref float maxDist, bool stopAtFirstHit, PhaseShift phaseShift) { return false; }
+        public virtual bool IntersectRay(Ray ray, ref float maxDist, bool stopAtFirstHit, PhaseShift phaseShift, ModelIgnoreFlags ignoreFlags) { return false; }
+        public virtual bool IntersectRay(Ray ray, ref float distance, bool stopAtFirstHit, ModelIgnoreFlags ignoreFlags) { return false; }
         public virtual bool IntersectRay(Ray ray, ref float distance, bool stopAtFirstHit) { return false; }
         public virtual void IntersectPoint(Vector3 point, AreaInfo info, PhaseShift phaseShift) { }
     }

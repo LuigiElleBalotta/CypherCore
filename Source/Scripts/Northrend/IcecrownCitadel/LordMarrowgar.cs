@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ using Game.Scripting;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Scripts.Northrend.IcecrownCitadel
 {
@@ -153,7 +152,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             {
                 Talk(Texts.SayAggro);
 
-                me.setActive(true);
+                me.SetActive(true);
                 DoZoneInCombat();
                 instance.SetBossState(Bosses.LordMarrowgar, EncounterState.InProgress);
             }
@@ -398,11 +397,10 @@ namespace Scripts.Northrend.IcecrownCitadel
         [Script]
         class npc_bone_spike : ScriptedAI
         {
-            public npc_bone_spike(Creature creature)
-                : base(creature)
+            public npc_bone_spike(Creature creature) : base(creature)
             {
                 _hasTrappedUnit = false;
-                Contract.Assert(creature.GetVehicleKit());
+                Cypher.Assert(creature.GetVehicleKit());
 
                 SetCombatMovement(false);
             }
@@ -565,7 +563,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                 if (marrowgar)
                 {
                     CreatureAI marrowgarAI = marrowgar.GetAI();
-                    byte boneSpikeCount = (byte)(Convert.ToBoolean((int)GetCaster().GetMap().GetSpawnMode() & 1) ? 3 : 1);
+                    byte boneSpikeCount = (byte)(Convert.ToBoolean((int)GetCaster().GetMap().GetDifficultyID() & 1) ? 3 : 1);
 
                     List<Unit> targets = marrowgarAI.SelectTargetList(new BoneSpikeTargetSelector(marrowgarAI), boneSpikeCount, SelectAggroTarget.Random);
                     if (targets.Empty())

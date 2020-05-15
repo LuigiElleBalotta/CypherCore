@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,12 +40,13 @@ namespace Game.Entities
 
         //Movement
         protected float[] m_speed_rate = new float[(int)UnitMoveType.Max];
-        RefManager<Unit, TargetedMovementGeneratorBase> m_FollowingRefManager;
-        public MoveSpline moveSpline { get; set; }
+        RefManager<Unit, ITargetedMovementGeneratorBase> m_FollowingRefManager;
+        public MoveSpline MoveSpline { get; set; }
         MotionMaster i_motionMaster;
         public uint m_movementCounter;       //< Incrementing counter used in movement packets
         TimeTrackerSmall movesplineTimer;
         public Player m_playerMovingMe;
+        MovementForces _movementForces;
 
         //Combat
         protected List<Unit> attackerList = new List<Unit>();
@@ -58,19 +59,18 @@ namespace Game.Entities
         protected uint[] m_attackTimer = new uint[(int)WeaponAttackType.Max];
 
         ThreatManager threatManager;
-        HostileRefManager m_HostileRefManager;
+        HostileRefManager hostileRefManager;
         RedirectThreatInfo _redirectThreatInfo;
-        protected Unit m_attacking;
+        protected Unit attacking;
 
-        public float m_modMeleeHitChance { get; set; }
-        public float m_modRangedHitChance { get; set; }
-        public float m_modSpellHitChance { get; set; }
-        long _lastDamagedTime;
+        public float ModMeleeHitChance { get; set; }
+        public float ModRangedHitChance { get; set; }
+        public float ModSpellHitChance { get; set; }
         bool m_canDualWield;
-        public int m_baseSpellCritChance { get; set; }
-        public uint m_regenTimer { get; set; }
-        uint m_CombatTimer;
-        public uint m_extraAttacks { get; set; }
+        public int BaseSpellCritChance { get; set; }
+        public uint RegenTimer { get; set; }
+        uint combatTimer;
+        public uint ExtraAttacks { get; set; }
 
         //Charm
         public List<Unit> m_Controlled = new List<Unit>();
@@ -107,22 +107,26 @@ namespace Game.Entities
         uint m_removedAurasCount;
 
         //General  
+        public UnitData m_unitData;
+
         DiminishingReturn[] m_Diminishing = new DiminishingReturn[(int)DiminishingGroup.Max];
         protected List<GameObject> m_gameObj = new List<GameObject>();
         List<AreaTrigger> m_areaTrigger = new List<AreaTrigger>();
         protected List<DynamicObject> m_dynObj = new List<DynamicObject>();
         protected float[] CreateStats = new float[(int)Stats.Max];
+        float[] m_floatStatPosBuff = new float[(int)Stats.Max];
+        float[] m_floatStatNegBuff = new float[(int)Stats.Max];
         public ObjectGuid[] m_SummonSlot = new ObjectGuid[7];
         public ObjectGuid[] m_ObjectSlot = new ObjectGuid[4];
         public EventSystem m_Events = new EventSystem();
-        public UnitTypeMask m_unitTypeMask { get; set; }
+        public UnitTypeMask UnitTypeMask { get; set; }
         UnitState m_state;
         protected LiquidTypeRecord _lastLiquid;
         protected DeathState m_deathState;
         public Vehicle m_vehicle { get; set; }
-        public Vehicle m_vehicleKit { get; set; }
+        public Vehicle VehicleKit { get; set; }
         bool canModifyStats;
-        public uint m_lastSanctuaryTime { get; set; }
+        public uint LastSanctuaryTime { get; set; }
         uint m_transform;
         bool m_cleanupDone; // lock made to not add stuff after cleanup before delete
         bool m_duringRemoveFromWorld; // lock made to not add stuff after begining removing from world
@@ -226,6 +230,7 @@ namespace Game.Entities
             m_attacker = attacker;
             m_victim = victim;
             m_damage = damage;
+            m_originalDamage = damage;
             m_spellInfo = spellInfo;
             m_schoolMask = schoolMask;
             m_damageType = damageType;
@@ -237,6 +242,7 @@ namespace Game.Entities
             m_attacker = dmgInfo.attacker;
             m_victim = dmgInfo.target;
             m_damage = dmgInfo.damage;
+            m_originalDamage = dmgInfo.damage;
             m_spellInfo = null;
             m_schoolMask = (SpellSchoolMask)dmgInfo.damageSchoolMask;
             m_damageType = DamageEffectType.Direct;
@@ -357,6 +363,7 @@ namespace Game.Entities
         DamageEffectType GetDamageType() { return m_damageType; }
         public WeaponAttackType GetAttackType() { return m_attackType; }
         public uint GetDamage() { return m_damage; }
+        public uint GetOriginalDamage() { return m_originalDamage; }
         public uint GetAbsorb() { return m_absorb; }
         public uint GetResist() { return m_resist; }
         uint GetBlock() { return m_block; }
@@ -365,6 +372,7 @@ namespace Game.Entities
         Unit m_attacker;
         Unit m_victim;
         uint m_damage;
+        uint m_originalDamage;
         SpellInfo m_spellInfo;
         SpellSchoolMask m_schoolMask;
         DamageEffectType m_damageType;
@@ -382,6 +390,7 @@ namespace Game.Entities
             _healer = healer;
             _target = target;
             _heal = heal;
+            _originalHeal = heal;
             _spellInfo = spellInfo;
             _schoolMask = schoolMask;
         }
@@ -400,6 +409,7 @@ namespace Game.Entities
         public Unit GetHealer() { return _healer; }
         public Unit GetTarget() { return _target; }
         public uint GetHeal() { return _heal; }
+        public uint GetOriginalHeal() { return _originalHeal; }
         public uint GetEffectiveHeal() { return _effectiveHeal; }
         public uint GetAbsorb() { return _absorb; }
         public SpellInfo GetSpellInfo() { return _spellInfo; }
@@ -409,6 +419,7 @@ namespace Game.Entities
         Unit _healer;
         Unit _target;
         uint _heal;
+        uint _originalHeal;
         uint _effectiveHeal;
         uint _absorb;
         SpellInfo _spellInfo;
@@ -422,6 +433,7 @@ namespace Game.Entities
         public Unit target { get; set; }               // Target for damage
         public uint damageSchoolMask { get; set; }
         public uint damage;
+        public uint originalDamage;
         public uint absorb;
         public uint resist;
         public uint blocked_amount { get; set; }
@@ -437,7 +449,7 @@ namespace Game.Entities
 
     public class SpellNonMeleeDamage
     {
-        public SpellNonMeleeDamage(Unit _attacker, Unit _target, uint _SpellID, uint _SpellXSpellVisualID, SpellSchoolMask _schoolMask, ObjectGuid _castId = default(ObjectGuid))
+        public SpellNonMeleeDamage(Unit _attacker, Unit _target, uint _SpellID, uint _SpellXSpellVisualID, SpellSchoolMask _schoolMask, ObjectGuid _castId = default)
         {
             target = _target;
             attacker = _attacker;
@@ -454,6 +466,7 @@ namespace Game.Entities
         public uint SpellId;
         public uint SpellXSpellVisualID;
         public uint damage;
+        public uint originalDamage;
         public SpellSchoolMask schoolMask;
         public uint absorb;
         public uint resist;
@@ -476,11 +489,11 @@ namespace Game.Entities
             hitOutCome = _hitOutCome;
         }
 
-        public uint absorbed_damage { get; set; }
+        public uint absorbed_damage { get; }
         public uint mitigated_damage { get; set; }
 
-        public WeaponAttackType attackType { get; set; }
-        public MeleeHitOutcome hitOutCome { get; set; }
+        public WeaponAttackType attackType { get; }
+        public MeleeHitOutcome hitOutCome { get; }
     }
 
     public class DispelInfo
@@ -528,10 +541,11 @@ namespace Game.Entities
 
     public class SpellPeriodicAuraLogInfo
     {
-        public SpellPeriodicAuraLogInfo(AuraEffect _auraEff, uint _damage, int _overDamage, uint _absorb, uint _resist, float _multiplier, bool _critical)
+        public SpellPeriodicAuraLogInfo(AuraEffect _auraEff, uint _damage, uint _originalDamage, uint _overDamage, uint _absorb, uint _resist, float _multiplier, bool _critical)
         {
             auraEff = _auraEff;
             damage = _damage;
+            originalDamage = _originalDamage;
             overDamage = _overDamage;
             absorb = _absorb;
             resist = _resist;
@@ -541,7 +555,8 @@ namespace Game.Entities
 
         public AuraEffect auraEff;
         public uint damage;
-        public int overDamage;                                      // overkill/overheal
+        public uint originalDamage;
+        public uint overDamage;                                      // overkill/overheal
         public uint absorb;
         public uint resist;
         public float multiplier;
@@ -578,7 +593,7 @@ namespace Game.Entities
             return obj.GetExactDist2dSq(i_source) <= i_distSq;
         }
 
-        public override void Visit(ICollection<Player> objs)
+        public override void Visit(IList<Player> objs)
         {
             foreach (var target in objs)
             {
@@ -598,7 +613,7 @@ namespace Game.Entities
             }
         }
 
-        public override void Visit(ICollection<Creature> objs)
+        public override void Visit(IList<Creature> objs)
         {
             foreach (var target in objs)
             {
@@ -614,7 +629,7 @@ namespace Game.Entities
                 }
             }
         }
-        public override void Visit(ICollection<DynamicObject> objs)
+        public override void Visit(IList<DynamicObject> objs)
         {
             foreach (var target in objs)
             {

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,11 +22,22 @@ using Game.Network.Packets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Collections;
 
 namespace Game.Entities
 {
     public class CollectionMgr
     {
+        static Dictionary<uint, uint> FactionSpecificMounts = new Dictionary<uint, uint>();
+
+        WorldSession _owner;
+        Dictionary<uint, ToyFlags> _toys = new Dictionary<uint, ToyFlags>();
+        Dictionary<uint, HeirloomData> _heirlooms = new Dictionary<uint, HeirloomData>();
+        Dictionary<uint, MountStatusFlags> _mounts = new Dictionary<uint, MountStatusFlags>();
+        BitSet _appearances;
+        MultiMap<uint, ObjectGuid> _temporaryAppearances = new MultiMap<uint, ObjectGuid>();
+        Dictionary<uint, FavoriteAppearanceState> _favoriteAppearances = new Dictionary<uint, FavoriteAppearanceState>();
+
         public static void LoadMountDefinitions()
         {
             uint oldMSTime = Time.GetMSTime();
@@ -64,20 +75,20 @@ namespace Game.Entities
         public CollectionMgr(WorldSession owner)
         {
             _owner = owner;
-            _appearances = new System.Collections.BitSet(0);
+            _appearances = new BitSet(0);
         }
 
         public void LoadToys()
         {
-            foreach (var value in _toys.Keys)
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Toys, value);
+            foreach (var pair in _toys)
+                _owner.GetPlayer().AddToy(pair.Key, (uint)pair.Value);
         }
 
-        public bool AddToy(uint itemId, bool isFavourite = false)
+        public bool AddToy(uint itemId, bool isFavourite, bool hasFanfare)
         {
-            if (UpdateAccountToys(itemId, isFavourite))
+            if (UpdateAccountToys(itemId, isFavourite, hasFanfare))
             {
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Toys, itemId);
+                _owner.GetPlayer().AddToy(itemId, (uint)GetToyFlags(isFavourite, hasFanfare));
                 return true;
             }
 
@@ -92,9 +103,7 @@ namespace Game.Entities
             do
             {
                 uint itemId = result.Read<uint>(0);
-                bool isFavourite = result.Read<bool>(1);
-
-                _toys[itemId] = isFavourite;
+                _toys.Add(itemId, GetToyFlags(result.Read<bool>(1), result.Read<bool>(2)));
             } while (result.NextRow());
         }
 
@@ -106,17 +115,18 @@ namespace Game.Entities
                 stmt = DB.Login.GetPreparedStatement(LoginStatements.REP_ACCOUNT_TOYS);
                 stmt.AddValue(0, _owner.GetBattlenetAccountId());
                 stmt.AddValue(1, pair.Key);
-                stmt.AddValue(2, pair.Value);
+                stmt.AddValue(2, pair.Value.HasAnyFlag(ToyFlags.Favorite));
+                stmt.AddValue(3, pair.Value.HasAnyFlag(ToyFlags.HasFanfare));
                 trans.Append(stmt);
             }
         }
 
-        bool UpdateAccountToys(uint itemId, bool isFavourite = false)
+        bool UpdateAccountToys(uint itemId, bool isFavourite, bool hasFanfare)
         {
             if (_toys.ContainsKey(itemId))
                 return false;
 
-            _toys.Add(itemId, isFavourite);
+            _toys.Add(itemId, GetToyFlags(isFavourite, hasFanfare));
             return true;
         }
 
@@ -125,7 +135,30 @@ namespace Game.Entities
             if (!_toys.ContainsKey(itemId))
                 return;
 
-            _toys[itemId] = favorite;
+            if (favorite)
+                _toys[itemId] |= ToyFlags.Favorite;
+            else
+                _toys[itemId] &= ~ToyFlags.Favorite;
+        }
+
+        public void ToyClearFanfare(uint itemId)
+        {
+            if (!_toys.ContainsKey(itemId))
+                return;
+
+            _toys[itemId] &= ~ToyFlags.HasFanfare;
+        }
+
+        ToyFlags GetToyFlags(bool isFavourite, bool hasFanfare)
+        {
+            ToyFlags flags = ToyFlags.None;
+            if (isFavourite)
+                flags |= ToyFlags.Favorite;
+
+            if (hasFanfare)
+                flags |= ToyFlags.HasFanfare;
+
+            return flags;
         }
 
         public void OnItemAdded(Item item)
@@ -152,7 +185,9 @@ namespace Game.Entities
 
                 uint bonusId = 0;
 
-                if (flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel110))
+                if (flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel120))
+                    bonusId = heirloom.UpgradeItemBonusListID[3];
+                else if (flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel110))
                     bonusId = heirloom.UpgradeItemBonusListID[2];
                 else if (flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel100))
                     bonusId = heirloom.UpgradeItemBonusListID[1];
@@ -197,19 +232,13 @@ namespace Game.Entities
         public void LoadHeirlooms()
         {
             foreach (var item in _heirlooms)
-            {
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Heirlooms, item.Key);
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.HeirloomsFlags, (uint)item.Value.flags);
-            }
+                _owner.GetPlayer().AddHeirloom(item.Key, (uint)item.Value.flags);
         }
 
         public void AddHeirloom(uint itemId, HeirloomPlayerFlags flags)
         {
             if (UpdateAccountHeirlooms(itemId, flags))
-            {
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Heirlooms, itemId);
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.HeirloomsFlags, (uint)flags);
-            }
+                _owner.GetPlayer().AddHeirloom(itemId, (uint)flags);
         }
 
         public void UpgradeHeirloom(uint itemId, uint castItem)
@@ -244,15 +273,20 @@ namespace Game.Entities
                 flags |= HeirloomPlayerFlags.BonusLevel110;
                 bonusId = heirloom.UpgradeItemBonusListID[2];
             }
+            if (heirloom.UpgradeItemID[3] == castItem)
+            {
+                flags |= HeirloomPlayerFlags.BonusLevel120;
+                bonusId = heirloom.UpgradeItemBonusListID[3];
+            }
 
             foreach (Item item in player.GetItemListByEntry(itemId, true))
                 item.AddBonuses(bonusId);
 
             // Get heirloom offset to update only one part of dynamic field
-            var fields = player.GetDynamicValues(PlayerDynamicFields.Heirlooms);
-            ushort offset = (ushort)Array.IndexOf(fields, itemId);
+            List<uint> heirlooms = player.m_activePlayerData.Heirlooms;
+            int offset = heirlooms.IndexOf(itemId);
 
-            player.SetDynamicValue(PlayerDynamicFields.HeirloomsFlags, offset, (uint)flags);
+            player.SetHeirloomFlags(offset, (uint)flags);
             data.flags = flags;
             data.bonusId = bonusId;
         }
@@ -292,11 +326,11 @@ namespace Game.Entities
 
                 if (newItemId != 0)
                 {
-                    var heirloomFields = player.GetDynamicValues(PlayerDynamicFields.Heirlooms);
-                    ushort offset = (ushort)Array.IndexOf(heirloomFields, item.GetEntry());
+                    List<uint> heirlooms = player.m_activePlayerData.Heirlooms;
+                    int offset = heirlooms.IndexOf(item.GetEntry());
 
-                    player.SetDynamicValue(PlayerDynamicFields.Heirlooms, offset, newItemId);
-                    player.SetDynamicValue(PlayerDynamicFields.HeirloomsFlags, offset, 0);
+                    player.SetHeirloom(offset, newItemId);
+                    player.SetHeirloomFlags(offset, 0);
 
                     _heirlooms.Remove(item.GetEntry());
                     _heirlooms[newItemId] = null;
@@ -304,12 +338,17 @@ namespace Game.Entities
                     return;
                 }
 
-                var fields = item.GetDynamicValues(ItemDynamicFields.BonusListIds);
-                foreach (uint bonusId in fields)
+                List<uint> bonusListIDs = item.m_itemData.BonusListIDs;
+                foreach (uint bonusId in bonusListIDs)
+                {
                     if (bonusId != data.bonusId)
-                        item.ClearDynamicValue(ItemDynamicFields.BonusListIds);
+                    {
+                        item.ClearBonuses();
+                        break;
+                    }
+                }
 
-                if (!fields.Contains(data.bonusId))
+                if (!bonusListIDs.Contains(data.bonusId))
                     item.AddBonuses(data.bonusId);
             }
         }
@@ -323,6 +362,8 @@ namespace Game.Entities
             if (data == null)
                 return false;
 
+            if (data.flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel120))
+                return level <= 120;
             if (data.flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel110))
                 return level <= 110;
             if (data.flags.HasAnyFlag(HeirloomPlayerFlags.BonusLevel100))
@@ -430,13 +471,12 @@ namespace Game.Entities
 
         public void LoadItemAppearances()
         {
+            Player owner = _owner.GetPlayer();
             foreach (uint blockValue in _appearances.ToBlockRange())
-            {
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Transmog, blockValue);
-            }
+                owner.AddTransmogBlock(blockValue);
 
             foreach (var value in _temporaryAppearances.Keys)
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.ConditionalTransmog, value);
+                owner.AddConditionalTransmog(value);
         }
 
         public void LoadAccountItemAppearances(SQLResult knownAppearances, SQLResult favoriteAppearances)
@@ -454,7 +494,7 @@ namespace Game.Entities
 
                 } while (knownAppearances.NextRow());
 
-                _appearances = new System.Collections.BitSet(blocks);
+                _appearances = new BitSet(blocks);
             }
 
             if (!favoriteAppearances.IsEmpty())
@@ -555,7 +595,7 @@ namespace Game.Entities
             if (!CanAddAppearance(itemModifiedAppearance))
                 return;
 
-            if (Convert.ToBoolean(item.GetUInt32Value(ItemFields.Flags) & (uint)(ItemFieldFlags.BopTradeable | ItemFieldFlags.Refundable)))
+            if (item.HasItemFlag(ItemFieldFlags.BopTradeable | ItemFieldFlags.Refundable))
             {
                 AddTemporaryAppearance(item.GetGUID(), itemModifiedAppearance);
                 return;
@@ -586,6 +626,9 @@ namespace Game.Entities
 
             ItemTemplate itemTemplate = Global.ObjectMgr.GetItemTemplate(itemModifiedAppearance.ItemID);
             if (itemTemplate == null)
+                return false;
+
+            if (!_owner.GetPlayer())
                 return false;
 
             if (_owner.GetPlayer().CanUseItem(itemTemplate) != InventoryResult.Ok)
@@ -635,7 +678,7 @@ namespace Game.Entities
                                 return false;
                         }
                         if (itemTemplate.GetInventoryType() != InventoryType.Cloak)
-                            if (!Convert.ToBoolean(PlayerClassByArmorSubclass[itemTemplate.GetSubClass()] & _owner.GetPlayer().getClassMask()))
+                            if (!Convert.ToBoolean(PlayerClassByArmorSubclass[itemTemplate.GetSubClass()] & _owner.GetPlayer().GetClassMask()))
                                 return false;
                         break;
                     }
@@ -655,24 +698,24 @@ namespace Game.Entities
         //todo  check this
         void AddItemAppearance(ItemModifiedAppearanceRecord itemModifiedAppearance)
         {
+            Player owner = _owner.GetPlayer();
             if (_appearances.Count <= itemModifiedAppearance.Id)
             {
                 uint numBlocks = (uint)(_appearances.Count << 2);
                 _appearances.Length = (int)itemModifiedAppearance.Id + 1;
                 numBlocks = (uint)(_appearances.Count << 2) - numBlocks;
                 while (numBlocks-- != 0)
-                    _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.Transmog, 0);
+                    owner.AddTransmogBlock(0);
             }
 
             _appearances.Set((int)itemModifiedAppearance.Id, true);
             uint blockIndex = itemModifiedAppearance.Id / 32;
             uint bitIndex = itemModifiedAppearance.Id % 32;
-            uint currentMask = _owner.GetPlayer().GetDynamicValue(PlayerDynamicFields.Transmog, (ushort)blockIndex);
-            _owner.GetPlayer().SetDynamicValue(PlayerDynamicFields.Transmog, (ushort)blockIndex, (uint)((int)currentMask | (1 << (int)bitIndex)));
+            owner.AddTransmogFlag((int)blockIndex, 1u << (int)bitIndex);
             var temporaryAppearance = _temporaryAppearances.LookupByKey(itemModifiedAppearance.Id);
             if (!temporaryAppearance.Empty())
             {
-                _owner.GetPlayer().RemoveDynamicValue(PlayerDynamicFields.ConditionalTransmog, itemModifiedAppearance.Id);
+                owner.RemoveConditionalTransmog(itemModifiedAppearance.Id);
                 _temporaryAppearances.Remove(itemModifiedAppearance.Id);
             }
 
@@ -694,7 +737,7 @@ namespace Game.Entities
         {
             var itemsWithAppearance = _temporaryAppearances[itemModifiedAppearance.Id];
             if (itemsWithAppearance.Empty())
-                _owner.GetPlayer().AddDynamicValue(PlayerDynamicFields.ConditionalTransmog, itemModifiedAppearance.Id);
+                _owner.GetPlayer().AddConditionalTransmog(itemModifiedAppearance.Id);
 
             itemsWithAppearance.Add(itemGuid);
         }
@@ -712,7 +755,7 @@ namespace Game.Entities
             guid.Remove(item.GetGUID());
             if (guid.Empty())
             {
-                _owner.GetPlayer().RemoveDynamicValue(PlayerDynamicFields.ConditionalTransmog, itemModifiedAppearance.Id);
+                _owner.GetPlayer().RemoveConditionalTransmog(itemModifiedAppearance.Id);
                 _temporaryAppearances.Remove(itemModifiedAppearance.Id);
             }
         }
@@ -816,7 +859,7 @@ namespace Game.Entities
                 if (transmogSlot < 0 || knownPieces[transmogSlot] == 1)
                     continue;
 
-                (var hasAppearance, var isTemporary) = HasItemAppearance(transmogSetItem.ItemModifiedAppearanceID);
+                (var hasAppearance, bool isTemporary) = HasItemAppearance(transmogSetItem.ItemModifiedAppearanceID);
 
                 knownPieces[transmogSlot] = (hasAppearance && !isTemporary) ? 1 : 0;
             }
@@ -825,20 +868,9 @@ namespace Game.Entities
         }
 
         public bool HasToy(uint itemId) { return _toys.ContainsKey(itemId); }
-        public Dictionary<uint, bool> GetAccountToys() { return _toys; }
+        public Dictionary<uint, ToyFlags> GetAccountToys() { return _toys; }
         public Dictionary<uint, HeirloomData> GetAccountHeirlooms() { return _heirlooms; }
         public Dictionary<uint, MountStatusFlags> GetAccountMounts() { return _mounts; }
-
-        WorldSession _owner;
-
-        Dictionary<uint, bool> _toys = new Dictionary<uint, bool>();
-        Dictionary<uint, HeirloomData> _heirlooms = new Dictionary<uint, HeirloomData>();
-        Dictionary<uint, MountStatusFlags> _mounts = new Dictionary<uint, MountStatusFlags>();
-        System.Collections.BitSet _appearances;
-        MultiMap<uint, ObjectGuid> _temporaryAppearances = new MultiMap<uint, ObjectGuid>();
-        Dictionary<uint, FavoriteAppearanceState> _favoriteAppearances = new Dictionary<uint, FavoriteAppearanceState>();
-
-        static Dictionary<uint, uint> FactionSpecificMounts = new Dictionary<uint, uint>();
     }
 
     enum FavoriteAppearanceState
@@ -850,13 +882,13 @@ namespace Game.Entities
 
     public class HeirloomData
     {
+        public HeirloomPlayerFlags flags;
+        public uint bonusId;
+
         public HeirloomData(HeirloomPlayerFlags _flags = 0, uint _bonusId = 0)
         {
             flags = _flags;
             bonusId = _bonusId;
         }
-
-        public HeirloomPlayerFlags flags;
-        public uint bonusId;
     }
 }

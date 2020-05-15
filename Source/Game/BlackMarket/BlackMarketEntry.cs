@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,10 +38,13 @@ namespace Game.BlackMarket
 
             var bonusListIDsTok = new StringArray(fields.Read<string>(7), ' ');
             List<uint> bonusListIDs = new List<uint>();
-            foreach (string token in bonusListIDsTok)
+            if (!bonusListIDsTok.IsEmpty())
             {
-                if (uint.TryParse(token, out uint id))
-                    bonusListIDs.Add(id);
+                foreach (string token in bonusListIDsTok)
+                {
+                    if (uint.TryParse(token, out uint id))
+                        bonusListIDs.Add(id);
+                }
             }
 
             if (!bonusListIDs.Empty())
@@ -125,7 +128,7 @@ namespace Game.BlackMarket
             _bidder = fields.Read<ulong>(4);
 
             // Either no bidder or existing player
-            if (_bidder != 0 && ObjectManager.GetPlayerAccountIdByGUID(ObjectGuid.Create(HighGuid.Player, _bidder)) == 0) // Probably a better way to check if player exists
+            if (_bidder != 0 && Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(ObjectGuid.Create(HighGuid.Player, _bidder)) == 0) // Probably a better way to check if player exists
             {
                 Log.outError(LogFilter.Misc, "Black market auction {0} does not have a valid bidder (GUID: {1}).", _marketId, _bidder);
                 return false;

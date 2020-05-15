@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -147,11 +147,11 @@ namespace Game.Network.Packets
             {
                 case TradeStatus.Failed:
                     _worldPacket.WriteBit(FailureForYou);
-                    _worldPacket.WriteInt32(BagResult);
-                    _worldPacket.WriteInt32(ItemID);
+                    _worldPacket.WriteInt32((int)BagResult);
+                    _worldPacket.WriteUInt32(ItemID);
                     break;
                 case TradeStatus.Initiated:
-                    _worldPacket.WriteUInt32(ID);
+                    _worldPacket.WriteUInt32(Id);
                     break;
                 case TradeStatus.Proposed:
                     _worldPacket.WritePackedGuid(Partner);
@@ -159,7 +159,7 @@ namespace Game.Network.Packets
                     break;
                 case TradeStatus.WrongRealm:
                 case TradeStatus.NotOnTaplist:
-                    _worldPacket.WriteInt8(TradeSlot);
+                    _worldPacket.WriteUInt8(TradeSlot);
                     break;
                 case TradeStatus.NotEnoughCurrency:
                 case TradeStatus.CurrencyNotTradable:
@@ -181,7 +181,7 @@ namespace Game.Network.Packets
         public bool FailureForYou;
         public InventoryResult BagResult;
         public uint ItemID;
-        public uint ID;
+        public uint Id;
         public bool PartnerIsSameBnetAccount;
     }
 
@@ -192,14 +192,14 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteUInt8(WhichPlayer);
-            _worldPacket.WriteUInt32(ID);
+            _worldPacket.WriteUInt32(Id);
             _worldPacket.WriteUInt32(ClientStateIndex);
             _worldPacket.WriteUInt32(CurrentStateIndex);
             _worldPacket.WriteUInt64(Gold);
             _worldPacket.WriteInt32(CurrencyType);
             _worldPacket.WriteInt32(CurrencyQuantity);
             _worldPacket.WriteInt32(ProposedEnchantment);
-            _worldPacket.WriteUInt32(Items.Count);
+            _worldPacket.WriteInt32(Items.Count);
 
             Items.ForEach(item => item.Write(_worldPacket));
         }
@@ -238,7 +238,7 @@ namespace Game.Network.Packets
             public void Write(WorldPacket data)
             {
                 data.WriteUInt8(Slot);
-                data.WriteUInt32(StackCount);
+                data.WriteInt32(StackCount);
                 data.WritePackedGuid(GiftCreator);
                 Item.Write(data);
                 data.WriteBit(Unwrapped.HasValue);
@@ -261,7 +261,7 @@ namespace Game.Network.Packets
         public uint ClientStateIndex;
         public List<TradeItem> Items = new List<TradeItem>();
         public int CurrencyType;
-        public uint ID;
+        public uint Id;
         public int ProposedEnchantment;
         public int CurrencyQuantity;
     }

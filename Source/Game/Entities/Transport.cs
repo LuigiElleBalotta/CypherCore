@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.DataStorage;
 using Game.Maps;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Entities
@@ -67,12 +66,14 @@ namespace Game.Entities
         {
             _isMoving = true;
 
-            m_updateFlag = UpdateFlag.Transport | UpdateFlag.StationaryPosition | UpdateFlag.Rotation;
+            m_updateFlag.ServerTime = true;
+            m_updateFlag.Stationary = true;
+            m_updateFlag.Rotation = true;
         }
 
         public override void Dispose()
         {
-            Contract.Assert(_passengers.Empty());
+            Cypher.Assert(_passengers.Empty());
             UnloadStaticPassengers();
             base.Dispose();
         }
@@ -117,11 +118,11 @@ namespace Game.Entities
             if (m_goTemplateAddon != null)
             {
                 SetFaction(m_goTemplateAddon.faction);
-                SetUInt32Value(GameObjectFields.Flags, m_goTemplateAddon.flags);
+                SetFlags((GameObjectFlags)m_goTemplateAddon.flags);
             }
 
             m_goValue.Transport.PathProgress = 0;
-            SetFloatValue(ObjectFields.ScaleX, goinfo.size);
+            SetObjectScale(goinfo.size);
             SetPeriod(tInfo.pathTime);
             SetEntry(goinfo.entry);
             SetDisplayId(goinfo.displayId);
@@ -129,7 +130,7 @@ namespace Game.Entities
             SetGoType(GameObjectTypes.MapObjTransport);
             SetGoAnimProgress(animprogress);
             SetName(goinfo.name);
-            SetWorldRotation(Quaternion.WAxis);
+            SetWorldRotation(0.0f, 0.0f, 0.0f, 1.0f);
             SetParentRotation(Quaternion.WAxis);
 
             m_model = CreateModel();
@@ -283,12 +284,15 @@ namespace Game.Entities
             if (!IsInWorld)
                 return;
 
-            _passengers.Add(passenger);
-            passenger.SetTransport(this);
-            passenger.m_movementInfo.transport.guid = GetGUID();
+            if (_passengers.Add(passenger))
+            {
+                passenger.SetTransport(this);
+                passenger.m_movementInfo.transport.guid = GetGUID();
 
-            if (passenger.IsTypeId(TypeId.Player))
-                Global.ScriptMgr.OnAddPassenger(this, passenger.ToPlayer());
+                Player player = passenger.ToPlayer();
+                if (player)
+                    Global.ScriptMgr.OnAddPassenger(this, player);
+            }
         }
 
         public void RemovePassenger(WorldObject passenger)
@@ -301,8 +305,12 @@ namespace Game.Entities
                 passenger.m_movementInfo.transport.Reset();
                 Log.outDebug(LogFilter.Transport, "Object {0} removed from transport {1}.", passenger.GetName(), GetName());
 
-                if (passenger.IsTypeId(TypeId.Player))
-                    Global.ScriptMgr.OnRemovePassenger(this, passenger.ToPlayer());
+                Player plr = passenger.ToPlayer();
+                if (plr != null)
+                {
+                    Global.ScriptMgr.OnRemovePassenger(this, plr);
+                    plr.SetFallInformation(0, plr.GetPositionZ());
+                }
             }
         }
 
@@ -469,7 +477,7 @@ namespace Game.Entities
 
             PhasingHandler.InheritPhaseShift(summon, summoner ? (WorldObject)summoner : this);
 
-            summon.SetUInt32Value(UnitFields.CreatedBySpell, spellId);
+            summon.SetCreatedBySpell(spellId);
 
             summon.SetTransport(this);
             summon.m_movementInfo.transport.guid = GetGUID();
@@ -511,7 +519,7 @@ namespace Game.Entities
             Cell oldCell = new Cell(GetPositionX(), GetPositionY());
 
             Relocate(x, y, z, o);
-            m_stationaryPosition.SetOrientation(o);
+            StationaryPosition.SetOrientation(o);
             UpdateModelPosition();
 
             UpdatePassengerPositions(_passengers);
@@ -534,7 +542,7 @@ namespace Game.Entities
         void LoadStaticPassengers()
         {
             uint mapId = (uint)GetGoInfo().MoTransport.SpawnMap;
-            var cells = Global.ObjectMgr.GetMapObjectGuids(mapId, (byte)GetMap().GetSpawnMode());
+            var cells = Global.ObjectMgr.GetMapObjectGuids(mapId, (byte)GetMap().GetDifficultyID());
             if (cells == null)
                 return;
             foreach (var cell in cells)
@@ -665,10 +673,8 @@ namespace Game.Entities
                   z = nextFrame.Node.Loc.Z,
                   o = nextFrame.InitialOrientation;
 
-            for (var i =0; i < _passengers.Count; ++i)
+            foreach(WorldObject obj in _passengers.ToList())
             {
-                WorldObject obj = _passengers[i];
-
                 float destX, destY, destZ, destO;
                 obj.m_movementInfo.transport.pos.GetPosition(out destX, out destY, out destZ, out destO);
                 TransportPosHelper.CalculatePassengerPosition(ref destX, ref destY, ref destZ, ref destO, x, y, z, o);
@@ -693,7 +699,7 @@ namespace Game.Entities
             GetMap().AddToMap(this);
         }
 
-        void UpdatePassengerPositions(List<WorldObject> passengers)
+        void UpdatePassengerPositions(HashSet<WorldObject> passengers)
         {
             foreach (var passenger in passengers)
             {
@@ -725,8 +731,11 @@ namespace Game.Entities
                             break;
                         }
                     case TypeId.Player:
-                        if (passenger.IsInWorld)
+                        if (passenger.IsInWorld && !passenger.ToPlayer().IsBeingTeleported())
+                        {
                             GetMap().PlayerRelocation(passenger.ToPlayer(), x, y, z, o);
+                            passenger.ToPlayer().SetFallInformation(0, passenger.GetPositionZ());
+                        }
                         break;
                     case TypeId.GameObject:
                         GetMap().GameObjectRelocation(passenger.ToGameObject(), x, y, z, o, false);
@@ -774,10 +783,10 @@ namespace Game.Entities
             ClearUpdateMask(true);
         }
 
-        public List<WorldObject> GetPassengers() { return _passengers; }
+        public HashSet<WorldObject> GetPassengers() { return _passengers; }
 
-        public override  uint GetTransportPeriod() { return GetUInt32Value(GameObjectFields.Level); }
-        public void SetPeriod(uint period) { SetUInt32Value(GameObjectFields.Level, period); }
+        public override uint GetTransportPeriod() { return m_gameObjectData.Level; }
+        public void SetPeriod(uint period) { SetLevel(period); }
         uint GetTimer() { return m_goValue.Transport.PathProgress; }
 
         public List<KeyFrame> GetKeyFrames() { return _transportInfo.keyFrames; }
@@ -799,8 +808,8 @@ namespace Game.Entities
         bool _triggeredArrivalEvent;
         bool _triggeredDepartureEvent;
 
-        List<WorldObject> _passengers = new List<WorldObject>();
-        List<WorldObject> _staticPassengers = new List<WorldObject>();
+        HashSet<WorldObject> _passengers = new HashSet<WorldObject>();
+        HashSet<WorldObject> _staticPassengers = new HashSet<WorldObject>();
 
         bool _delayedAddModel;
         bool _delayedTeleport;

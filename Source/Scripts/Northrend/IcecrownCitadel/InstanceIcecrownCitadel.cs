@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 using Framework.Constants;
 using Framework.IO;
 using Game;
-using Game.AI;
 using Game.Entities;
 using Game.Maps;
 using Game.Network.Packets;
@@ -159,12 +158,12 @@ namespace Scripts.Northrend.IcecrownCitadel
             {
                 if (usable)
                 {
-                    go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                    go.RemoveFlag(GameObjectFlags.NotSelectable);
                     go.SetGoState(GameObjectState.Active);
                 }
                 else
                 {
-                    go.SetFlag(GameObjectFields.Flags, GameObjectFlags.NotSelectable);
+                    go.AddFlag(GameObjectFlags.NotSelectable);
                     go.SetGoState(GameObjectState.Ready);
                 }
             }
@@ -362,7 +361,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                             {
                                 if (WeeklyQuestData[questIndex].creatureEntry == entry)
                                 {
-                                    byte diffIndex = (byte)((int)instance.GetSpawnMode() & 1);
+                                    byte diffIndex = (byte)((int)instance.GetDifficultyID() & 1);
                                     if (!Global.PoolMgr.IsSpawnedObject<Quest>(WeeklyQuestData[questIndex].questId[diffIndex]))
                                         entry = 0;
                                     break;
@@ -639,7 +638,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                         Creature valithria = instance.GetCreature(ValithriaDreamwalkerGUID);
                         if (valithria)
                             go.SetLootRecipient(valithria.GetLootRecipient(), valithria.GetLootRecipientGroup());
-                        go.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
+                        go.RemoveFlag(GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
                         break;
                     case GameObjectIds.ArthasPlatform:
                         ArthasPlatformGUID = go.GetGUID();
@@ -851,7 +850,7 @@ namespace Scripts.Northrend.IcecrownCitadel
 
                             GameObject loot = instance.GetGameObject(GunshipArmoryGUID);
                             if (loot)
-                                loot.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
+                                loot.RemoveFlag(GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
                         }
                         else if (state == EncounterState.Fail)
                             _events.ScheduleEvent(TimedEvents.RespawnGunship, 30000);
@@ -867,7 +866,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                                         Creature deathbringer = instance.GetCreature(DeathbringerSaurfangGUID);
                                         if (deathbringer)
                                             loot.SetLootRecipient(deathbringer.GetLootRecipient(), deathbringer.GetLootRecipientGroup());
-                                        loot.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
+                                        loot.RemoveFlag(GameObjectFlags.Locked | GameObjectFlags.NotSelectable | GameObjectFlags.NoDespawn);
                                     }
 
                                     GameObject teleporter = instance.GetGameObject(TeleporterUpperSpireGUID);
@@ -976,7 +975,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     case Bosses.ValithriaDreamwalker:
                         if (state == EncounterState.Done)
                         {
-                            if (Global.PoolMgr.IsSpawnedObject<Quest>(WeeklyQuestData[8].questId[(int)instance.GetSpawnMode() & 1]))
+                            if (Global.PoolMgr.IsSpawnedObject<Quest>(WeeklyQuestData[8].questId[(int)instance.GetDifficultyID() & 1]))
                                 instance.SummonCreature(CreatureIds.ValithriaDreamwalkerQuest, ValithriaDreamwalker.ValithriaSpawnPos);
 
                             GameObject teleporter = instance.GetGameObject(TeleporterSindragosaGUID);
@@ -1009,11 +1008,11 @@ namespace Scripts.Northrend.IcecrownCitadel
                             // note: "active" gameobjects do not block grid unloading
                             GameObject precipice = instance.GetGameObject(ArthasPrecipiceGUID);
                             if (precipice)
-                                precipice.setActive(state == EncounterState.InProgress);
+                                precipice.SetActive(state == EncounterState.InProgress);
 
                             GameObject platform = instance.GetGameObject(ArthasPlatformGUID);
                             if (platform)
-                                platform.setActive(state == EncounterState.InProgress);
+                                platform.SetActive(state == EncounterState.InProgress);
 
                             if (instance.IsHeroic())
                             {
@@ -1106,7 +1105,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                                 break;
 
                             // 5 is the index of Blood Quickening
-                            if (!Global.PoolMgr.IsSpawnedObject<Quest>(WeeklyQuestData[5].questId[(int)instance.GetSpawnMode() & 1]))
+                            if (!Global.PoolMgr.IsSpawnedObject<Quest>(WeeklyQuestData[5].questId[(int)instance.GetDifficultyID() & 1]))
                                 break;
 
                             switch ((EncounterState)data)
@@ -1583,11 +1582,6 @@ namespace Scripts.Northrend.IcecrownCitadel
         public override InstanceScript GetInstanceScript(InstanceMap map)
         {
             return new instance_icecrown_citadel_InstanceMapScript(map);
-        }
-
-        public static T GetInstanceAI<T>(Creature creature) where T : CreatureAI
-        {
-            return GetInstanceAI<T>(creature, "instance_icecrown_citadel");
         }
     }
 }

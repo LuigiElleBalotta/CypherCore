@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using Framework.Constants;
 using Framework.GameMath;
 using System;
 using System.IO;
@@ -24,8 +25,8 @@ namespace Game.Collision
     public enum ModelFlags
     {
         M2 = 1,
-        WorldSpawn = 1 << 1,
-        HasBound = 1 << 2
+        HasBound = 1 << 1,
+        ParentSpawn = 1 << 2
     }
 
     public class ModelSpawn
@@ -35,7 +36,7 @@ namespace Game.Collision
         {
             flags = spawn.flags;
             adtId = spawn.adtId;
-            ID = spawn.ID;
+            Id = spawn.Id;
             iPos = spawn.iPos;
             iRot = spawn.iRot;
             iScale = spawn.iScale;
@@ -43,13 +44,13 @@ namespace Game.Collision
             name = spawn.name;
         }
 
-        public static bool readFromFile(BinaryReader reader, out ModelSpawn spawn)
+        public static bool ReadFromFile(BinaryReader reader, out ModelSpawn spawn)
         {
             spawn = new ModelSpawn();
 
             spawn.flags = reader.ReadUInt32();
             spawn.adtId = reader.ReadUInt16();
-            spawn.ID = reader.ReadUInt32();
+            spawn.Id = reader.ReadUInt32();
             spawn.iPos = reader.Read<Vector3>();
             spawn.iRot = reader.Read<Vector3>();
             spawn.iScale = reader.ReadSingle();
@@ -61,15 +62,15 @@ namespace Game.Collision
                 Vector3 bHigh = reader.Read<Vector3>();
                 spawn.iBound = new AxisAlignedBox(bLow, bHigh);
             }
-            uint nameLen = reader.ReadUInt32();
 
+            uint nameLen = reader.ReadUInt32();
             spawn.name = reader.ReadString((int)nameLen);
             return true;
         }
 
         public uint flags;
         public ushort adtId;
-        public uint ID;
+        public uint Id;
         public Vector3 iPos;
         public Vector3 iRot;
         public float iScale;
@@ -93,7 +94,7 @@ namespace Game.Collision
             iInvScale = 1.0f / iScale;
         }
 
-        public bool intersectRay(Ray pRay, ref float pMaxDist, bool pStopAtFirstHit)
+        public bool IntersectRay(Ray pRay, ref float pMaxDist, bool pStopAtFirstHit, ModelIgnoreFlags ignoreFlags)
         {
             if (iModel == null)
                 return false;
@@ -106,7 +107,7 @@ namespace Game.Collision
             Vector3 p = iInvRot * (pRay.Origin - iPos) * iInvScale;
             Ray modRay = new Ray(p, iInvRot * pRay.Direction);
             float distance = pMaxDist * iInvScale;
-            bool hit = iModel.IntersectRay(modRay, ref distance, pStopAtFirstHit);
+            bool hit = iModel.IntersectRay(modRay, ref distance, pStopAtFirstHit, ignoreFlags);
             if (hit)
             {
                 distance *= iScale;
@@ -115,7 +116,7 @@ namespace Game.Collision
             return hit;
         }
 
-        public void intersectPoint(Vector3 p, AreaInfo info)
+        public void IntersectPoint(Vector3 p, AreaInfo info)
         {
             if (iModel == null)
                 return;
@@ -191,7 +192,7 @@ namespace Game.Collision
             return false;
         }
 
-        public void setUnloaded() { iModel = null; }
+        public void SetUnloaded() { iModel = null; }
 
         Matrix3 iInvRot;
         float iInvScale;

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ using Game.Maps;
 using Game.Scripting;
 using Game.Spells;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Scripts.Northrend.IcecrownCitadel
 {
@@ -157,13 +156,13 @@ namespace Scripts.Northrend.IcecrownCitadel
                             Creature factionNPC = me.FindNearestCreature(_instance.GetData(DataTypes.TeamInInstance) == (uint)Team.Horde ? CreatureIds.SeHighOverlordSaurfang : CreatureIds.SeMuradinBronzebeard, 50.0f);
                             if (factionNPC)
                             {
-                                me.setActive(true);
+                                me.SetActive(true);
                                 _theLichKing = theLichKing.GetGUID();
-                                theLichKing.setActive(true);
+                                theLichKing.SetActive(true);
                                 _bolvarFordragon = bolvarFordragon.GetGUID();
-                                bolvarFordragon.setActive(true);
+                                bolvarFordragon.SetActive(true);
                                 _factionNPC = factionNPC.GetGUID();
-                                factionNPC.setActive(true);
+                                factionNPC.SetActive(true);
                             }
                         }
                     }
@@ -261,7 +260,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                         if (temp)
                         {
                             temp.GetAI().Talk(Texts.SayBolvarIntro1);
-                            temp.setActive(false);
+                            temp.SetActive(false);
                         }
                         break;
                     case EventTypes.LkIntro5:
@@ -269,7 +268,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                         if (temp)
                         {
                             temp.GetAI().Talk(Texts.SayLkIntro5);
-                            temp.setActive(false);
+                            temp.SetActive(false);
                         }
                         break;
                     case EventTypes.SaurfangIntro1:
@@ -300,7 +299,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                         Creature factionNPC = ObjectAccessor.GetCreature(me, _factionNPC);
                         if (factionNPC)
                             factionNPC.GetMotionMaster().MovePath((uint)(factionNPC.GetSpawnId() * 10), false);
-                        me.setActive(false);
+                        me.SetActive(false);
                         _damnedKills = 3;
                         break;
                     case EventTypes.MuradinIntro1:
@@ -502,6 +501,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             Creature crok = ObjectAccessor.GetCreature(me, instance.GetGuidData(DataTypes.CrokScourgebane));
             if (crok)
                 crok.GetAI().Talk(Texts.SayCrokCombatSvalna);
+            DoCastSelf(InstanceSpells.DivineSurge, true);
             _events.ScheduleEvent(EventTypes.SvalnaCombat, 9000);
             _events.ScheduleEvent(EventTypes.ImpalingSpear, RandomHelper.URand(40000, 50000));
             _events.ScheduleEvent(EventTypes.AetherShield, RandomHelper.URand(100000, 110000));
@@ -548,9 +548,9 @@ namespace Scripts.Northrend.IcecrownCitadel
                     me.CastCustomSpell(InstanceSpells.CaressOfDeath, SpellValueMod.MaxTargets, 1, me, true);
                     break;
                 case Actions.StartGauntlet:
-                    me.setActive(true);
+                    me.SetActive(true);
                     _isEventInProgress = true;
-                    me.SetFlag(UnitFields.Flags, UnitFlags.ImmuneToPc | UnitFlags.ImmuneToNpc);
+                    me.AddUnitFlag(UnitFlags.ImmuneToPc | UnitFlags.ImmuneToNpc);
                     _events.ScheduleEvent(EventTypes.SvalnaStart, 25000);
                     break;
                 case Actions.ResurrectCaptains:
@@ -560,7 +560,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     Talk(Texts.SaySvalnaCaptainDeath);
                     break;
                 case Actions.ResetEvent:
-                    me.setActive(false);
+                    me.SetActive(false);
                     Reset();
                     break;
                 default:
@@ -583,8 +583,8 @@ namespace Scripts.Northrend.IcecrownCitadel
                 return;
 
             _isEventInProgress = false;
-            me.setActive(false);
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.ImmuneToPc | UnitFlags.ImmuneToNpc);
+            me.SetActive(false);
+            me.RemoveUnitFlag(UnitFlags.ImmuneToPc | UnitFlags.ImmuneToNpc);
             me.SetDisableGravity(false);
             me.SetHover(false);
         }
@@ -602,7 +602,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     {
                         Talk(Texts.EmoteSvalnaImpale, target);
                         summon.CastCustomSpell(SharedConst.VehicleSpellRideHardcoded, SpellValueMod.BasePoint0, 1, target, false);
-                        summon.SetFlag(UnitFields.Flags2, UnitFlags2.Unk1 | UnitFlags2.AllowEnemyInteract);
+                        summon.AddUnitFlag2(UnitFlags2.Unk1 | UnitFlags2.AllowEnemyInteract);
                     }
                     break;
                 default:
@@ -656,7 +656,7 @@ namespace Scripts.Northrend.IcecrownCitadel
     }
 
     [Script]
-    class npc_crok_scourgebane : npc_escortAI
+    class npc_crok_scourgebane : NpcEscortAI
     {
         public npc_crok_scourgebane(Creature creature) : base(creature)
         {
@@ -699,7 +699,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                 _events.ScheduleEvent(EventTypes.ArnathIntro2, 7000);
                 _events.ScheduleEvent(EventTypes.CrokIntro3, 14000);
                 _events.ScheduleEvent(EventTypes.StartPathing, 37000);
-                me.setActive(true);
+                me.SetActive(true);
                 for (uint i = 0; i < 4; ++i)
                 {
                     Creature crusader = ObjectAccessor.GetCreature(me, _instance.GetGuidData(DataTypes.CaptainArnath + i));
@@ -711,7 +711,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             {
                 _isEventActive = false;
                 _isEventDone = _instance.GetBossState(Bosses.SisterSvalna) == EncounterState.Done;
-                me.setActive(false);
+                me.SetActive(false);
                 _aliveTrash.Clear();
                 _currentWPid = 0;
             }
@@ -728,7 +728,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     if (_currentWPid == 4 && _isEventActive)
                     {
                         _isEventActive = false;
-                        me.setActive(false);
+                        me.SetActive(false);
                         Talk(Texts.SayCrokFinalWp);
                         Creature svalna = ObjectAccessor.GetCreature(me, _instance.GetGuidData(Bosses.SisterSvalna));
                         if (svalna)
@@ -744,6 +744,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             {
                 // pause pathing until trash pack is cleared
                 case 0:
+                    me.RemoveUnitFlag(UnitFlags.ImmuneToNpc);
                     Talk(Texts.SayCrokCombatWp0);
                     if (!_aliveTrash.Empty())
                         SetEscortPaused(true);
@@ -757,7 +758,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     if (_aliveTrash.Empty() && _isEventActive)
                     {
                         _isEventActive = false;
-                        me.setActive(false);
+                        me.SetActive(false);
                         Talk(Texts.SayCrokFinalWp);
                         Creature svalna = ObjectAccessor.GetCreature(me, _instance.GetGuidData(Bosses.SisterSvalna));
                         if (svalna)
@@ -860,7 +861,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             }
         }
 
-        void UpdateEscortAI(uint diff)
+        public override void UpdateEscortAI(uint diff)
         {
             if (_wipeCheckTimer <= diff)
                 _wipeCheckTimer = 0;
@@ -978,7 +979,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     me.GetMotionMaster().MoveFollow(crok, FollowDist, FollowAngle, MovementSlot.Idle);
                 }
 
-                me.setActive(true);
+                me.SetActive(true);
             }
             else if (action == Actions.ResetEvent)
             {
@@ -1027,8 +1028,8 @@ namespace Scripts.Northrend.IcecrownCitadel
             if (spell.Id == InstanceSpells.ReviveChampion && !IsUndead)
             {
                 IsUndead = true;
-                me.setDeathState(DeathState.JustRespawned);
-                uint newEntry = 0;
+                me.SetDeathState(DeathState.JustRespawned);
+                uint newEntry;
                 switch (me.GetEntry())
                 {
                     case CreatureIds.CaptainArnath:
@@ -1091,10 +1092,12 @@ namespace Scripts.Northrend.IcecrownCitadel
                 switch (eventId)
                 {
                     case EventTypes.ArnathFlashHeal:
-                        Creature target = FindFriendlyCreature();
-                        if (target)
-                            DoCast(target, InstanceSpells.SpellFlashHeal(IsUndead));
-                        _events.ScheduleEvent(EventTypes.ArnathFlashHeal, RandomHelper.URand(6000, 9000));
+                        {
+                            Creature target = FindFriendlyCreature();
+                            if (target)
+                                DoCast(target, InstanceSpells.SpellFlashHeal(IsUndead));
+                            _events.ScheduleEvent(EventTypes.ArnathFlashHeal, RandomHelper.URand(6000, 9000));
+                        }
                         break;
                     case EventTypes.ArnathPwShield:
                         {
@@ -1108,10 +1111,12 @@ namespace Scripts.Northrend.IcecrownCitadel
                         _events.ScheduleEvent(EventTypes.ArnathSmite, RandomHelper.URand(4000, 7000));
                         break;
                     case EventTypes.ArnathDominateMind:
-                        Unit target1 = SelectTarget(SelectAggroTarget.Random, 1, 0.0f, true);
-                        if (target1)
-                            DoCast(target1, InstanceSpells.DominateMind);
-                        _events.ScheduleEvent(EventTypes.ArnathDominateMind, RandomHelper.URand(28000, 37000));
+                        {
+                            Unit target = SelectTarget(SelectAggroTarget.Random, 1, 0.0f, true);
+                            if (target)
+                                DoCast(target, InstanceSpells.DominateMind);
+                            _events.ScheduleEvent(EventTypes.ArnathDominateMind, RandomHelper.URand(28000, 37000));
+                        }
                         break;
                     default:
                         break;
@@ -1362,7 +1367,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                 _events.ScheduleEvent(EventTypes.SoulMissile, RandomHelper.URand(1000, 6000));
         }
 
-        void Update(uint diff)
+        public override void UpdateAI(uint diff)
         {
             if (_events.Empty())
                 return;
@@ -1388,8 +1393,8 @@ namespace Scripts.Northrend.IcecrownCitadel
             if (target)
             {
                 target.SetReactState(ReactStates.Passive);
-                target.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable | UnitFlags.ImmuneToPc);
-                target.SetUInt32Value(UnitFields.NpcEmotestate, (uint)Emote.OneshotCustomSpell02);
+                target.AddUnitFlag(UnitFlags.NotSelectable | UnitFlags.ImmuneToPc);
+                target.SetEmoteState(Emote.OneshotCustomSpell02);
             }
         }
 
@@ -1399,8 +1404,8 @@ namespace Scripts.Northrend.IcecrownCitadel
             if (target)
             {
                 target.SetReactState(ReactStates.Aggressive);
-                target.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable | UnitFlags.ImmuneToPc);
-                target.SetUInt32Value(UnitFields.NpcEmotestate, 0);
+                target.RemoveUnitFlag(UnitFlags.NotSelectable | UnitFlags.ImmuneToPc);
+                target.SetEmoteState(Emote.StateCustomSpell02);
             }
         }
 
@@ -1422,7 +1427,7 @@ namespace Scripts.Northrend.IcecrownCitadel
         void HandleEvent(uint effIndex)
         {
             PreventHitDefaultEffect(effIndex);
-            uint trapId = 0;
+            uint trapId;
             switch (GetSpellInfo().GetEffect(effIndex).MiscValue)
             {
                 case AwakenWard1:
@@ -1443,7 +1448,7 @@ namespace Scripts.Northrend.IcecrownCitadel
 
             GameObject trap = GetCaster().FindNearestGameObject(trapId, 5.0f);
             if (trap)
-                trap.SetRespawnTime((int)trap.GetGoInfo().GetAutoCloseTime());
+                trap.SetRespawnTime((int)trap.GetGoInfo().GetAutoCloseTime() / Time.InMilliseconds);
 
             List<Creature> wards = new List<Creature>();
             GetCaster().GetCreatureListWithEntryInGrid(wards, CreatureIds.DeathboundWard, 150.0f);

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,8 +49,8 @@ namespace Game.Chat
             int queuedClientsNum = Global.WorldMgr.GetQueuedSessionCount();
             uint maxActiveClientsNum = Global.WorldMgr.GetMaxActiveSessionCount();
             uint maxQueuedClientsNum = Global.WorldMgr.GetMaxQueuedSessionCount();
-            string uptime = Time.secsToTimeString(Global.WorldMgr.GetUptime());
-            uint updateTime = Global.WorldMgr.GetUpdateTime();
+            string uptime = Time.secsToTimeString(GameTime.GetUptime());
+            uint updateTime = Global.WorldMgr.GetWorldUpdateTime().GetLastUpdateTime();
 
             handler.SendSysMessage(CypherStrings.ConnectedPlayers, playersNum, maxPlayersNum);
             handler.SendSysMessage(CypherStrings.ConnectedUsers, activeClientsNum, maxActiveClientsNum, queuedClientsNum, maxQueuedClientsNum);
@@ -82,8 +82,6 @@ namespace Game.Chat
                 string paramStr = args.NextString();
                 if (string.IsNullOrEmpty(paramStr))
                     return false;
-
-                int limit = paramStr.Length;
 
                 switch (paramStr.ToLower())
                 {
@@ -117,7 +115,7 @@ namespace Game.Chat
 
             uint playerAmountLimit = Global.WorldMgr.GetPlayerAmountLimit();
             AccountTypes allowedAccountType = Global.WorldMgr.GetPlayerSecurityLimit();
-            string secName = "";
+            string secName;
             switch (allowedAccountType)
             {
                 case AccountTypes.Player:
@@ -343,7 +341,7 @@ namespace Game.Chat
                 string name = args.NextString();
                 string level = args.NextString();
 
-                if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(name) || string.IsNullOrEmpty(level) || name.IsEmpty() || level.IsEmpty() || (type[0] != 'a' && type[0] != 'l'))
+                if (type.IsEmpty() || name.IsEmpty() || level.IsEmpty() || (type[0] != 'a' && type[0] != 'l'))
                     return false;
 
                 return Log.SetLogLevel(name, level, type[0] == 'l');

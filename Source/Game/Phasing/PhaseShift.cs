@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,48 +17,73 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Game.Conditions;
 using Game.Entities;
-using System.Collections.Concurrent;
 using System.Linq;
 
 namespace Game
 {
     public class PhaseShift
     {
+        public PhaseShift()
+        {
+            Flags = PhaseShiftFlags.Unphased;
+        }
+        public PhaseShift(PhaseShift copy)
+        {
+            Flags = copy.Flags;
+            PersonalGuid = copy.PersonalGuid;
+            Phases = new Dictionary<uint, PhaseRef>(copy.Phases);
+            VisibleMapIds = new Dictionary<uint, VisibleMapIdRef>(copy.VisibleMapIds);
+            UiMapPhaseIds = new Dictionary<uint, UiMapPhaseIdRef>(copy.UiMapPhaseIds);
+
+            NonCosmeticReferences = copy.NonCosmeticReferences;
+            CosmeticReferences = copy.CosmeticReferences;
+            DefaultReferences = copy.DefaultReferences;
+            IsDbPhaseShift = copy.IsDbPhaseShift;
+        }
+
         public bool AddPhase(uint phaseId, PhaseFlags flags, List<Condition> areaConditions, int references = 1)
         {
-            var phase = new PhaseRef(phaseId, flags, null);
-            ModifyPhasesReferences(phase, references);
+            bool newPhase = false;
+
+            if (!Phases.ContainsKey(phaseId))
+            {
+                newPhase = true;
+                Phases.Add(phaseId, new PhaseRef(flags, null));
+            }
+
+            var phase = Phases.LookupByKey(phaseId);
+            ModifyPhasesReferences(phaseId, phase, references);
             if (areaConditions != null)
                 phase.AreaConditions = areaConditions;
 
-            Phases.Add(phase);
-            return true;
+            return newPhase;
         }
 
         public bool RemovePhase(uint phaseId)
         {
-            var phaseRef = new PhaseRef(phaseId, PhaseFlags.None, null);
-            if (Phases.Contains(phaseRef))
+            var phaseRef = Phases.LookupByKey(phaseId);
+            if (phaseRef != null)
             {
-                ModifyPhasesReferences(phaseRef, -1);
+                ModifyPhasesReferences(phaseId, phaseRef, -1);
                 if (phaseRef.References == 0)
                 {
-                    Phases.Remove(phaseRef);
+                    Phases.Remove(phaseId);
                     return true;
                 }
-
-                return false;
             }
+
             return false;
         }
 
         public bool AddVisibleMapId(uint visibleMapId, TerrainSwapInfo visibleMapInfo, int references = 1)
         {
+            if (VisibleMapIds.ContainsKey(visibleMapId))
+                return false;
+
             VisibleMapIds.Add(visibleMapId, new VisibleMapIdRef(references, visibleMapInfo));
-            return true; //Tryadd?  maybe Concurrent
+            return true;
         }
 
         public bool RemoveVisibleMapId(uint visibleMapId)
@@ -71,31 +96,30 @@ namespace Game
                     VisibleMapIds.Remove(visibleMapId);
                     return true;
                 }
-
-                return false;
             }
 
             return false;
         }
 
-        public bool AddUiWorldMapAreaIdSwap(uint uiWorldMapAreaId, int references = 1)
+        public bool AddUiMapPhaseId(uint uiMapPhaseId, int references = 1)
         {
-            UiWorldMapAreaIdSwaps.Add(uiWorldMapAreaId, new UiWorldMapAreaIdSwapRef(references));
-            return true; //Tryadd?  maybe Concurrent
+            if (UiMapPhaseIds.ContainsKey(uiMapPhaseId))
+                return false;
+
+            UiMapPhaseIds.Add(uiMapPhaseId, new UiMapPhaseIdRef(references));
+            return true;
         }
 
-        public bool RemoveUiWorldMapAreaIdSwap(uint uiWorldMapAreaId)
-        {           
-            if (UiWorldMapAreaIdSwaps.ContainsKey(uiWorldMapAreaId))
+        public bool RemoveUiMapPhaseId(uint uiWorldMapAreaId)
+        {
+            if (UiMapPhaseIds.ContainsKey(uiWorldMapAreaId))
             {
-                var value = UiWorldMapAreaIdSwaps[uiWorldMapAreaId];
+                var value = UiMapPhaseIds[uiWorldMapAreaId];
                 if ((--value.References) == 0)
                 {
-                    UiWorldMapAreaIdSwaps.Remove(uiWorldMapAreaId);
+                    UiMapPhaseIds.Remove(uiWorldMapAreaId);
                     return true;
                 }
-
-                return false;
             }
 
             return false;
@@ -106,7 +130,7 @@ namespace Game
             ClearPhases();
             PersonalGuid.Clear();
             VisibleMapIds.Clear();
-            UiWorldMapAreaIdSwaps.Clear();
+            UiMapPhaseIds.Clear();
         }
 
         public void ClearPhases()
@@ -136,10 +160,7 @@ namespace Game
             {
                 ObjectGuid ownerGuid = PersonalGuid;
                 ObjectGuid otherPersonalGuid = other.PersonalGuid;
-                return Phases.Intersect(other.Phases, (myPhase, otherPhase) =>
-                {
-                    return !myPhase.Flags.HasAnyFlag(excludePhasesWithFlag) && (!myPhase.Flags.HasFlag(PhaseFlags.Personal) || ownerGuid == otherPersonalGuid);
-                }).Any();
+                return Phases.Intersect(other.Phases, (myPhase, otherPhase) => !myPhase.Value.Flags.HasAnyFlag(excludePhasesWithFlag) && (!myPhase.Value.Flags.HasFlag(PhaseFlags.Personal) || ownerGuid == otherPersonalGuid)).Any();
             }
 
             var checkInversePhaseShift = new Func<PhaseShift, PhaseShift, bool>((phaseShift, excludedPhaseShift) =>
@@ -147,13 +168,14 @@ namespace Game
                 if (phaseShift.Flags.HasFlag(PhaseShiftFlags.Unphased) && !excludedPhaseShift.Flags.HasFlag(PhaseShiftFlags.InverseUnphased))
                     return true;
 
-                foreach (var itr in phaseShift.Phases)
+                var list = excludedPhaseShift.Phases.ToList();
+                foreach (var pair in phaseShift.Phases)
                 {
-                    if (itr.Flags.HasAnyFlag(excludePhasesWithFlag))
+                    if (pair.Value.Flags.HasAnyFlag(excludePhasesWithFlag))
                         continue;
 
-                    var index = excludedPhaseShift.Phases.IndexOf(itr);
-                    if (index == -1 || excludedPhaseShift.Phases[index].Flags.HasAnyFlag(excludePhasesWithFlag))
+                    var ExcludedPhaseRef = excludedPhaseShift.Phases.LookupByKey(pair.Key);
+                    if (ExcludedPhaseRef == null || ExcludedPhaseRef.Flags.HasAnyFlag(excludePhasesWithFlag))
                         return true;
                 }
 
@@ -166,7 +188,7 @@ namespace Game
             return checkInversePhaseShift(other, this);
         }
 
-        public void ModifyPhasesReferences(PhaseRef phaseRef, int references)
+        public void ModifyPhasesReferences(uint phaseId, PhaseRef phaseRef, int references)
         {
             phaseRef.References += references;
 
@@ -174,7 +196,7 @@ namespace Game
             {
                 if (phaseRef.Flags.HasAnyFlag(PhaseFlags.Cosmetic))
                     CosmeticReferences += references;
-                else if (phaseRef.Id != 169)
+                else if (phaseId != 169)
                     NonCosmeticReferences += references;
                 else
                     DefaultReferences += references;
@@ -198,20 +220,20 @@ namespace Game
                 Flags |= unphasedFlag;
         }
 
-        public bool HasPhase(uint phaseId) { return Phases.Contains(new PhaseRef(phaseId, PhaseFlags.None, null)); }
-        public List<PhaseRef> GetPhases() { return Phases; }
+        public bool HasPhase(uint phaseId) { return Phases.ContainsKey(phaseId); }
+        public Dictionary<uint, PhaseRef> GetPhases() { return Phases; }
 
         public bool HasVisibleMapId(uint visibleMapId) { return VisibleMapIds.ContainsKey(visibleMapId); }
         public Dictionary<uint, VisibleMapIdRef> GetVisibleMapIds() { return VisibleMapIds; }
 
-        public bool HasUiWorldMapAreaIdSwap(uint uiWorldMapAreaId) { return UiWorldMapAreaIdSwaps.ContainsKey(uiWorldMapAreaId); }
-        public Dictionary<uint, UiWorldMapAreaIdSwapRef> GetUiWorldMapAreaIdSwaps() { return UiWorldMapAreaIdSwaps; }
+        public bool HasUiWorldMapAreaIdSwap(uint uiWorldMapAreaId) { return UiMapPhaseIds.ContainsKey(uiWorldMapAreaId); }
+        public Dictionary<uint, UiMapPhaseIdRef> GetUiWorldMapAreaIdSwaps() { return UiMapPhaseIds; }
 
-        public PhaseShiftFlags Flags = PhaseShiftFlags.Unphased;
+        public PhaseShiftFlags Flags;
         public ObjectGuid PersonalGuid;
-        public List<PhaseRef> Phases = new List<PhaseRef>();
+        public Dictionary<uint, PhaseRef> Phases = new Dictionary<uint, PhaseRef>();
         public Dictionary<uint, VisibleMapIdRef> VisibleMapIds = new Dictionary<uint, VisibleMapIdRef>();
-        public Dictionary<uint, UiWorldMapAreaIdSwapRef> UiWorldMapAreaIdSwaps = new Dictionary<uint, UiWorldMapAreaIdSwapRef>();
+        public Dictionary<uint, UiMapPhaseIdRef> UiMapPhaseIds = new Dictionary<uint, UiMapPhaseIdRef>();
 
         int NonCosmeticReferences;
         int CosmeticReferences;
@@ -219,42 +241,18 @@ namespace Game
         public bool IsDbPhaseShift;
     }
 
-    public struct PhaseRef
+    public class PhaseRef
     {
-        public PhaseRef(uint id, PhaseFlags flags, List<Condition> conditions)
+        public PhaseRef(PhaseFlags flags, List<Condition> conditions)
         {
-            Id = id;
             Flags = flags;
             References = 0;
             AreaConditions = conditions;
         }
 
-        public uint Id;
         public PhaseFlags Flags;
         public int References;
         public List<Condition> AreaConditions;
-
-        public static bool operator <(PhaseRef left, PhaseRef right)
-        {
-            return left.Id < right.Id;
-        }
-
-        public static bool operator >(PhaseRef left, PhaseRef right)
-        {
-            return left.Id > right.Id;
-        }
-
-        public static bool operator ==(PhaseRef left, PhaseRef right) { return left.Id == right.Id; }
-        public static bool operator !=(PhaseRef left, PhaseRef right) { return !(left == right); }
-
-        public override bool Equals(object obj)
-        {
-            return base.Equals(obj);
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
-        }
     }
 
     public struct VisibleMapIdRef
@@ -269,9 +267,9 @@ namespace Game
         public TerrainSwapInfo VisibleMapInfo;
     }
 
-    public struct UiWorldMapAreaIdSwapRef
+    public struct UiMapPhaseIdRef
     {
-        public UiWorldMapAreaIdSwapRef(int references)
+        public UiMapPhaseIdRef(int references)
         {
             References = references;
         }

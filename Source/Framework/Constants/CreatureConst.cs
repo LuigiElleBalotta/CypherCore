@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -110,48 +110,54 @@ namespace Framework.Constants
         Unk1 = 0x01,
     }
 
-    public enum NPCFlags : ulong
+    public enum NPCFlags : uint
     {
         None = 0x00,
-        Gossip = 0x01,
-        QuestGiver = 0x02,
+        Gossip = 0x01,     // 100%
+        QuestGiver = 0x02,     // 100%
         Unk1 = 0x04,
         Unk2 = 0x08,
-        Trainer = 0x10,
-        TrainerClass = 0x20,
-        TrainerProfession = 0x40,
-        Vendor = 0x80,
-        VendorGeneral = 0x100,
-        VendorFood = 0x200,
-        VendorPoison = 0x400,
-        VendorReagent = 0x800,
-        Repair = 0x1000,
-        FlightMaster = 0x2000,
-        SpiritHealer = 0x4000,
-        SpiritGuide = 0x8000,
-        Innkeeper = 0x10000,
-        Banker = 0x20000,
-        Petitioner = 0x40000,
-        TabardDesigner = 0x80000,
-        BattleMaster = 0x100000,
-        Auctioneer = 0x200000,
-        StableMaster = 0x400000,
-        GuildBanker = 0x800000,
-        SpellClick = 0x1000000,
-        PlayerVehicle = 0x2000000,
-        Mailbox = 0x4000000,
-        ArtifactPowerRespec = 0x8000000,
-        Transmogrifier = 0x10000000,
-        VaultKeeper = 0x20000000,
-        WildBattlePet = 0x0040000000,
-        BlackMarket = 0x80000000,
-        ItemUpgradeMaster = 0x100000000,
-        GarrisonArchitect = 0x200000000,
-        Steering = 0x400000000,
-        ShipmentCrafter = 0x1000000000,
-        GarrisonMissionNpc = 0x2000000000,
-        TradeskillNpc = 0x4000000000,
-        BlackMarketView = 0x8000000000
+        Trainer = 0x10,     // 100%
+        TrainerClass = 0x20,     // 100%
+        TrainerProfession = 0x40,     // 100%
+        Vendor = 0x80,     // 100%
+        VendorAmmo = 0x100,     // 100%, General Goods Vendor
+        VendorFood = 0x200,     // 100%
+        VendorPoison = 0x400,     // Guessed
+        VendorReagent = 0x800,     // 100%
+        Repair = 0x1000,     // 100%
+        FlightMaster = 0x2000,     // 100%
+        SpiritHealer = 0x4000,     // Guessed
+        SpiritGuide = 0x8000,     // Guessed
+        Innkeeper = 0x10000,     // 100%
+        Banker = 0x20000,     // 100%
+        Petitioner = 0x40000,     // 100% 0xc0000 = Guild Petitions, 0x40000 = Arena Team Petitions
+        TabardDesigner = 0x80000,     // 100%
+        BattleMaster = 0x100000,     // 100%
+        Auctioneer = 0x200000,     // 100%
+        StableMaster = 0x400000,     // 100%
+        GuildBanker = 0x800000,     //
+        SpellClick = 0x1000000,     //
+        PlayerVehicle = 0x2000000,     // Players With Mounts That Have Vehicle Data Should Have It Set
+        Mailbox = 0x4000000,     // Mailbox
+        ArtifactPowerRespec = 0x8000000,     // Artifact Powers Reset
+        Transmogrifier = 0x10000000,     // Transmogrification
+        VaultKeeper = 0x20000000,     // Void Storage
+        WildBattlePet = 0x40000000,     // Pet That Player Can Fight (Battle Pet)
+        BlackMarket = 0x80000000,     // Black Market
+    }
+
+    public enum NPCFlags2
+    { 
+        None = 0x00,
+        ItemUpgradeMaster = 0x01,
+        GarrisonArchitect = 0x02,
+        Steering = 0x04,
+        ShipmentCrafter = 0x10,
+        GarrisonMissionNpc = 0x20,
+        TradeskillNpc = 0x40,
+        BlackMarketView = 0x80,
+        ContributionCollector = 0x400,
     }
 
     public enum CreatureTypeFlags : uint
@@ -201,6 +207,7 @@ namespace Framework.Constants
         NoXpAtKill = 0x40,       // Creature Kill Not Provide Xp
         Trigger = 0x80,       // Trigger Creature
         NoTaunt = 0x100,       // Creature Is Immune To Taunt Auras And Effect Attack Me
+        NoMoveFlagsUpdate = 0x200, // Creature won't update movement flags
         Worldevent = 0x4000,       // Custom Flag For World Event Creatures (Left Room For Merging)
         Guard = 0x8000,       // Creature Is Guard
         NoCrit = 0x20000,       // Creature Can'T Do Critical Strikes
@@ -213,7 +220,7 @@ namespace Framework.Constants
         ImmunityKnockback = 0x40000000,        // creature is immune to knockback effects
 
         DBAllowed = (InstanceBind | Civilian | NoParry | NoParryHasten | NoBlock | NoCrush | NoXpAtKill | 
-            Trigger | NoTaunt | Worldevent | NoCrit | NoSkillgain | TauntDiminish | AllDiminish | Guard |
+            Trigger | NoTaunt | NoMoveFlagsUpdate | Worldevent | NoCrit | NoSkillgain | TauntDiminish | AllDiminish | Guard |
             IgnorePathfinding | NoPlayerDamageReq | ImmunityKnockback)
     }
 

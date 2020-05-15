@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ namespace Scripts.Northrend.Nexus.Oculus
                         BelgaristraszGUID = creature.GetGUID();
                         if (GetBossState(DATA_DRAKOS) == EncounterState.Done)
                         {
-                            creature.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                            creature.AddNpcFlag(NPCFlags.Gossip);
                             creature.Relocate(BelgaristraszMove);
                         }
                         break;
@@ -83,7 +83,7 @@ namespace Scripts.Northrend.Nexus.Oculus
                         EternosGUID = creature.GetGUID();
                         if (GetBossState(DATA_DRAKOS) == EncounterState.Done)
                         {
-                            creature.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                            creature.AddNpcFlag(NPCFlags.Gossip);
                             creature.Relocate(EternosMove);
                         }
                         break;
@@ -91,7 +91,7 @@ namespace Scripts.Northrend.Nexus.Oculus
                         VerdisaGUID = creature.GetGUID();
                         if (GetBossState(DATA_DRAKOS) == EncounterState.Done)
                         {
-                            creature.SetFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                            creature.AddNpcFlag(NPCFlags.Gossip);
                             creature.Relocate(VerdisaMove);
                         }
                         break;

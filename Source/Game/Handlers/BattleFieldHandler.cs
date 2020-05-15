@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ namespace Game
         public void SendBfEntered(ulong queueId, bool relocated, bool onOffense)
         {
             BFMgrEntering bfMgrEntering = new BFMgrEntering();
-            bfMgrEntering.ClearedAFK = _player.isAFK();
+            bfMgrEntering.ClearedAFK = _player.IsAFK();
             bfMgrEntering.Relocated = relocated;
             bfMgrEntering.OnOffense = onOffense;
             bfMgrEntering.QueueID = queueId;
@@ -89,7 +89,6 @@ namespace Game
         /// <summary>
         /// This is call when player leave battlefield zone.
         /// </summary>
-        /// <param name="queueId">The queue id of Bf</param>
         /// <param name="queueId">The queue id of Bf</param>
         /// <param name="battleState">Battlefield status</param>
         /// <param name="relocated">Whether player is added to Bf on the spot or teleported from queue</param>

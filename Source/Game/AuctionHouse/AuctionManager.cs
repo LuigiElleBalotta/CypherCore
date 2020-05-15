@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@ using Game.Mails;
 using Game.Network.Packets;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
+using System.Collections.Concurrent;
 
 namespace Game
 {
@@ -79,12 +79,12 @@ namespace Game
             if (!item)
                 return;
 
-            uint bidderAccId = 0;
+            uint bidderAccId;
             ObjectGuid bidderGuid = ObjectGuid.Create(HighGuid.Player, auction.bidder);
             Player bidder = Global.ObjAccessor.FindPlayer(bidderGuid);
             // data for gm.log
             string bidderName = "";
-            bool logGmTrade = false;
+            bool logGmTrade;
 
             if (bidder)
             {
@@ -94,10 +94,10 @@ namespace Game
             }
             else
             {
-                bidderAccId = ObjectManager.GetPlayerAccountIdByGUID(bidderGuid);
+                bidderAccId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(bidderGuid);
                 logGmTrade = Global.AccountMgr.HasPermission(bidderAccId, RBACPermissions.LogGmTrade, Global.WorldMgr.GetRealm().Id.Realm);
 
-                if (logGmTrade && !ObjectManager.GetPlayerNameByGUID(bidderGuid, out bidderName))
+                if (logGmTrade && !Global.CharacterCacheStorage.GetCharacterNameByGuid(bidderGuid, out bidderName))
                     bidderName = Global.ObjectMgr.GetCypherString(CypherStrings.Unknown);
             }
 
@@ -105,10 +105,10 @@ namespace Game
             {
                 ObjectGuid ownerGuid = ObjectGuid.Create(HighGuid.Player, auction.owner);
                 string ownerName;
-                if (!ObjectManager.GetPlayerNameByGUID(ownerGuid, out ownerName))
+                if (!Global.CharacterCacheStorage.GetCharacterNameByGuid(ownerGuid, out ownerName))
                     ownerName = Global.ObjectMgr.GetCypherString(CypherStrings.Unknown);
 
-                uint ownerAccId = ObjectManager.GetPlayerAccountIdByGUID(ownerGuid);
+                uint ownerAccId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(ownerGuid);
 
                 Log.outCommand(bidderAccId, $"GM {bidderName} (Account: {bidderAccId}) won item in auction: {item.GetTemplate().GetName()} (Entry: {item.GetEntry()} Count: {item.GetCount()}) and pay money: {auction.bid}. Original owner {ownerName} (Account: {ownerAccId})");
             }
@@ -145,7 +145,7 @@ namespace Game
         {
             ObjectGuid owner_guid = ObjectGuid.Create(HighGuid.Player, auction.owner);
             Player owner = Global.ObjAccessor.FindPlayer(owner_guid);
-            uint owner_accId = ObjectManager.GetPlayerAccountIdByGUID(owner_guid);
+            uint owner_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(owner_guid);
             // owner exist (online or offline)
             if (owner || owner_accId != 0)
                 new MailDraft(auction.BuildAuctionMailSubject(MailAuctionAnswers.SalePending), AuctionEntry.BuildAuctionMailBody(auction.bidder, auction.bid, auction.buyout, auction.deposit, auction.GetAuctionCut()))
@@ -157,7 +157,7 @@ namespace Game
         {
             ObjectGuid owner_guid = ObjectGuid.Create(HighGuid.Player, auction.owner);
             Player owner = Global.ObjAccessor.FindPlayer(owner_guid);
-            uint owner_accId = ObjectManager.GetPlayerAccountIdByGUID(owner_guid);
+            uint owner_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(owner_guid);
             Item item = GetAItem(auction.itemGUIDLow);
 
             // owner exist
@@ -190,7 +190,7 @@ namespace Game
 
             ObjectGuid owner_guid = ObjectGuid.Create(HighGuid.Player, auction.owner);
             Player owner = Global.ObjAccessor.FindPlayer(owner_guid);
-            uint owner_accId = ObjectManager.GetPlayerAccountIdByGUID(owner_guid);
+            uint owner_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(owner_guid);
             // owner exist
             if (owner || owner_accId != 0)
             {
@@ -216,7 +216,7 @@ namespace Game
 
             uint oldBidder_accId = 0;
             if (oldBidder == null)
-                oldBidder_accId = ObjectManager.GetPlayerAccountIdByGUID(oldBidder_guid);
+                oldBidder_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(oldBidder_guid);
 
             Item item = GetAItem(auction.itemGUIDLow);
 
@@ -240,7 +240,7 @@ namespace Game
 
             uint bidder_accId = 0;
             if (!bidder)
-                bidder_accId = ObjectManager.GetPlayerAccountIdByGUID(bidder_guid);
+                bidder_accId = Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(bidder_guid);
 
             // bidder exist
             if (bidder || bidder_accId != 0)
@@ -327,8 +327,8 @@ namespace Game
 
         public void AddAItem(Item it)
         {
-            Contract.Assert(it);
-            Contract.Assert(!mAitems.ContainsKey(it.GetGUID().GetCounter()));
+            Cypher.Assert(it);
+            Cypher.Assert(!mAitems.ContainsKey(it.GetGUID().GetCounter()));
             mAitems[it.GetGUID().GetCounter()] = it;
         }
 
@@ -419,7 +419,7 @@ namespace Game
     {
         public void AddAuction(AuctionEntry auction)
         {
-            Contract.Assert(auction != null);
+            Cypher.Assert(auction != null);
 
             AuctionsMap[auction.Id] = auction;
             Global.ScriptMgr.OnAuctionAdd(this, auction);
@@ -427,19 +427,13 @@ namespace Game
 
         public bool RemoveAuction(AuctionEntry auction)
         {
-            bool wasInMap = AuctionsMap.Remove(auction.Id) ? true : false;
-
             Global.ScriptMgr.OnAuctionRemove(this, auction);
-
-            // we need to delete the entry, it is not referenced any more
-            auction = null;
-
-            return wasInMap;
+            return AuctionsMap.TryRemove(auction.Id, out _);
         }
 
         public void Update()
         {
-            long curTime = Global.WorldMgr.GetGameTime();
+            long curTime = GameTime.GetGameTime();
             // Handle expired auctions
 
             // If storage is empty, no need to update. next == NULL in this case.
@@ -508,7 +502,7 @@ namespace Game
 
         public void BuildListAuctionItems(AuctionListItemsResult packet, Player player, string searchedname, uint listfrom, byte levelmin, byte levelmax, bool usable, Optional<AuctionSearchFilters> filters, uint quality)
         {
-            long curTime = Global.WorldMgr.GetGameTime();
+            long curTime = GameTime.GetGameTime();
 
             foreach (var Aentry in AuctionsMap.Values)
             {
@@ -543,7 +537,7 @@ namespace Game
                 if (quality != 0xffffffff && (uint)proto.GetQuality() != quality)
                     continue;
 
-                if (levelmin != 0 && (proto.GetBaseRequiredLevel() < levelmin || (levelmax != 0x00 && proto.GetBaseRequiredLevel() > levelmax)))
+                if (levelmin != 0 && (item.GetRequiredLevel() < levelmin || (levelmax != 0 && item.GetRequiredLevel() > levelmax)))
                     continue;
 
                 if (usable && player.CanUseItem(item) != InventoryResult.Ok)
@@ -556,38 +550,6 @@ namespace Game
                     string name = proto.GetName(player.GetSession().GetSessionDbcLocale());
                     if (string.IsNullOrEmpty(name))
                         continue;
-
-                    // DO NOT use GetItemEnchantMod(proto.RandomProperty) as it may return a result
-                    //  that matches the search but it may not equal item.GetItemRandomPropertyId()
-                    //  used in BuildAuctionInfo() which then causes wrong items to be listed
-                    int propRefID = item.GetItemRandomPropertyId();
-                    if (propRefID != 0)
-                    {
-                        string suffix = null;
-                        // Append the suffix to the name (ie: of the Monkey) if one exists
-                        // These are found in ItemRandomProperties.dbc, not ItemRandomSuffix.dbc
-                        //  even though the DBC names seem misleading
-                        if (propRefID < 0)
-                        {
-                            ItemRandomSuffixRecord itemRandSuffix = CliDB.ItemRandomSuffixStorage.LookupByKey(-propRefID);
-                            if (itemRandSuffix != null)
-                                suffix = itemRandSuffix.Name[player.GetSession().GetSessionDbcLocale()];
-                        }
-                        else
-                        {
-                            ItemRandomPropertiesRecord itemRandProp = CliDB.ItemRandomPropertiesStorage.LookupByKey(propRefID);
-                            if (itemRandProp != null)
-                                suffix = itemRandProp.Name[player.GetSession().GetSessionDbcLocale()];
-                        }
-
-                        // dbc local name
-                        if (!string.IsNullOrEmpty(suffix))
-                        {
-                            // Append the suffix (ie: of the Monkey) to the name using localization
-                            // or default enUS if localization is invalid
-                            name += ' ' + suffix;
-                        }
-                    }
                 }
 
                 // Add the item if no search term or if entered search term was found
@@ -603,7 +565,7 @@ namespace Game
             return AuctionsMap.LookupByKey(id);
         }
 
-        Dictionary<uint, AuctionEntry> AuctionsMap = new Dictionary<uint, AuctionEntry>();
+        ConcurrentDictionary<uint, AuctionEntry> AuctionsMap = new ConcurrentDictionary<uint, AuctionEntry>();
     }
 
     public class AuctionEntry
@@ -632,7 +594,7 @@ namespace Game
             auctionItem.ItemGuid = item.GetGUID();
             auctionItem.MinBid = startbid;
             auctionItem.Owner = ObjectGuid.Create(HighGuid.Player, owner);
-            auctionItem.OwnerAccountID = ObjectGuid.Create(HighGuid.WowAccount, ObjectManager.GetPlayerAccountIdByGUID(auctionItem.Owner));
+            auctionItem.OwnerAccountID = ObjectGuid.Create(HighGuid.WowAccount, Global.CharacterCacheStorage.GetCharacterAccountIdByGuid(auctionItem.Owner));
             auctionItem.MinIncrement = bidder != 0 ? GetAuctionOutBid() : 0;
             auctionItem.Bidder = bidder != 0 ? ObjectGuid.Create(HighGuid.Player, bidder) : ObjectGuid.Empty;
             auctionItem.BidAmount = bidder != 0 ? bid : 0;
@@ -646,7 +608,7 @@ namespace Game
             }
 
             byte i = 0;
-            foreach (ItemDynamicFieldGems gemData in item.GetGems())
+            foreach (SocketedGem gemData in item.m_itemData.Gems)
             {
                 if (gemData.ItemId != 0)
                 {
@@ -794,12 +756,12 @@ namespace Game
 
         public string BuildAuctionMailSubject(MailAuctionAnswers response)
         {
-            return string.Format("{0}:0:{1}:{2}:{3}", itemEntry, response, Id, itemCount);
+            return $"{itemEntry}:0:{(uint)response}:{Id}:{itemCount}";
         }
 
         public static string BuildAuctionMailBody(ulong lowGuid, ulong bid, ulong buyout, ulong deposit, ulong cut)
         {
-            return string.Format($"{lowGuid}:{bid}:{buyout}:{deposit}:{cut}");
+            return $"{lowGuid}:{bid}:{buyout}:{deposit}:{cut}";
         }
 
         // helpers

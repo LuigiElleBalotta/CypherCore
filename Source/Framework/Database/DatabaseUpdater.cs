@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ namespace Framework.Database
         public bool Populate()
         {
             SQLResult result = _database.Query("SHOW TABLES");
-            if (!result.IsEmpty() && result.GetRowCount() > 0)
+            if (!result.IsEmpty() && !result.IsEmpty())
                 return true;
 
             Log.outInfo(LogFilter.SqlUpdates, $"Database {_database.GetDatabaseName()} is empty, auto populating it...");
@@ -51,10 +51,10 @@ namespace Framework.Database
                     fileName = @"/sql/base/characters_database.sql";
                     break;
                 case "WorldDatabase":
-                    fileName = @"/sql/TDB_world_735.00_2018_02_19.sql";
+                    fileName = @"/sql/TDB_full_world_820.19071_2019_07_15.sql";
                     break;
                 case "HotfixDatabase":
-                    fileName = @"/sql/TDB_hotfixes_735.00_2018_02_19.sql";
+                    fileName = @"/sql/TDB_full_hotfixes_820.19071_2019_07_15.sql";
                     break;
             }
 
@@ -318,7 +318,7 @@ namespace Framework.Database
             _database.Execute(update);
         }
 
-        public List<FileEntry> GetFileList()
+        List<FileEntry> GetFileList()
         {
             List<FileEntry> fileList = new List<FileEntry>();
 
@@ -348,7 +348,7 @@ namespace Framework.Database
             return fileList;
         }
 
-        public Dictionary<string, AppliedFileEntry> ReceiveAppliedFiles()
+        Dictionary<string, AppliedFileEntry> ReceiveAppliedFiles()
         {
             Dictionary<string, AppliedFileEntry> map = new Dictionary<string, AppliedFileEntry>();
 
@@ -402,7 +402,7 @@ namespace Framework.Database
             }
         }
 
-        protected MySqlBase<T> _database;
+        MySqlBase<T> _database;
     }
 
     public class AppliedFileEntry

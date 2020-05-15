@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,19 +54,19 @@ namespace Game.Movement
         // Returns true to show that the arguments were configured correctly and MoveSpline initialization will succeed.
         public bool Validate(Unit unit)
         {
-            Func<bool, bool> CHECK = new Func<bool, bool>(exp =>
+            bool CHECK(bool exp)
             {
-                if (!(exp))
+                if (!exp)
                 {
                     Log.outError(LogFilter.Misc, "MoveSplineInitArgs::Validate: expression '{0}' failed for {1} Entry: {2}", exp.ToString(), unit.GetGUID().ToString(), unit.GetEntry());
                     return false;
                 }
                 return true;
-            });
+            }
 
             if (!CHECK(path.Length > 1))
                 return false;
-            if (!CHECK(velocity > 0.01f))
+            if (!CHECK(velocity >= 0.01f))
                 return false;
             if (!CHECK(time_perc >= 0.0f && time_perc <= 1.0f))
                 return false;

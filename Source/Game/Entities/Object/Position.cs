@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,12 +23,24 @@ namespace Game.Entities
 {
     public class Position
     {
+        public float posX;
+        public float posY;
+        public float posZ;
+        public float Orientation;
+
         public Position(float x = 0f, float y = 0f, float z = 0f, float o = 0f)
         {
             posX = x;
             posY = y;
             posZ = z;
             Orientation = o;
+        }
+
+        public Position(Vector3 vector)
+        {
+            posX = vector.X;
+            posY = vector.Y;
+            posZ = vector.Z;
         }
 
         public float GetPositionX()
@@ -281,11 +293,12 @@ namespace Game.Entities
             return ((angle >= lborder) && (angle <= rborder));
         }
 
-        public bool HasInLine(Position pos, float width)
+        public bool HasInLine(Position pos, float objSize, float width)
         {
             if (!HasInArc(MathFunctions.PI, pos))
                 return false;
 
+            width += objSize;
             float angle = GetRelativeAngle(pos);
             return Math.Abs(Math.Sin(angle)) * GetExactDist2d(pos.GetPositionX(), pos.GetPositionY()) < width;
         }
@@ -311,17 +324,18 @@ namespace Game.Entities
 
         public override string ToString()
         {
-            return string.Format("X: {0} Y: {1} Z: {2} O: {3}", posX, posY, posZ, Orientation);
+            return $"X: {posX} Y: {posY} Z: {posZ} O: {Orientation}";
         }
-
-        public float posX;
-        public float posY;
-        public float posZ;
-        public float Orientation;
     }
 
     public class WorldLocation : Position
     {
+        uint _mapId;
+        Cell currentCell;
+        public ObjectCellMoveState _moveState;
+
+        public Position _newPosition = new Position();
+
         public WorldLocation(uint mapId = 0xFFFFFFFF, float x = 0, float y = 0, float z = 0, float o = 0)
         {
             _mapId = mapId;
@@ -356,7 +370,7 @@ namespace Game.Entities
         }
 
         public uint GetMapId() { return _mapId; }
-        public void SetMapId(uint _mapId) { this._mapId = _mapId; }
+        public void SetMapId(uint mapId) { _mapId = mapId; }
 
         public Cell GetCurrentCell()
         {
@@ -376,11 +390,5 @@ namespace Game.Entities
         {
             return this;
         }
-
-        uint _mapId;
-        Cell currentCell;
-        public ObjectCellMoveState _moveState;
-
-        public Position _newPosition = new Position();
     }
 }

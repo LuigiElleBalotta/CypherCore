@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ using Game.Scripting;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Scripts.Northrend.Ulduar.FlameLeviathan
 {
@@ -217,7 +216,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
 
         public override void InitializeAI()
         {
-            Contract.Assert(vehicle);
+            Cypher.Assert(vehicle);
             if (!me.IsDead())
                 Reset();
 
@@ -233,7 +232,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
 
             DoCast(Spells.InvisAndStealthDetect);
 
-            me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable | UnitFlags.Stunned);
+            me.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable | UnitFlags.Stunned);
             me.SetReactState(ReactStates.Passive);
         }
 
@@ -514,7 +513,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                         me.SetHomePosition(Leviathan.Center);
                         me.GetMotionMaster().MoveCharge(Leviathan.Center.GetPositionX(), Leviathan.Center.GetPositionY(), Leviathan.Center.GetPositionZ()); // position center
                         me.SetReactState(ReactStates.Aggressive);
-                        me.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable | UnitFlags.Stunned);
+                        me.RemoveUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable | UnitFlags.Stunned);
                         return;
                     }
                     break;
@@ -527,13 +526,13 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
         //! I also removed the spellInfo check
         void DoBatteringRamIfReady()
         {
-            if (me.isAttackReady())
+            if (me.IsAttackReady())
             {
                 Unit target = Global.ObjAccessor.GetUnit(me, _pursueTarget);
                 if (me.IsWithinCombatRange(target, 30.0f))
                 {
                     DoCast(target, Spells.BatteringRam);
-                    me.resetAttackTimer();
+                    me.ResetAttackTimer();
                 }
             }
         }
@@ -558,9 +557,9 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
             : base(creature)
         {
             vehicle = creature.GetVehicleKit();
-            Contract.Assert(vehicle);
+            Cypher.Assert(vehicle);
             me.SetReactState(ReactStates.Passive);
-            me.SetDisplayId(me.GetCreatureTemplate().ModelId2);
+            me.SetDisplayFromModel(1);
             instance = creature.GetInstanceScript();
         }
 
@@ -586,8 +585,8 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                     Creature turret = turretPassenger.ToCreature();
                     if (turret)
                     {
-                        turret.SetFaction(me.GetVehicleBase().getFaction());
-                        turret.SetUInt32Value(UnitFields.Flags, 0); // unselectable
+                        turret.SetFaction(me.GetVehicleBase().GetFaction());
+                        turret.SetUnitFlags(0);
                         turret.GetAI().AttackStart(who);
                     }
                 }
@@ -597,12 +596,12 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                     Creature device = devicePassenger.ToCreature();
                     if (device)
                     {
-                        device.SetFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick);
-                        device.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                        device.AddNpcFlag(NPCFlags.SpellClick);
+                        device.RemoveUnitFlag(UnitFlags.NotSelectable);
                     }
                 }
 
-                me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                me.AddUnitFlag(UnitFlags.NotSelectable);
             }
             else if (seatId == Seats.Turret)
             {
@@ -612,8 +611,8 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                 Unit device = vehicle.GetPassenger(Seats.Device);
                 if (device)
                 {
-                    device.SetFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick);
-                    device.SetUInt32Value(UnitFields.Flags, 0); // unselectable
+                    device.AddNpcFlag(NPCFlags.SpellClick);
+                    device.SetUnitFlags(0); // unselectable
                 }
             }
         }
@@ -695,8 +694,8 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
 
             if (me.GetVehicle())
             {
-                me.RemoveFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick);
-                me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                me.RemoveNpcFlag(NPCFlags.SpellClick);
+                me.AddUnitFlag(UnitFlags.NotSelectable);
 
                 Unit player = me.GetVehicle().GetPassenger(Seats.Player);
                 if (player)
@@ -736,7 +735,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
     {
         public npc_mechanolift(Creature creature) : base(creature)
         {
-            Contract.Assert(me.GetVehicleKit());
+            Cypher.Assert(me.GetVehicleKit());
         }
 
         uint MoveTimer;
@@ -793,7 +792,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
         public npc_pool_of_tar(Creature creature)
             : base(creature)
         {
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.RemoveUnitFlag(UnitFlags.NotSelectable);
             me.SetReactState(ReactStates.Passive);
             me.CastSpell(me, Spells.TarPassive, true);
         }
@@ -844,7 +843,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
         public npc_thorims_hammer(Creature creature)
             : base(creature)
         {
-            me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.AddUnitFlag(UnitFlags.NotSelectable);
             me.CastSpell(me, Spells.DummyBlue, true);
         }
 
@@ -868,12 +867,12 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
     }
 
     [Script]
-    class npc_mimirons_inferno : npc_escortAI
+    class npc_mimirons_inferno : NpcEscortAI
     {
         public npc_mimirons_inferno(Creature creature)
             : base(creature)
         {
-            me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+            me.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
             me.CastSpell(me, Spells.DummyYellow, true);
             me.SetReactState(ReactStates.Passive);
         }
@@ -894,7 +893,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
         {
             base.UpdateAI(diff);
 
-            if (!HasEscortState(eEscortState.Escorting))
+            if (!HasEscortState(EscortState.Escorting))
                 Start(false, true, ObjectGuid.Empty, null, false, true);
             else
             {
@@ -922,7 +921,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
         public npc_hodirs_fury(Creature creature)
             : base(creature)
         {
-            me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.AddUnitFlag(UnitFlags.NotSelectable);
             me.CastSpell(me, Spells.DummyGreen, true);
         }
 
@@ -1035,11 +1034,11 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
             }
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
             if (menuId == GossipIds.MenuLoreKeeper && gossipListId == GossipIds.OptionLoreKeeper)
             {
-                me.RemoveFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                me.RemoveNpcFlag(NPCFlags.Gossip);
                 player.PlayerTalkClass.SendCloseGossip();
                 me.GetMap().LoadGrid(364, -16); // make sure leviathan is loaded
 
@@ -1056,9 +1055,9 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                         Creature brann = _instance.GetCreature(InstanceData.BrannBronzebeardIntro);
                         if (brann)
                         {
-                            brann.RemoveFlag(UnitFields.NpcFlags, NPCFlags.Gossip);
+                            brann.RemoveNpcFlag(NPCFlags.Gossip);
                             delorah.GetMotionMaster().MovePoint(0, brann.GetPositionX() - 4, brann.GetPositionY(), brann.GetPositionZ());
-                            /// @todo delorah->AI()->Talk(xxxx, brann->GetGUID()); when reached at branz
+                            // @todo delorah.AI().Talk(xxxx, brann.GetGUID()); when reached at branz
                         }
                     }
                 }
@@ -1357,7 +1356,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
 
             //! This could probably in the SPELL_EFFECT_SEND_EVENT handler too:
             owner.AddUnitState(UnitState.Stunned | UnitState.Root);
-            owner.SetFlag(UnitFields.Flags, UnitFlags.Stunned);
+            owner.AddUnitFlag(UnitFlags.Stunned);
             owner.RemoveAurasDueToSpell(Spells.GatheringSpeed);
         }
 
@@ -1367,7 +1366,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
             if (!owner)
                 return;
 
-            owner.RemoveFlag(UnitFields.Flags, UnitFlags.Stunned);
+            owner.RemoveUnitFlag(UnitFlags.Stunned);
         }
 
         public override void Register()
@@ -1388,7 +1387,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
 
         void FilterTargets(List<WorldObject> targets)
         {
-            targets.RemoveAll(new Predicate<WorldObject>(target =>
+            targets.RemoveAll(target =>
             {
                 //! No players, only vehicles (@todo check if blizzlike)
                 Creature creatureTarget = target.ToCreature();
@@ -1420,7 +1419,7 @@ namespace Scripts.Northrend.Ulduar.FlameLeviathan
                 }
 
                 return !playerFound;
-            }));
+            });
 
             if (targets.Empty())
             {

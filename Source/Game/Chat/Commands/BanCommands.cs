@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -133,8 +133,7 @@ namespace Game.Chat.Commands
                     }
                     break;
                 case BanMode.IP:
-                    IPAddress address;
-                    if (!IPAddress.TryParse(nameOrIP, out address))
+                    if (!IPAddress.TryParse(nameOrIP, out _))
                         return false;
                     break;
             }
@@ -143,10 +142,10 @@ namespace Game.Chat.Commands
             switch (Global.WorldMgr.BanAccount(mode, nameOrIP, durationStr, reasonStr, author))
             {
                 case BanReturn.Success:
-                    if (!uint.TryParse(durationStr, out uint tempValue) || tempValue > 0)
+                    if (duration > 0)
                     {
                         if (WorldConfig.GetBoolValue(WorldCfg.ShowBanInWorld))
-                            Global.WorldMgr.SendWorldText(CypherStrings.BanAccountYoubannedmessageWorld, author, nameOrIP, Time.secsToTimeString(Time.TimeStringToSecs(durationStr)).ToString(), reasonStr);
+                            Global.WorldMgr.SendWorldText(CypherStrings.BanAccountYoubannedmessageWorld, author, nameOrIP, Time.secsToTimeString(Time.TimeStringToSecs(durationStr)), reasonStr);
                         else
                             handler.SendSysMessage(CypherStrings.BanYoubanned, nameOrIP, Time.secsToTimeString(Time.TimeStringToSecs(durationStr), true), reasonStr);
                     }
@@ -213,12 +212,18 @@ namespace Game.Chat.Commands
                 return false;
 
             string name = args.NextString();
+            if (!ObjectManager.NormalizePlayerName(ref name))
+            {
+                handler.SendSysMessage(CypherStrings.BaninfoNocharacter);
+                return false;
+            }
+
             Player target = Global.ObjAccessor.FindPlayerByName(name);
             ObjectGuid targetGuid;
 
             if (!target)
             {
-                targetGuid = ObjectManager.GetPlayerGUIDByName(name);
+                targetGuid = Global.CharacterCacheStorage.GetCharacterGuidByName(name);
                 if (targetGuid.IsEmpty())
                 {
                     handler.SendSysMessage(CypherStrings.BaninfoNocharacter);
@@ -539,7 +544,7 @@ namespace Game.Chat.Commands
                     string accountName;
 
                     // "account" case, name can be get in same query
-                    if (result.GetRowCount() > 1)
+                    if (result.GetFieldCount() > 1)
                         accountName = result.Read<string>(1);
                     // "character" case, name need extract from another DB
                     else
@@ -648,8 +653,7 @@ namespace Game.Chat.Commands
                     }
                     break;
                 case BanMode.IP:
-                    IPAddress address;
-                    if (!IPAddress.TryParse(nameOrIP, out address))
+                    if (!IPAddress.TryParse(nameOrIP, out _))
                         return false;
                     break;
             }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game.DataStorage;
 using Game.Entities;
 using Game.Network;
 using Game.Network.Packets;
-using System.Diagnostics.Contracts;
 
 namespace Game
 {
@@ -97,15 +96,18 @@ namespace Game
 
             vehicle_base.m_movementInfo = packet.Status;
 
-            Unit vehUnit;
             if (packet.DstVehicle.IsEmpty())
                 GetPlayer().ChangeSeat(-1, packet.DstSeatIndex != 255);
-            else if (vehUnit = Global.ObjAccessor.GetUnit(GetPlayer(), packet.DstVehicle))
+            else
             {
-                Vehicle vehicle = vehUnit.GetVehicleKit();
-                if (vehicle)
-                    if (vehicle.HasEmptySeat((sbyte)packet.DstSeatIndex))
-                    vehUnit.HandleSpellClick(GetPlayer(), (sbyte)packet.DstSeatIndex);
+                Unit vehUnit = Global.ObjAccessor.GetUnit(GetPlayer(), packet.DstVehicle);
+                if (vehUnit)
+                {
+                    Vehicle vehicle = vehUnit.GetVehicleKit();
+                    if (vehicle)
+                        if (vehicle.HasEmptySeat((sbyte) packet.DstSeatIndex))
+                            vehUnit.HandleSpellClick(GetPlayer(), (sbyte) packet.DstSeatIndex);
+                }
             }
         }
 
@@ -123,22 +125,26 @@ namespace Game
                     GetPlayer().GetGUID().ToString(), seat.Flags);
                 return;
             }
-            Unit vehUnit;
+
             if (vehicle_base.GetGUID() == packet.Vehicle)
                 GetPlayer().ChangeSeat((sbyte)packet.SeatIndex);
-            else if (vehUnit = Global.ObjAccessor.GetUnit(GetPlayer(), packet.Vehicle))
+            else
             {
-                Vehicle vehicle = vehUnit.GetVehicleKit();
-                if (vehicle)                
-                    if (vehicle.HasEmptySeat((sbyte)packet.SeatIndex))
-                        vehUnit.HandleSpellClick(GetPlayer(), (sbyte)packet.SeatIndex);
+                Unit vehUnit = Global.ObjAccessor.GetUnit(GetPlayer(), packet.Vehicle);
+                if (vehUnit)
+                {
+                    Vehicle vehicle = vehUnit.GetVehicleKit();
+                    if (vehicle)
+                        if (vehicle.HasEmptySeat((sbyte) packet.SeatIndex))
+                            vehUnit.HandleSpellClick(GetPlayer(), (sbyte) packet.SeatIndex);
+                }
             }
         }
 
         [WorldPacketHandler(ClientOpcodes.RideVehicleInteract)]
         void HandleRideVehicleInteract(RideVehicleInteract packet)
         {
-            Player player = Global.ObjAccessor.FindPlayer(packet.Vehicle);
+            Player player = Global.ObjAccessor.GetPlayer(_player, packet.Vehicle);
             if (player)
             {
                 if (!player.GetVehicleKit())
@@ -146,6 +152,9 @@ namespace Game
                 if (!player.IsInRaidWith(GetPlayer()))
                     return;
                 if (!player.IsWithinDistInMap(GetPlayer(), SharedConst.InteractionDistance))
+                    return;
+                // Dont' allow players to enter player vehicle on arena
+                if (!_player.GetMap() || _player.GetMap().IsBattleArena())
                     return;
 
                 GetPlayer().EnterVehicle(player);
@@ -178,7 +187,7 @@ namespace Game
                 }
 
                 VehicleSeatRecord seat = vehicle.GetSeatForPassenger(unit);
-                Contract.Assert(seat != null);
+                Cypher.Assert(seat != null);
                 if (seat.IsEjectable())
                     unit.ExitVehicle();
                 else

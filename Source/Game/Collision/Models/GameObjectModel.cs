@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ namespace Game.Collision
 
     public class GameObjectModel : IModel
     {
-        bool initialize(GameObjectModelOwnerBase modelOwner)
+        bool Initialize(GameObjectModelOwnerBase modelOwner)
         {
             var modelData = StaticModelList.models.LookupByKey(modelOwner.GetDisplayId());
             if (modelData == null)
@@ -55,7 +55,7 @@ namespace Game.Collision
                 return false;
             }
 
-            iModel = Global.VMapMgr.acquireModelInstance(modelData.name);
+            iModel = Global.VMapMgr.AcquireModelInstance(modelData.name);
 
             if (iModel == null)
                 return false;
@@ -82,15 +82,15 @@ namespace Game.Collision
         public static GameObjectModel Create(GameObjectModelOwnerBase modelOwner)
         {
             GameObjectModel mdl = new GameObjectModel();
-            if (!mdl.initialize(modelOwner))
+            if (!mdl.Initialize(modelOwner))
                 return null;
 
             return mdl;
         }
 
-        public override bool IntersectRay(Ray ray, ref float maxDist, bool stopAtFirstHit, PhaseShift phaseShift)
+        public override bool IntersectRay(Ray ray, ref float maxDist, bool stopAtFirstHit, PhaseShift phaseShift, ModelIgnoreFlags ignoreFlags)
         {
-            if (!isCollisionEnabled() || !owner.IsSpawned())
+            if (!IsCollisionEnabled() || !owner.IsSpawned())
                 return false;
 
             if (!owner.IsInPhase(phaseShift))
@@ -104,7 +104,7 @@ namespace Game.Collision
             Vector3 p = iInvRot * (ray.Origin - iPos) * iInvScale;
             Ray modRay = new Ray(p, iInvRot * ray.Direction);
             float distance = maxDist * iInvScale;
-            bool hit = iModel.IntersectRay(modRay, ref distance, stopAtFirstHit);
+            bool hit = iModel.IntersectRay(modRay, ref distance, stopAtFirstHit, ignoreFlags);
             if (hit)
             {
                 distance *= iScale;
@@ -115,7 +115,7 @@ namespace Game.Collision
 
         public override void IntersectPoint(Vector3 point, AreaInfo info, PhaseShift phaseShift)
         {
-            if (!isCollisionEnabled() || !owner.IsSpawned() || !isMapObject())
+            if (!IsCollisionEnabled() || !owner.IsSpawned() || !IsMapObject())
                 return;
 
             if (!owner.IsInPhase(phaseShift))
@@ -172,12 +172,12 @@ namespace Game.Collision
             return true;
         }
 
-        public override Vector3 getPosition() { return iPos; }
-        public override AxisAlignedBox getBounds() { return iBound; }
+        public override Vector3 GetPosition() { return iPos; }
+        public override AxisAlignedBox GetBounds() { return iBound; }
 
-        public void enableCollision(bool enable) { _collisionEnabled = enable; }
-        bool isCollisionEnabled() { return _collisionEnabled; }
-        public bool isMapObject() { return isWmo; }
+        public void EnableCollision(bool enable) { _collisionEnabled = enable; }
+        bool IsCollisionEnabled() { return _collisionEnabled; }
+        public bool IsMapObject() { return isWmo; }
 
         public static void LoadGameObjectModelList()
         {

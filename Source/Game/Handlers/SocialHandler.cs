@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,9 +17,9 @@
 
 using Framework.Constants;
 using Framework.Database;
+using Game.Cache;
 using Game.DataStorage;
 using Game.Entities;
-using Game.Guilds;
 using Game.Network;
 using Game.Network.Packets;
 using System;
@@ -29,7 +29,7 @@ namespace Game
 {
     public partial class WorldSession
     {
-        [WorldPacketHandler(ClientOpcodes.Who)]
+        [WorldPacketHandler(ClientOpcodes.Who, Processing = PacketProcessing.ThreadSafe)]
         void HandleWho(WhoRequestPkt whoRequest)
         {
             WhoRequest request = whoRequest.Request;
@@ -44,17 +44,17 @@ namespace Game
             if (request.Words.Count > 4)
                 return;
 
-            /// @todo: handle following packet values
-            /// VirtualRealmNames
-            /// ShowEnemies
-            /// ShowArenaPlayers
-            /// ExactName
-            /// ServerInfo
+            // @todo: handle following packet values
+            // VirtualRealmNames
+            // ShowEnemies
+            // ShowArenaPlayers
+            // ExactName
+            // ServerInfo
 
             request.Words.ForEach(p => p = p.ToLower());
 
-            request.Name.ToLower();
-            request.Guild.ToLower();
+            request.Name = request.Name.ToLower();
+            request.Guild = request.Guild.ToLower();
 
             // client send in case not set max level value 100 but we support 255 max level,
             // update it to show GMs with characters after 100 level
@@ -66,61 +66,53 @@ namespace Game
             uint gmLevelInWhoList = WorldConfig.GetUIntValue(WorldCfg.GmLevelInWhoList);
 
             WhoResponsePkt response = new WhoResponsePkt();
-            foreach (var target in Global.ObjAccessor.GetPlayers())
+            List<WhoListPlayerInfo> whoList = Global.WhoListStorageMgr.GetWhoList();
+            foreach (WhoListPlayerInfo target in whoList)
             {
                 // player can see member of other team only if CONFIG_ALLOW_TWO_SIDE_WHO_LIST
-                if (target.GetTeam() != team && !HasPermission(RBACPermissions.TwoSideWhoList))
+                if (target.Team != team && !HasPermission(RBACPermissions.TwoSideWhoList))
                     continue;
 
                 // player can see MODERATOR, GAME MASTER, ADMINISTRATOR only if CONFIG_GM_IN_WHO_LIST
-                if (target.GetSession().GetSecurity() > (AccountTypes)gmLevelInWhoList && !HasPermission(RBACPermissions.WhoSeeAllSecLevels))
-                    continue;
-
-                // do not process players which are not in world
-                if (!target.IsInWorld)
+                if (target.Security > (AccountTypes)gmLevelInWhoList && !HasPermission(RBACPermissions.WhoSeeAllSecLevels))
                     continue;
 
                 // check if target is globally visible for player
-                if (!target.IsVisibleGloballyFor(GetPlayer()))
-                    continue;
+                if (_player.GetGUID() != target.Guid && !target.IsVisible)
+                    if (Global.AccountMgr.IsPlayerAccount(_player.GetSession().GetSecurity()) || target.Security > _player.GetSession().GetSecurity())
+                        continue;
 
                 // check if target's level is in level range
-                uint lvl = target.getLevel();
+                uint lvl = target.Level;
                 if (lvl < request.MinLevel || lvl > request.MaxLevel)
                     continue;
 
                 // check if class matches classmask
-                int class_ = (byte)target.GetClass();
-                if (!Convert.ToBoolean(request.ClassFilter & (1 << class_)))
+                if (!Convert.ToBoolean(request.ClassFilter & (1 << target.Class)))
                     continue;
 
                 // check if race matches racemask
-                int race = (int)target.GetRace();
-                if (!Convert.ToBoolean(request.RaceFilter & (1 << race)))
+                if (!Convert.ToBoolean(request.RaceFilter & (1 << target.Race)))
                     continue;
 
                 if (!whoRequest.Areas.Empty())
                 {
-                    if (whoRequest.Areas.Contains((int)target.GetZoneId()))
+                    if (whoRequest.Areas.Contains((int)target.ZoneId))
                         continue;
                 }
 
-                string wTargetName = target.GetName().ToLower();
-                if (!string.IsNullOrEmpty(request.Name) && !wTargetName.Equals(request.Name))
+                string wTargetName = target.PlayerName.ToLower();
+                if (!(request.Name.IsEmpty() || wTargetName.Equals(request.Name)))
                     continue;
 
-                string wTargetGuildName = "";
-                Guild targetGuild = target.GetGuild();
-                if (targetGuild)
-                    wTargetGuildName = targetGuild.GetName().ToLower();
-
-                if (!string.IsNullOrEmpty(request.Guild) && !wTargetGuildName.Equals(request.Guild))
+                string wTargetGuildName = target.GuildName.ToLower();
+                if (!request.Guild.IsEmpty() && !wTargetGuildName.Equals(request.Guild))
                     continue;
 
                 if (!request.Words.Empty())
                 {
                     string aname = "";
-                    AreaTableRecord areaEntry = CliDB.AreaTableStorage.LookupByKey(target.GetZoneId());
+                    AreaTableRecord areaEntry = CliDB.AreaTableStorage.LookupByKey(target.ZoneId);
                     if (areaEntry != null)
                         aname = areaEntry.AreaName[GetSessionDbcLocale()].ToLower();
 
@@ -144,18 +136,18 @@ namespace Game
                 }
 
                 WhoEntry whoEntry = new WhoEntry();
-                if (!whoEntry.PlayerData.Initialize(target.GetGUID(), target))
+                if (!whoEntry.PlayerData.Initialize(target.Guid, null))
                     continue;
 
-                if (targetGuild)
+                if (!target.GuildGuid.IsEmpty())
                 {
-                    whoEntry.GuildGUID = targetGuild.GetGUID();
+                    whoEntry.GuildGUID = target.GuildGuid;
                     whoEntry.GuildVirtualRealmAddress = Global.WorldMgr.GetVirtualRealmAddress();
-                    whoEntry.GuildName = targetGuild.GetName();
+                    whoEntry.GuildName = target.GuildName;
                 }
 
-                whoEntry.AreaID = (int)target.GetZoneId();
-                whoEntry.IsGM = target.IsGameMaster();
+                whoEntry.AreaID = (int)target.ZoneId;
+                whoEntry.IsGM = target.IsGamemaster;
 
                 response.Response.Add(whoEntry);
 
@@ -228,28 +220,15 @@ namespace Game
             if (!ObjectManager.NormalizePlayerName(ref packet.Name))
                 return;
 
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_GUID_RACE_ACC_BY_NAME);
-            stmt.AddValue(0, packet.Name);
-
-            _queryProcessor.AddQuery(DB.Characters.AsyncQuery(stmt).WithCallback(HandleAddFriendCallBack, packet.Notes));
-        }
-
-        void HandleAddFriendCallBack(string friendNote, SQLResult result)
-        {
-            if (!GetPlayer())
-                return;
-
-            ObjectGuid friendGuid = ObjectGuid.Empty;
             FriendsResult friendResult = FriendsResult.NotFound;
-
-            if (!result.IsEmpty())
+            ObjectGuid friendGuid = Global.CharacterCacheStorage.GetCharacterGuidByName(packet.Name);
+            if (!friendGuid.IsEmpty())
             {
-                ulong lowGuid = result.Read<ulong>(0);
-                if (lowGuid != 0)
+                CharacterCacheEntry characterInfo = Global.CharacterCacheStorage.GetCharacterCacheByGuid(friendGuid);
+                if (characterInfo != null)
                 {
-                    friendGuid = ObjectGuid.Create(HighGuid.Player, lowGuid);
-                    Team team = Player.TeamForRace((Race)result.Read<byte>(1));
-                    uint friendAccountId = result.Read<uint>(2);
+                    Team team = Player.TeamForRace(characterInfo.RaceId);
+                    uint friendAccountId = characterInfo.AccountId;
 
                     if (HasPermission(RBACPermissions.AllowGmFriend) || Global.AccountMgr.IsPlayerAccount(Global.AccountMgr.GetSecurity(friendAccountId, (int)Global.WorldMgr.GetRealm().Id.Realm)))
                     {
@@ -268,7 +247,7 @@ namespace Game
                                 friendResult = FriendsResult.AddedOffline;
 
                             if (GetPlayer().GetSocial().AddToSocialList(friendGuid, SocialFlag.Friend))
-                                GetPlayer().GetSocial().SetFriendNote(friendGuid, friendNote);
+                                GetPlayer().GetSocial().SetFriendNote(friendGuid, packet.Notes);
                             else
                                 friendResult = FriendsResult.ListFull;
                         }
@@ -282,7 +261,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.DelFriend)]
         void HandleDelFriend(DelFriend packet)
         {
-            /// @todo: handle VirtualRealmAddress
+            // @todo: handle VirtualRealmAddress
             GetPlayer().GetSocial().RemoveFromSocialList(packet.Player.Guid, SocialFlag.Friend);
 
             Global.SocialMgr.SendFriendStatus(GetPlayer(), FriendsResult.Removed, packet.Player.Guid);
@@ -294,39 +273,21 @@ namespace Game
             if (!ObjectManager.NormalizePlayerName(ref packet.Name))
                 return;
 
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_GUID_BY_NAME);
-            stmt.AddValue(0, packet.Name);
-
-            _queryProcessor.AddQuery(DB.Characters.AsyncQuery(stmt).WithCallback(HandleAddIgnoreCallBack));
-        }
-
-        void HandleAddIgnoreCallBack(SQLResult result)
-        {
-            if (!GetPlayer())
-                return;
-
-            ObjectGuid IgnoreGuid = ObjectGuid.Empty;
+            ObjectGuid IgnoreGuid = Global.CharacterCacheStorage.GetCharacterGuidByName(packet.Name);
             FriendsResult ignoreResult = FriendsResult.IgnoreNotFound;
-
-            if (result.IsEmpty())
+            if (IgnoreGuid.IsEmpty())
             {
-                ulong lowGuid = result.Read<ulong>(0);
-                if (lowGuid != 0)
+                if (IgnoreGuid == GetPlayer().GetGUID())              //not add yourself
+                    ignoreResult = FriendsResult.IgnoreSelf;
+                else if (GetPlayer().GetSocial().HasIgnore(IgnoreGuid))
+                    ignoreResult = FriendsResult.IgnoreAlready;
+                else
                 {
-                    IgnoreGuid = ObjectGuid.Create(HighGuid.Player, lowGuid);
+                    ignoreResult = FriendsResult.IgnoreAdded;
 
-                    if (IgnoreGuid == GetPlayer().GetGUID())              //not add yourself
-                        ignoreResult = FriendsResult.IgnoreSelf;
-                    else if (GetPlayer().GetSocial().HasIgnore(IgnoreGuid))
-                        ignoreResult = FriendsResult.IgnoreAlready;
-                    else
-                    {
-                        ignoreResult = FriendsResult.IgnoreAdded;
-
-                        // ignore list full
-                        if (!GetPlayer().GetSocial().AddToSocialList(IgnoreGuid, SocialFlag.Ignored))
-                            ignoreResult = FriendsResult.IgnoreFull;
-                    }
+                    // ignore list full
+                    if (!GetPlayer().GetSocial().AddToSocialList(IgnoreGuid, SocialFlag.Ignored))
+                        ignoreResult = FriendsResult.IgnoreFull;
                 }
             }
 
@@ -336,7 +297,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.DelIgnore)]
         void HandleDelIgnore(DelIgnore packet)
         {
-            /// @todo: handle VirtualRealmAddress
+            // @todo: handle VirtualRealmAddress
             Log.outDebug(LogFilter.Network, "WorldSession.HandleDelIgnoreOpcode: {0}", packet.Player.Guid.ToString());
 
             GetPlayer().GetSocial().RemoveFromSocialList(packet.Player.Guid, SocialFlag.Ignored);
@@ -347,7 +308,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.SetContactNotes)]
         void HandleSetContactNotes(SetContactNotes packet)
         {
-            /// @todo: handle VirtualRealmAddress
+            // @todo: handle VirtualRealmAddress
             Log.outDebug(LogFilter.Network, "WorldSession.HandleSetContactNotesOpcode: Contact: {0}, Notes: {1}", packet.Player.Guid.ToString(), packet.Notes);
             GetPlayer().GetSocial().SetFriendNote(packet.Player.Guid, packet.Notes);
         }

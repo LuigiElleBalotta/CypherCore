@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@ using Framework.Constants;
 using Game.DataStorage;
 using Game.Entities;
 using Game.Groups;
-using Game.Guilds;
 using Game.Loots;
 using Game.Maps;
 using Game.Network;
@@ -37,7 +36,7 @@ namespace Game
             Player player = GetPlayer();
             AELootResult aeResult = player.GetAELootView().Count > 1 ? new AELootResult() : null;
 
-            /// @todo Implement looting by LootObject guid
+            // @todo Implement looting by LootObject guid
             foreach (LootRequest req in packet.Loot)
             {
                 Loot loot = null;
@@ -96,7 +95,7 @@ namespace Game
                 player.StoreLootItem((byte)(req.LootListID - 1), loot, aeResult);
 
                 // If player is removing the last LootItem, delete the empty container.
-                if (loot.isLooted() && lguid.IsItem())
+                if (loot.IsLooted() && lguid.IsItem())
                     player.GetSession().DoLootRelease(lguid);
             }
 
@@ -186,7 +185,7 @@ namespace Game
                     Group group = player.GetGroup();
 
                     List<Player> playersNear = new List<Player>();
-                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                     {
                         Player member = refe.GetSource();
                         if (!member)
@@ -196,42 +195,32 @@ namespace Game
                             playersNear.Add(member);
                     }
 
-                    uint goldPerPlayer = (uint)(loot.gold / playersNear.Count);
+                    ulong goldPerPlayer = (ulong)(loot.gold / playersNear.Count);
 
                     foreach (var pl in playersNear)
                     {
-                        pl.ModifyMoney(goldPerPlayer);
-                        pl.UpdateCriteria(CriteriaTypes.LootMoney, goldPerPlayer);
+                        ulong goldMod = MathFunctions.CalculatePct(goldPerPlayer, pl.GetTotalAuraModifierByMiscValue(AuraType.ModMoneyGain, 1));
 
-                        Guild guild = Global.GuildMgr.GetGuildById(pl.GetGuildId());
-                        if (guild)
-                        {
-                            uint guildGold = MathFunctions.CalculatePct(goldPerPlayer, pl.GetTotalAuraModifier(AuraType.DepositBonusMoneyInGuildBankOnLoot));
-                            if (guildGold != 0)
-                                guild.HandleMemberDepositMoney(this, guildGold, true);
-                        }
+                        pl.ModifyMoney((long)(goldPerPlayer + goldMod));
+                        pl.UpdateCriteria(CriteriaTypes.LootMoney, goldPerPlayer);
 
                         LootMoneyNotify packet = new LootMoneyNotify();
                         packet.Money = goldPerPlayer;
+                        packet.MoneyMod = goldMod;
                         packet.SoleLooter = playersNear.Count <= 1 ? true : false;
                         pl.SendPacket(packet);
                     }
                 }
                 else
                 {
-                    player.ModifyMoney(loot.gold);
-                    player.UpdateCriteria(CriteriaTypes.LootMoney, loot.gold);
+                    ulong goldMod = MathFunctions.CalculatePct(loot.gold, player.GetTotalAuraModifierByMiscValue(AuraType.ModMoneyGain, 1));
 
-                    Guild guild = Global.GuildMgr.GetGuildById(player.GetGuildId());
-                    if (guild)
-                    {
-                        uint guildGold = MathFunctions.CalculatePct(loot.gold, player.GetTotalAuraModifier(AuraType.DepositBonusMoneyInGuildBankOnLoot));
-                        if (guildGold != 0)
-                            guild.HandleMemberDepositMoney(this, guildGold, true);
-                    }
+                    player.ModifyMoney((long)(loot.gold + goldMod));
+                    player.UpdateCriteria(CriteriaTypes.LootMoney, loot.gold);
 
                     LootMoneyNotify packet = new LootMoneyNotify();
                     packet.Money = loot.gold;
+                    packet.MoneyMod = goldMod;
                     packet.SoleLooter = true; // "You loot..."
                     SendPacket(packet);
                 }
@@ -243,7 +232,7 @@ namespace Game
                     loot.DeleteLootMoneyFromContainerItemDB();
 
                 // Delete container if empty
-                if (loot.isLooted() && guid.IsItem())
+                if (loot.IsLooted() && guid.IsItem())
                     player.GetSession().DoLootRelease(guid);
             }
         }
@@ -269,7 +258,7 @@ namespace Game
                 if (!_looter.IsWithinDist(creature, LootDistance))
                     return false;
 
-                return _looter.isAllowedToLoot(creature);
+                return _looter.IsAllowedToLoot(creature);
             }
 
             Player _looter;
@@ -328,7 +317,7 @@ namespace Game
                 player.SetLootGUID(ObjectGuid.Empty);
             player.SendLootRelease(lguid);
 
-            player.RemoveFlag(UnitFields.Flags, UnitFlags.Looting);
+            player.RemoveUnitFlag(UnitFlags.Looting);
 
             if (!player.IsInWorld)
                 return;
@@ -348,12 +337,12 @@ namespace Game
                     // locked doors are opened with spelleffect openlock, prevent remove its as looted
                     go.UseDoorOrButton();
                 }
-                else if (loot.isLooted() || go.GetGoType() == GameObjectTypes.FishingNode)
+                else if (loot.IsLooted() || go.GetGoType() == GameObjectTypes.FishingNode)
                 {
                     if (go.GetGoType() == GameObjectTypes.FishingHole)
                     {                                               // The fishing hole used once more
                         go.AddUse();                               // if the max usage is reached, will be despawned in next tick
-                        if (go.GetUseCount() >= go.m_goValue.FishingHole.MaxOpens)
+                        if (go.GetUseCount() >= go.GetGoValue().FishingHole.MaxOpens)
                             go.SetLootState(LootState.JustDeactivated);
                         else
                             go.SetLootState(LootState.Ready);
@@ -361,7 +350,7 @@ namespace Game
                     else
                         go.SetLootState(LootState.JustDeactivated);
 
-                    loot.clear();
+                    loot.Clear();
                 }
                 else
                 {
@@ -381,10 +370,10 @@ namespace Game
 
                 loot = corpse.loot;
 
-                if (loot.isLooted())
+                if (loot.IsLooted())
                 {
-                    loot.clear();
-                    corpse.RemoveFlag(CorpseFields.DynamicFlags, 0x0001);
+                    loot.Clear();
+                    corpse.RemoveCorpseDynamicFlag(CorpseDynFlags.Lootable);
                 }
             }
             else if (lguid.IsItem())
@@ -399,7 +388,7 @@ namespace Game
                 if (proto.GetFlags().HasAnyFlag(ItemFlags.IsProspectable | ItemFlags.IsMillable))
                 {
                     pItem.m_lootGenerated = false;
-                    pItem.loot.clear();
+                    pItem.loot.Clear();
 
                     uint count = pItem.GetCount();
 
@@ -411,7 +400,7 @@ namespace Game
                 }
                 else
                 {
-                    if (pItem.loot.isLooted() || !proto.GetFlags().HasAnyFlag(ItemFlags.HasLoot)) // Only delete item if no loot or money (unlooted loot is saved to db)
+                    if (pItem.loot.IsLooted() || !proto.GetFlags().HasAnyFlag(ItemFlags.HasLoot)) // Only delete item if no loot or money (unlooted loot is saved to db)
                         player.DestroyItem(pItem.GetBagSlot(), pItem.GetSlot(), true);
                 }
                 return;                                             // item can be looted only single player
@@ -425,15 +414,15 @@ namespace Game
                     return;
 
                 loot = creature.loot;
-                if (loot.isLooted())
+                if (loot.IsLooted())
                 {
-                    creature.RemoveFlag(ObjectFields.DynamicFlags, UnitDynFlags.Lootable);
+                    creature.RemoveDynamicFlag(UnitDynFlags.Lootable);
 
                     // skip pickpocketing loot for speed, skinning timer reduction is no-op in fact
                     if (!creature.IsAlive())
                         creature.AllLootRemovedFromCorpse();
 
-                    loot.clear();
+                    loot.Clear();
                 }
                 else
                 {
@@ -447,11 +436,10 @@ namespace Game
                         {
                             if (group.GetLootMethod() != LootMethod.MasterLoot)
                                 group.SendLooter(creature, null);
-
-
                         }
                         // force dynflag update to update looter and lootable info
-                        creature.ForceValuesUpdateAtIndex(ObjectFields.DynamicFlags);
+                        creature.m_values.ModifyValue(creature.m_objectData).ModifyValue(creature.m_objectData.DynamicFlags);
+                        creature.ForceUpdateFieldChange();
                     }
                 }
             }
@@ -481,7 +469,8 @@ namespace Game
                 return;
             }
 
-            Player target = Global.ObjAccessor.FindPlayer(target_playerguid);
+            // player on other map
+            Player target = Global.ObjAccessor.GetPlayer(_player, target_playerguid);
             if (!target)
             {
                 GetPlayer().SendLootError(lootguid, ObjectGuid.Empty, LootError.PlayerNotFound);
@@ -534,7 +523,7 @@ namespace Game
 
             LootItem item = slotid >= loot.items.Count ? loot.quest_items[slotid - loot.items.Count] : loot.items[slotid];
 
-            List<ItemPosCount> dest = new List<ItemPosCount>(); ;
+            List<ItemPosCount> dest = new List<ItemPosCount>();
             InventoryResult msg = target.CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, item.itemid, item.count);
             if (item.follow_loot_rules && !item.AllowedForPlayer(target))
                 msg = InventoryResult.CantEquipEver;
@@ -552,7 +541,7 @@ namespace Game
             }
 
             // not move item from loot to target inventory
-            Item newitem = target.StoreNewItem(dest, item.itemid, true, item.randomPropertyId, item.GetAllowedLooters(), item.context, item.BonusListIDs);
+            Item newitem = target.StoreNewItem(dest, item.itemid, true, item.randomBonusListId, item.GetAllowedLooters(), item.context, item.BonusListIDs);
             target.SendNewItem(newitem, item.count, false, false, true);
             target.UpdateCriteria(CriteriaTypes.LootItem, item.itemid, item.count);
             target.UpdateCriteria(CriteriaTypes.LootType, item.itemid, item.count, (ulong)loot.loot_type);

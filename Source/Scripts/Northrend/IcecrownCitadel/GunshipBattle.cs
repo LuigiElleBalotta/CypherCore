@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -554,7 +554,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             Index = 0xFFFFFFFF;
 
             BurningPitchId = Instance.GetData(DataTypes.TeamInInstance) == (uint)Team.Horde ? GunshipSpells.BurningPitchA : GunshipSpells.BurningPitchH;
-            me.setRegeneratingHealth(false);
+            me.SetRegeneratingHealth(false);
         }
 
         public override void SetData(uint type, uint data)
@@ -645,7 +645,7 @@ namespace Scripts.Northrend.IcecrownCitadel
                     AttackStart(victim);
                 return me.GetVictim();
             }
-            else if (me.GetThreatManager().isThreatListEmpty())
+            else if (me.GetThreatManager().IsThreatListEmpty())
             {
                 EnterEvadeMode(EvadeReason.Other);
                 return false;
@@ -680,7 +680,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             _summonedFirstMage = false;
             _died = false;
 
-            me.setRegeneratingHealth(false);
+            me.SetRegeneratingHealth(false);
         }
 
         public override void DamageTaken(Unit source, ref uint damage)
@@ -845,7 +845,7 @@ namespace Scripts.Northrend.IcecrownCitadel
 
             _controller.ResetSlots(Team.Horde);
             _controller.SetTransport(creature.GetTransport());
-            me.setRegeneratingHealth(false);
+            me.SetRegeneratingHealth(false);
             me.m_CombatDistance = 70.0f;
         }
 
@@ -955,9 +955,9 @@ namespace Scripts.Northrend.IcecrownCitadel
             }
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
-            me.RemoveFlag64(UnitFields.NpcFlags, NPCFlags.Gossip);
+            me.RemoveNpcFlag(NPCFlags.Gossip);
             me.GetTransport().EnableMovement(true);
             _events.SetPhase(GunshipMiscData.PhaseIntro);
             _events.ScheduleEvent(GunshipEvents.IntroH1, 5000, 0, GunshipMiscData.PhaseIntro);
@@ -1075,10 +1075,10 @@ namespace Scripts.Northrend.IcecrownCitadel
 
             if (me.IsWithinMeleeRange(me.GetVictim()))
                 DoMeleeAttackIfReady();
-            else if (me.isAttackReady())
+            else if (me.IsAttackReady())
             {
                 DoCastVictim(GunshipSpells.RendingThrow);
-                me.resetAttackTimer();
+                me.ResetAttackTimer();
             }
         }
 
@@ -1104,7 +1104,7 @@ namespace Scripts.Northrend.IcecrownCitadel
 
             _controller.ResetSlots(Team.Alliance);
             _controller.SetTransport(creature.GetTransport());
-            me.setRegeneratingHealth(false);
+            me.SetRegeneratingHealth(false);
             me.m_CombatDistance = 70.0f;
         }
 
@@ -1200,9 +1200,9 @@ namespace Scripts.Northrend.IcecrownCitadel
             }
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
-            me.RemoveFlag64(UnitFields.NpcFlags, NPCFlags.Gossip);
+            me.RemoveNpcFlag(NPCFlags.Gossip);
             me.GetTransport().EnableMovement(true);
             _events.SetPhase(GunshipMiscData.PhaseIntro);
             _events.ScheduleEvent(GunshipEvents.IntroA1, 5000);
@@ -1325,10 +1325,10 @@ namespace Scripts.Northrend.IcecrownCitadel
 
             if (me.IsWithinMeleeRange(me.GetVictim()))
                 DoMeleeAttackIfReady();
-            else if (me.isAttackReady())
+            else if (me.IsAttackReady())
             {
                 DoCastVictim(GunshipSpells.RendingThrow);
-                me.resetAttackTimer();
+                me.ResetAttackTimer();
             }
         }
 
@@ -1358,7 +1358,7 @@ namespace Scripts.Northrend.IcecrownCitadel
             me.SetReactState(ReactStates.Passive);
         }
 
-        public override void sGossipSelect(Player player, uint menuId, uint gossipListId)
+        public override void GossipSelect(Player player, uint menuId, uint gossipListId)
         {
             player.AddItem(GunshipMiscData.ItemGoblinRocketPack, 1);
             player.PlayerTalkClass.SendCloseGossip();
@@ -1710,7 +1710,7 @@ Fall Time: 824
 
         void HandlePeriodic(AuraEffect aurEff)
         {
-            if (GetTarget().moveSpline.Finalized())
+            if (GetTarget().MoveSpline.Finalized())
                 Remove(AuraRemoveMode.Expire);
         }
 

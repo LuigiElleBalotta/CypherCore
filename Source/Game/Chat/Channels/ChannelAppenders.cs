@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ using Framework.Constants;
 using Game.Entities;
 using Game.Network;
 using Game.Network.Packets;
+using Game.Cache;
 
 namespace Game.Chat
 {
@@ -65,11 +66,12 @@ namespace Game.Chat
             LocaleConstant localeIdx = Global.WorldMgr.GetAvailableDbcLocale(locale);
 
             ChannelNotifyJoined notify = new ChannelNotifyJoined();
-            //notify->ChannelWelcomeMsg = "";
+            //notify.ChannelWelcomeMsg = "";
             notify.ChatChannelID = (int)_source.GetChannelId();
-            //notify->InstanceID = 0;
+            //notify.InstanceID = 0;
             notify.ChannelFlags = _source.GetFlags();
             notify.Channel = _source.GetName(localeIdx);
+            notify.ChannelGUID = _source.GetChannelGuid();
             return notify;
         }
 
@@ -151,10 +153,10 @@ namespace Game.Chat
             ChatPkt packet = new ChatPkt();
             Player player = Global.ObjAccessor.FindConnectedPlayer(_guid);
             if (player)
-                packet.Initialize(ChatMsg.Channel, Language.Addon, player, player, _what, 0, _source.GetName(localeIdx), LocaleConstant.enUS, _prefix);
+                packet.Initialize(ChatMsg.Channel, _lang, player, player, _what, 0, _source.GetName(localeIdx), LocaleConstant.enUS, _prefix);
             else
             {
-                packet.Initialize(ChatMsg.Channel, Language.Addon, null, null, _what, 0, _source.GetName(localeIdx), LocaleConstant.enUS, _prefix);
+                packet.Initialize(ChatMsg.Channel, _lang, null, null, _what, 0, _source.GetName(localeIdx), LocaleConstant.enUS, _prefix);
                 packet.SenderGUID = _guid;
                 packet.TargetGUID = _guid;
             }
@@ -399,9 +401,9 @@ namespace Game.Chat
             _ownerGuid = ownerGuid;
             _ownerName = "";
 
-            CharacterInfo characterInfo = Global.WorldMgr.GetCharacterInfo(_ownerGuid);
-            if (characterInfo != null)
-                _ownerName = characterInfo.Name;
+            CharacterCacheEntry characterCacheEntry = Global.CharacterCacheStorage.GetCharacterCacheByGuid(_ownerGuid);
+            if (characterCacheEntry != null)
+                _ownerName = characterCacheEntry.Name;
         }
 
         public ChatNotify GetNotificationType() => ChatNotify.ChannelOwnerNotice;

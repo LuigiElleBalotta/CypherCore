@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -135,7 +135,7 @@ namespace Scripts.Spells.Warrior
                 for (uint i = 0; i < 5; ++i)
                 {
                     int timeOffset = (int)(6 * i * aurEff.GetPeriod() / 25);
-                    Vector4 loc = GetTarget().moveSpline.ComputePosition(timeOffset);
+                    Vector4 loc = GetTarget().MoveSpline.ComputePosition(timeOffset);
                     GetTarget().SendPlaySpellVisual(new Vector3(loc.X, loc.Y, loc.Z), 0.0f, Misc.SpellVisualBlazingCharge, 0, 0, 1.0f, true);
                 }
             }
@@ -367,7 +367,7 @@ namespace Scripts.Spells.Warrior
     }
 
     // 70844 - Item - Warrior T10 Protection 4P Bonus
-    [Script] /// 7.1.5
+    [Script] // 7.1.5
     class spell_warr_item_t10_prot_4p_bonus : AuraScript
     {
         public override bool Validate(SpellInfo spellInfo)
@@ -550,7 +550,7 @@ namespace Scripts.Spells.Warrior
         bool CheckProc(ProcEventInfo eventInfo)
         {
             // check attack comes not from behind and warrior is not stunned
-            return GetTarget().isInFront(eventInfo.GetProcTarget(), MathFunctions.PI) && !GetTarget().HasUnitState(UnitState.Stunned);
+            return GetTarget().IsInFront(eventInfo.GetProcTarget(), MathFunctions.PI) && !GetTarget().HasUnitState(UnitState.Stunned);
         }
 
         void HandleEffectProc(AuraEffect aurEff, ProcEventInfo eventInfo)
@@ -697,7 +697,7 @@ namespace Scripts.Spells.Warrior
             AfterCast.Add(new CastHandler(HandleAfterCast));
         }
 
-        uint _targetCount = 0;
+        uint _targetCount;
     }
 
     [Script] // 107570 - Storm Bolt
@@ -865,7 +865,7 @@ namespace Scripts.Spells.Warrior
 
         void HandleOnProc(AuraEffect aurEff, ProcEventInfo procInfo)
         {
-            if (procInfo.GetActor().GetTypeId() == TypeId.Player && procInfo.GetActor().GetUInt32Value(PlayerFields.CurrentSpecId) == (uint)TalentSpecialization.WarriorFury)
+            if (procInfo.GetActor().GetTypeId() == TypeId.Player && procInfo.GetActor().ToPlayer().GetPrimarySpecialization() == (uint)TalentSpecialization.WarriorFury)
                 PreventDefaultAction();
 
             procInfo.GetActor().GetSpellHistory().ResetCooldown(SpellIds.ImpendingVictory, true);

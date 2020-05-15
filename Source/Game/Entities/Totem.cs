@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game.DataStorage;
 using Game.Groups;
 using Game.Network.Packets;
 using Game.Spells;
-using System.Linq;
 
 namespace Game.Entities
 {
@@ -28,7 +27,7 @@ namespace Game.Entities
     {
         public Totem(SummonPropertiesRecord properties, Unit owner) : base(properties, owner, false)
         {
-            m_unitTypeMask |= UnitTypeMask.Totem;
+            UnitTypeMask |= UnitTypeMask.Totem;
             m_type = TotemType.Passive;
         }
 
@@ -63,23 +62,14 @@ namespace Game.Entities
                     packet.Totem = GetGUID();
                     packet.Slot = (byte)(m_Properties.Slot - (int)SummonSlot.Totem);
                     packet.Duration = duration;
-                    packet.SpellID = GetUInt32Value(UnitFields.CreatedBySpell);
+                    packet.SpellID = m_unitData.CreatedBySpell;
                     owner.ToPlayer().SendPacket(packet);
                 }
 
                 // set display id depending on caster's race
-                SpellInfo createdBySpell = Global.SpellMgr.GetSpellInfo(GetUInt32Value(UnitFields.CreatedBySpell));
-                if (createdBySpell != null)
-                {
-                    SpellEffectInfo[] effects = createdBySpell.GetEffectsForDifficulty(Difficulty.None);
-                    var summonEffect = effects.FirstOrDefault(effect =>
-                    {
-                        return effect != null && effect.IsEffect(SpellEffectName.Summon);
-                    });
-
-                    if (summonEffect != null)
-                        SetDisplayId(owner.GetModelForTotem((PlayerTotemType)summonEffect.MiscValueB));
-                }
+                uint totemDisplayId = Global.SpellMgr.GetModelForTotem(m_unitData.CreatedBySpell, owner.GetRace());
+                if (totemDisplayId != 0)
+                    SetDisplayId(totemDisplayId);
             }
 
             base.InitStats(duration);
@@ -87,12 +77,12 @@ namespace Game.Entities
             // Get spell cast by totem
             SpellInfo totemSpell = Global.SpellMgr.GetSpellInfo(GetSpell());
             if (totemSpell != null)
-                if (totemSpell.CalcCastTime(getLevel()) != 0)   // If spell has cast time . its an active totem
+                if (totemSpell.CalcCastTime(GetLevel()) != 0)   // If spell has cast time . its an active totem
                     m_type = TotemType.Active;
 
             m_duration = duration;
 
-            SetLevel(GetOwner().getLevel());
+            SetLevel(GetOwner().GetLevel());
         }
 
         public override void InitSummon()
@@ -134,17 +124,17 @@ namespace Game.Entities
             {
                 owner.SendAutoRepeatCancel(this);
 
-                SpellInfo spell = Global.SpellMgr.GetSpellInfo(GetUInt32Value(UnitFields.CreatedBySpell));
+                SpellInfo spell = Global.SpellMgr.GetSpellInfo(m_unitData.CreatedBySpell);
                 if (spell != null)
                     GetSpellHistory().SendCooldownEvent(spell, 0, null, false);
 
                 Group group = owner.GetGroup();
                 if (group)
                 {
-                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                     {
                         Player target = refe.GetSource();
-                        if (target && group.SameSubGroup(owner, target))
+                        if (target && target.IsInMap(owner) && group.SameSubGroup(owner, target))
                             target.RemoveAurasDueToSpell(GetSpell(), GetGUID());
                     }
                 }

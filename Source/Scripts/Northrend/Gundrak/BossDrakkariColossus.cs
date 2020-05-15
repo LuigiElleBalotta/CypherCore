@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,7 +87,7 @@ namespace Scripts.Northrend.Gundrak.DrakkariColossus
             if (GetData(Misc.DataIntroDone) != 0)
             {
                 me.SetReactState(ReactStates.Aggressive);
-                me.RemoveFlag(UnitFields.Flags, UnitFlags.ImmuneToPc);
+                me.RemoveUnitFlag(UnitFlags.ImmuneToPc);
                 me.RemoveAura(SpellIds.FreezeAnim);
             }
 
@@ -125,7 +125,7 @@ namespace Scripts.Northrend.Gundrak.DrakkariColossus
                     me.GetMotionMaster().MoveIdle();
 
                     me.SetReactState(ReactStates.Passive);
-                    me.SetFlag(UnitFields.Flags, UnitFlags.ImmuneToPc);
+                    me.AddUnitFlag(UnitFlags.ImmuneToPc);
                     DoCast(me, SpellIds.FreezeAnim);
                     break;
                 case Misc.ActionUnfreezeColossus:
@@ -133,7 +133,7 @@ namespace Scripts.Northrend.Gundrak.DrakkariColossus
                         return;
 
                     me.SetReactState(ReactStates.Aggressive);
-                    me.RemoveFlag(UnitFields.Flags, UnitFlags.ImmuneToPc);
+                    me.RemoveUnitFlag(UnitFlags.ImmuneToPc);
                     me.RemoveAura(SpellIds.FreezeAnim);
 
                     me.SetInCombatWithZone();
@@ -146,7 +146,7 @@ namespace Scripts.Northrend.Gundrak.DrakkariColossus
 
         public override void DamageTaken(Unit attacker, ref uint damage)
         {
-            if (me.HasFlag(UnitFields.Flags, UnitFlags.ImmuneToPc))
+            if (me.HasUnitFlag(UnitFlags.ImmuneToPc))
                 damage = 0;
 
             if (phase == Misc.ColossusPhaseNormal ||

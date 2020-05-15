@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2003-2004  Eran Kampf	eran@ekampf.com	http://www.ekampf.com
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -449,8 +449,7 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns>
         public override string ToString()
         {
-            return string.Format("2x2[{0}, {1}, {2}, {3}]",
-                _m11, _m12, _m21, _m22);
+            return $"2x2[{_m11}, {_m12}, {_m21}, {_m22}]";
         }
         #endregion
 
@@ -504,7 +503,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix2"/> instance containing the sum.</returns>
         public static Matrix2 operator +(Matrix2 left, Matrix2 right)
         {
-            return Matrix2.Add(left, right); ;
+            return Matrix2.Add(left, right);
         }
         /// <summary>
         /// Adds a matrix and a scalar.
@@ -534,7 +533,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix2"/> instance containing the difference.</returns>
         public static Matrix2 operator -(Matrix2 left, Matrix2 right)
         {
-            return Matrix2.Subtract(left, right); ;
+            return Matrix2.Subtract(left, right);
         }
         /// <summary>
         /// Subtracts a scalar from a matrix.
@@ -554,7 +553,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix2"/> instance containing the result.</returns>
         public static Matrix2 operator *(Matrix2 left, Matrix2 right)
         {
-            return Matrix2.Multiply(left, right); ;
+            return Matrix2.Multiply(left, right);
         }
         /// <summary>
         /// Transforms a given vector by a matrix.

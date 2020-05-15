@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 
 using Framework.Dynamic;
 using Game.Entities;
+using Game.Spells;
 
 namespace Game.AI
 {
@@ -40,7 +41,7 @@ namespace Game.AI
         public virtual void SetGUID(ulong guid, int id = 0) { }
         public virtual ulong GetGUID(int id = 0) { return 0; }
 
-        public virtual bool GossipHello(Player player, bool isUse) { return false; }
+        public virtual bool GossipHello(Player player, bool reportUse) { return false; }
         public virtual bool GossipSelect(Player player, uint sender, uint action) { return false; }
         public virtual bool GossipSelectCode(Player player, uint sender, uint action, string code) { return false; }
         public virtual bool QuestAccept(Player player, Quest quest) { return false; }
@@ -55,6 +56,7 @@ namespace Game.AI
         public virtual void OnGameEvent(bool start, ushort eventId) { }
         public virtual void OnStateChanged(uint state, Unit unit) { }
         public virtual void EventInform(uint eventId) { }
+        public virtual void SpellHit(Unit unit, SpellInfo spellInfo) { }
 
         protected TaskScheduler _scheduler;
         protected EventMap _events;
@@ -65,5 +67,7 @@ namespace Game.AI
     public class NullGameObjectAI : GameObjectAI
     {
         public NullGameObjectAI(GameObject g) : base(g) { }
+
+        public override void UpdateAI(uint diff) { }
     }
 }

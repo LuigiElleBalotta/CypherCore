@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ namespace Scripts.World
         {
             if (me.GetEntry() == CreatureIds.CenarionHoldIndantry)
                 Talk(GuardsConst.SaySilAggro, who);
-            SpellInfo spell = me.reachWithSpellAttack(who);
+            SpellInfo spell = me.ReachWithSpellAttack(who);
             if (spell != null)
                 DoCast(who, spell.Id);
         }
@@ -103,7 +103,7 @@ namespace Scripts.World
                 return;
 
             // Make sure our attack is ready and we arn't currently casting
-            if (me.isAttackReady() && !me.IsNonMeleeSpellCast(false))
+            if (me.IsAttackReady() && !me.IsNonMeleeSpellCast(false))
             {
                 //If we are within range melee the target
                 if (me.IsWithinMeleeRange(me.GetVictim()))
@@ -136,7 +136,7 @@ namespace Scripts.World
                     else
                         me.AttackerStateUpdate(me.GetVictim());
 
-                    me.resetAttackTimer();
+                    me.ResetAttackTimer();
                 }
             }
             else

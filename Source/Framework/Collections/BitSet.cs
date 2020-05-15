@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Diagnostics.Contracts;
 
 namespace System.Collections
 {
@@ -27,15 +26,14 @@ namespace System.Collections
             {
                 throw new ArgumentOutOfRangeException("length");
             }
-            Contract.EndContractBlock();
 
-            m_array = new uint[GetArrayLength(length, BitsPerInt32)];
-            m_length = length;
+            _mArray = new uint[GetArrayLength(length, BitsPerInt32)];
+            _mLength = length;
 
             uint fillValue = defaultValue ? 0xffffffff : 0;
-            for (int i = 0; i < m_array.Length; i++)
+            for (int i = 0; i < _mArray.Length; i++)
             {
-                m_array[i] = fillValue;
+                _mArray[i] = fillValue;
             }
 
             _version = 0;
@@ -47,17 +45,17 @@ namespace System.Collections
             {
                 throw new ArgumentNullException("values");
             }
-            Contract.EndContractBlock();
+
             // this value is chosen to prevent overflow when computing m_length
             if (values.Length > UInt32.MaxValue / BitsPerInt32)
             {
                 throw new ArgumentException();
             }
 
-            m_array = new uint[values.Length];
-            m_length = values.Length * BitsPerInt32;
+            _mArray = new uint[values.Length];
+            _mLength = values.Length * BitsPerInt32;
 
-            Array.Copy(values, m_array, values.Length);
+            Array.Copy(values, _mArray, values.Length);
 
             _version = 0;
         }
@@ -68,13 +66,12 @@ namespace System.Collections
             {
                 throw new ArgumentNullException("bits");
             }
-            Contract.EndContractBlock();
 
-            int arrayLength = GetArrayLength(bits.m_length, BitsPerInt32);
-            m_array = new uint[arrayLength];
-            m_length = bits.m_length;
+            int arrayLength = GetArrayLength(bits._mLength, BitsPerInt32);
+            _mArray = new uint[arrayLength];
+            _mLength = bits._mLength;
 
-            Array.Copy(bits.m_array, m_array, arrayLength);
+            Array.Copy(bits._mArray, _mArray, arrayLength);
 
             _version = bits._version;
         }
@@ -97,9 +94,8 @@ namespace System.Collections
             {
                 throw new ArgumentOutOfRangeException("index");
             }
-            Contract.EndContractBlock();
 
-            return (Convert.ToInt64(m_array[index / 32]) & (1 << (index % 32))) != 0;
+            return (Convert.ToInt64(_mArray[index / 32]) & (1 << (index % 32))) != 0;
         }
 
         public void Set(int index, bool value)
@@ -108,15 +104,14 @@ namespace System.Collections
             {
                 throw new ArgumentOutOfRangeException("index");
             }
-            Contract.EndContractBlock();
 
             if (value)
             {
-                m_array[index / 32] |= (1u << (index % 32));
+                _mArray[index / 32] |= (1u << (index % 32));
             }
             else
             {
-                m_array[index / 32] &= ~(1u << (index % 32));
+                _mArray[index / 32] &= ~(1u << (index % 32));
             }
 
             _version++;
@@ -125,10 +120,10 @@ namespace System.Collections
         public void SetAll(bool value)
         {
             uint fillValue = value ? 0xffffffff : 0u;
-            int ints = GetArrayLength(m_length, BitsPerInt32);
+            int ints = GetArrayLength(_mLength, BitsPerInt32);
             for (int i = 0; i < ints; i++)
             {
-                m_array[i] = fillValue;
+                _mArray[i] = fillValue;
             }
 
             _version++;
@@ -140,12 +135,11 @@ namespace System.Collections
                 throw new ArgumentNullException("value");
             if (Length != value.Length)
                 throw new ArgumentException();
-            Contract.EndContractBlock();
 
-            int ints = GetArrayLength(m_length, BitsPerInt32);
+            int ints = GetArrayLength(_mLength, BitsPerInt32);
             for (int i = 0; i < ints; i++)
             {
-                m_array[i] &= value.m_array[i];
+                _mArray[i] &= value._mArray[i];
             }
 
             _version++;
@@ -158,12 +152,11 @@ namespace System.Collections
                 throw new ArgumentNullException("value");
             if (Length != value.Length)
                 throw new ArgumentException();
-            Contract.EndContractBlock();
 
-            int ints = GetArrayLength(m_length, BitsPerInt32);
+            int ints = GetArrayLength(_mLength, BitsPerInt32);
             for (int i = 0; i < ints; i++)
             {
-                m_array[i] |= value.m_array[i];
+                _mArray[i] |= value._mArray[i];
             }
 
             _version++;
@@ -176,12 +169,11 @@ namespace System.Collections
                 throw new ArgumentNullException("value");
             if (Length != value.Length)
                 throw new ArgumentException();
-            Contract.EndContractBlock();
 
-            int ints = GetArrayLength(m_length, BitsPerInt32);
+            int ints = GetArrayLength(_mLength, BitsPerInt32);
             for (int i = 0; i < ints; i++)
             {
-                m_array[i] ^= value.m_array[i];
+                _mArray[i] ^= value._mArray[i];
             }
 
             _version++;
@@ -190,10 +182,10 @@ namespace System.Collections
 
         public BitSet Not()
         {
-            int ints = GetArrayLength(m_length, BitsPerInt32);
+            int ints = GetArrayLength(_mLength, BitsPerInt32);
             for (int i = 0; i < ints; i++)
             {
-                m_array[i] = ~m_array[i];
+                _mArray[i] = ~_mArray[i];
             }
 
             _version++;
@@ -204,8 +196,7 @@ namespace System.Collections
         {
             get
             {
-                Contract.Ensures(Contract.Result<int>() >= 0);
-                return m_length;
+                return _mLength;
             }
             set
             {
@@ -213,32 +204,31 @@ namespace System.Collections
                 {
                     throw new ArgumentOutOfRangeException("value");
                 }
-                Contract.EndContractBlock();
 
                 int newints = GetArrayLength(value, BitsPerInt32);
-                if (newints > m_array.Length || newints + _ShrinkThreshold < m_array.Length)
+                if (newints > _mArray.Length || newints + ShrinkThreshold < _mArray.Length)
                 {
                     // grow or shrink (if wasting more than _ShrinkThreshold ints)
                     uint[] newarray = new uint[newints];
-                    Array.Copy(m_array, newarray, newints > m_array.Length ? m_array.Length : newints);
-                    m_array = newarray;
+                    Array.Copy(_mArray, newarray, newints > _mArray.Length ? _mArray.Length : newints);
+                    _mArray = newarray;
                 }
 
-                if (value > m_length)
+                if (value > _mLength)
                 {
                     // clear high bit values in the last int
-                    int last = GetArrayLength(m_length, BitsPerInt32) - 1;
-                    int bits = m_length % 32;
+                    int last = GetArrayLength(_mLength, BitsPerInt32) - 1;
+                    int bits = _mLength % 32;
                     if (bits > 0)
                     {
-                        m_array[last] &= (1u << bits) - 1;
+                        _mArray[last] &= (1u << bits) - 1;
                     }
 
                     // clear remaining int values
-                    Array.Clear(m_array, last + 1, newints - last - 1);
+                    Array.Clear(_mArray, last + 1, newints - last - 1);
                 }
 
-                m_length = value;
+                _mLength = value;
                 _version++;
             }
         }
@@ -255,30 +245,28 @@ namespace System.Collections
             if (array.Rank != 1)
                 throw new ArgumentException();
 
-            Contract.EndContractBlock();
-
             if (array is uint[])
             {
-                Array.Copy(m_array, 0, array, index, GetArrayLength(m_length, BitsPerInt32));
+                Array.Copy(_mArray, 0, array, index, GetArrayLength(_mLength, BitsPerInt32));
             }
             else if (array is byte[])
             {
-                int arrayLength = GetArrayLength(m_length, BitsPerByte);
+                int arrayLength = GetArrayLength(_mLength, BitsPerByte);
                 if ((array.Length - index) < arrayLength)
                     throw new ArgumentException();
 
                 byte[] b = (byte[])array;
                 for (int i = 0; i < arrayLength; i++)
-                    b[index + i] = (byte)((m_array[i / 4] >> ((i % 4) * 8)) & 0x000000FF); // Shift to bring the required byte to LSB, then mask
+                    b[index + i] = (byte)((_mArray[i / 4] >> ((i % 4) * 8)) & 0x000000FF); // Shift to bring the required byte to LSB, then mask
             }
             else if (array is bool[])
             {
-                if (array.Length - index < m_length)
+                if (array.Length - index < _mLength)
                     throw new ArgumentException();
 
                 bool[] b = (bool[])array;
-                for (int i = 0; i < m_length; i++)
-                    b[index + i] = ((m_array[i / 32] >> (i % 32)) & 0x00000001) != 0;
+                for (int i = 0; i < _mLength; i++)
+                    b[index + i] = ((_mArray[i / 32] >> (i % 32)) & 0x00000001) != 0;
             }
             else
                 throw new ArgumentException();
@@ -288,20 +276,15 @@ namespace System.Collections
         {
             get
             {
-                Contract.Ensures(Contract.Result<int>() >= 0);
-
-                return (int)m_length;
+                return _mLength;
             }
         }
 
         public Object Clone()
         {
-            Contract.Ensures(Contract.Result<Object>() != null);
-            Contract.Ensures(((BitArray)Contract.Result<Object>()).Length == this.Length);
-
-            BitSet bitArray = new BitSet(m_array);
+            BitSet bitArray = new BitSet(_mArray);
             bitArray._version = _version;
-            bitArray.m_length = m_length;
+            bitArray._mLength = _mLength;
             return bitArray;
         }
 
@@ -345,23 +328,23 @@ namespace System.Collections
 
         private static int GetArrayLength(int n, int div)
         {
-            Contract.Assert(div > 0, "GetArrayLength: div arg must be greater than 0");
+            Cypher.Assert(div > 0, "GetArrayLength: div arg must be greater than 0");
             return n > 0 ? (((n - 1) / div) + 1) : 0;
         }
 
         [Serializable]
         private class BitArrayEnumeratorSimple : IEnumerator, ICloneable
         {
-            private BitSet bitarray;
-            private int index;
-            private int version;
-            private bool currentElement;
+            private BitSet _bitarray;
+            private int _index;
+            private int _version;
+            private bool _currentElement;
 
             internal BitArrayEnumeratorSimple(BitSet bitarray)
             {
-                this.bitarray = bitarray;
-                this.index = -1;
-                version = bitarray._version;
+                _bitarray = bitarray;
+                _index = -1;
+                _version = bitarray._version;
             }
 
             public Object Clone()
@@ -369,17 +352,17 @@ namespace System.Collections
                 return MemberwiseClone();
             }
 
-            public virtual bool MoveNext()
+            public bool MoveNext()
             {
                 //if (version != bitarray._version) throw new InvalidOperationException(Environment.GetResourceString(ResId.InvalidOperation_EnumFailedVersion));
-                if (index < (bitarray.Count - 1))
+                if (_index < (_bitarray.Count - 1))
                 {
-                    index++;
-                    currentElement = bitarray.Get(index);
+                    _index++;
+                    _currentElement = _bitarray.Get(_index);
                     return true;
                 }
                 else
-                    index = bitarray.Count;
+                    _index = _bitarray.Count;
 
                 return false;
             }
@@ -388,27 +371,27 @@ namespace System.Collections
             {
                 get
                 {
-                    if (index == -1)
+                    if (_index == -1)
                         throw new InvalidOperationException();
-                    if (index >= bitarray.Count)
+                    if (_index >= _bitarray.Count)
                         throw new InvalidOperationException();
-                    return currentElement;
+                    return _currentElement;
                 }
             }
 
             public void Reset()
             {
                 //if (version != bitarray._version) throw new InvalidOperationException(Environment.GetResourceString(ResId.InvalidOperation_EnumFailedVersion));
-                index = -1;
+                _index = -1;
             }
         }
 
-        private uint[] m_array;
-        private int m_length;
+        private uint[] _mArray;
+        private int _mLength;
         private int _version;
         [NonSerialized]
         private Object _syncRoot;
 
-        private const int _ShrinkThreshold = 256;
+        private const int ShrinkThreshold = 256;
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ using Framework.Configuration;
 using Framework.Database;
 using Framework.Networking;
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.Timers;
 
@@ -41,7 +42,7 @@ namespace BNetServer
                 Environment.Exit(-1);
             };
 
-            if (!ConfigMgr.Load(System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".conf"))
+            if (!ConfigMgr.Load(Process.GetCurrentProcess().ProcessName + ".conf"))
                 ExitNow();
 
             // Initialize the database connection

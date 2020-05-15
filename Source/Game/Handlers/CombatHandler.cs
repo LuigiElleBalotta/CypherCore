@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Network;
 using Game.Network.Packets;
 using System;
-using System.Diagnostics.Contracts;
 
 namespace Game
 {
@@ -52,7 +51,7 @@ namespace Game
             if (vehicle)
             {
                 VehicleSeatRecord seat = vehicle.GetSeatForPassenger(GetPlayer());
-                Contract.Assert(seat != null);
+                Cypher.Assert(seat != null);
                 if (!seat.Flags.HasAnyFlag(VehicleSeatFlags.CanAttack))
                 {
                     SendAttackStop(enemy);

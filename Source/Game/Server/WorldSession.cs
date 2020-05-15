@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ namespace Game
             if (_player)
                 LogoutPlayer(true);
 
-            /// - If have unclosed socket, close it
+            // - If have unclosed socket, close it
             for (byte i = 0; i < 2; ++i)
             {
                 if (m_Socket[i] != null)
@@ -101,7 +101,7 @@ namespace Game
                 //FIXME: logout must be delayed in case lost connection with client in time of combat
                 if (GetPlayer().GetDeathTimer() != 0)
                 {
-                    _player.getHostileRefManager().deleteReferences();
+                    _player.GetHostileRefManager().DeleteReferences();
                     _player.BuildPlayerRepop();
                     _player.RepopAtGraveyard();
                 }
@@ -161,12 +161,12 @@ namespace Game
                 // some save parts only correctly work in case player present in map/player_lists (pets, etc)
                 if (save)
                 {
-                    for (int j = InventorySlots.BuyBackStart; j < InventorySlots.BuyBackEnd; ++j)
+                    for (uint j = InventorySlots.BuyBackStart; j < InventorySlots.BuyBackEnd; ++j)
                     {
-                        int eslot = j - InventorySlots.BuyBackStart;
-                        _player.SetGuidValue(PlayerFields.InvSlotHead + (j * 4), ObjectGuid.Empty);
-                        _player.SetUInt32Value(PlayerFields.BuyBackPrice1 + eslot, 0);
-                        _player.SetUInt32Value(PlayerFields.BuyBackTimestamp1 + eslot, 0);
+                        uint eslot = j - InventorySlots.BuyBackStart;
+                        _player.SetInvSlot(j, ObjectGuid.Empty);
+                        _player.SetBuybackPrice(eslot, 0);
+                        _player.SetBuybackTimestamp(eslot, 0);
                     }
                     _player.SaveToDB();
                 }
@@ -179,7 +179,7 @@ namespace Game
 
                 // remove player from the group if he is:
                 // a) in group; b) not in raid group; c) logging out normally (not being kicked or disconnected)
-                if (_player.GetGroup() && !_player.GetGroup().isRaidGroup() && m_Socket[(int)ConnectionType.Realm] != null)
+                if (_player.GetGroup() && !_player.GetGroup().IsRaidGroup() && m_Socket[(int)ConnectionType.Realm] != null)
                     _player.RemoveFromGroup();
 
                 //! Send update to group and reset stored max enchanting level
@@ -202,7 +202,7 @@ namespace Game
                 // calls to GetMap in this case may cause crashes
                 GetPlayer().CleanupsBeforeDelete();
                 Log.outInfo(LogFilter.Player, "Account: {0} (IP: {1}) Logout Character:[{2}] (GUID: {3}) Level: {4}",
-                    GetAccountId(), GetRemoteAddress(), _player.GetName(), _player.GetGUID().ToString(), _player.getLevel());
+                    GetAccountId(), GetRemoteAddress(), _player.GetName(), _player.GetGUID().ToString(), _player.GetLevel());
 
                 Map map = GetPlayer().GetMap();
                 if (map != null)
@@ -428,34 +428,37 @@ namespace Game
         public void LoadTutorialsData(SQLResult result)
         {
             if (!result.IsEmpty())
+            {
                 for (var i = 0; i < SharedConst.MaxAccountTutorialValues; i++)
                     tutorials[i] = result.Read<uint>(i);
+                tutorialsChanged |= TutorialsFlag.LoadedFromDB;
+            }
 
-            tutorialsChanged = false;
+            tutorialsChanged &= ~TutorialsFlag.Changed;
         }
 
         public void SaveTutorialsData(SQLTransaction trans)
         {
-            if (!tutorialsChanged)
+            if (!tutorialsChanged.HasAnyFlag(TutorialsFlag.Changed))
                 return;
 
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_HAS_TUTORIALS);
-            stmt.AddValue(0, GetAccountId());
-            bool hasTutorials = !DB.Characters.Query(stmt).IsEmpty();
-            // Modify data in DB
-            stmt = DB.Characters.GetPreparedStatement(hasTutorials ? CharStatements.UPD_TUTORIALS : CharStatements.INS_TUTORIALS);
+            bool hasTutorialsInDB = tutorialsChanged.HasAnyFlag(TutorialsFlag.LoadedFromDB);
+            PreparedStatement stmt = DB.Characters.GetPreparedStatement(hasTutorialsInDB ? CharStatements.UPD_TUTORIALS : CharStatements.INS_TUTORIALS);
             for (var i = 0; i < SharedConst.MaxAccountTutorialValues; ++i)
                 stmt.AddValue(i, tutorials[i]);
             stmt.AddValue(SharedConst.MaxAccountTutorialValues, GetAccountId());
             trans.Append(stmt);
 
-            tutorialsChanged = false;
+            // now has, set flag so next save uses update query
+            if (!hasTutorialsInDB)
+                tutorialsChanged |= TutorialsFlag.LoadedFromDB;
+
+            tutorialsChanged &= ~TutorialsFlag.Changed;
         }
 
         public void SendConnectToInstance(ConnectToSerial serial)
         {
             var instanceAddress = Global.WorldMgr.GetRealm().GetAddressForClient(System.Net.IPAddress.Parse(GetRemoteAddress()));
-            instanceAddress.Port = WorldConfig.GetIntValue(WorldCfg.PortInstance);
 
             _instanceConnectKey.AccountId = GetAccountId();
             _instanceConnectKey.connectionType = ConnectionType.Instance;
@@ -464,8 +467,19 @@ namespace Game
             ConnectTo connectTo = new ConnectTo();
             connectTo.Key = _instanceConnectKey.Raw;
             connectTo.Serial = serial;
-            connectTo.Payload.Where = instanceAddress;
+            connectTo.Payload.Port = (ushort)WorldConfig.GetIntValue(WorldCfg.PortInstance);
             connectTo.Con = (byte)ConnectionType.Instance;
+
+            if (instanceAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                connectTo.Payload.Where.IPv4 = instanceAddress.Address.GetAddressBytes();
+                connectTo.Payload.Where.Type = ConnectTo.AddressType.IPv4;
+            }
+            else
+            {
+                connectTo.Payload.Where.IPv6 = instanceAddress.Address.GetAddressBytes();
+                connectTo.Payload.Where.Type = ConnectTo.AddressType.IPv6;
+            }
 
             SendPacket(connectTo);
         }
@@ -540,6 +554,11 @@ namespace Game
             SendPacket(packet);
         }
 
+        public bool CanSpeak()
+        {
+            return m_muteTime <= GameTime.GetGameTime();
+        }
+
         public void SendNotification(CypherStrings str, params object[] args)
         {
             SendNotification(Global.ObjectMgr.GetCypherString(str), args);
@@ -608,9 +627,11 @@ namespace Game
         public string GetOS() { return _os; }
         public void SetInQueue(bool state) { m_inQueue = state; }
 
-        public bool isLogingOut() { return _logoutTime != 0 || m_playerLogout; }
+        public bool IsLogingOut() { return _logoutTime != 0 || m_playerLogout; }
 
         public ulong GetConnectToInstanceKey() { return _instanceConnectKey.Raw; }
+
+        public QueryCallbackProcessor GetQueryProcessor() { return _queryProcessor; }
 
         void SetLogoutStartTime(long requestTime)
         {
@@ -633,7 +654,7 @@ namespace Game
                 _accountLoginCallback = null;
             }
 
-            //! HandlePlayerLoginOpcode
+            // HandlePlayerLoginOpcode
             if (_charLoginCallback != null && _charLoginCallback.IsCompleted)
             {
                 HandlePlayerLogin((LoginQueryHolder)_charLoginCallback.Result);
@@ -770,7 +791,7 @@ namespace Game
             if (tutorials[index] != value)
             {
                 tutorials[index] = value;
-                tutorialsChanged = true;
+                tutorialsChanged |= TutorialsFlag.Changed;
             }
         }
 
@@ -845,7 +866,7 @@ namespace Game
         uint m_clientTimeDelay;
         AccountData[] _accountData = new AccountData[(int)AccountDataTypes.Max];
         uint[] tutorials = new uint[SharedConst.MaxAccountTutorialValues];
-        bool tutorialsChanged;
+        TutorialsFlag tutorialsChanged;
 
         Array<byte> _realmListSecret = new Array<byte>(32);
         Dictionary<uint /*realmAddress*/, byte> _realmCharacterCounts = new Dictionary<uint, byte>();
@@ -984,8 +1005,6 @@ namespace Game
 
     class AccountInfoQueryHolderPerRealm : SQLQueryHolder<AccountInfoQueryLoad>
     {
-        public AccountInfoQueryHolderPerRealm() { }
-
         public void Initialize(uint accountId, uint battlenetAccountId)
         {
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_ACCOUNT_DATA);
@@ -1000,8 +1019,6 @@ namespace Game
 
     class AccountInfoQueryHolder : SQLQueryHolder<AccountInfoQueryLoad>
     {
-        public AccountInfoQueryHolder() { }
-
         public void Initialize(uint accountId, uint battlenetAccountId)
         {
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_ACCOUNT_TOYS);

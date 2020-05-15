@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ namespace Game.AI
                 return new VehicleAI(creature);
             else if (creature.HasUnitTypeMask(UnitTypeMask.ControlableGuardian) && ((Guardian)creature).GetOwner().IsTypeId(TypeId.Player))
                 return new PetAI(creature);
-            else if (creature.HasFlag64(UnitFields.NpcFlags, NPCFlags.SpellClick))
+            else if (creature.HasNpcFlag(NPCFlags.SpellClick))
                 return new NullCreatureAI(creature);
             else if (creature.IsGuard())
                 return new GuardAI(creature);
@@ -99,7 +99,7 @@ namespace Game.AI
 
         public static IMovementGenerator SelectMovementAI(Creature creature)
         {
-            switch (creature.m_defaultMovementType)
+            switch (creature.DefaultMovementType)
             {
                 case MovementGeneratorType.Random:
                     return new RandomMovementGenerator();

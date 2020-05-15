@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ using Game.Scenarios;
 using Game.Scripting;
 using Game.SupportSystem;
 using Game.Services;
+using Game.Cache;
 
 public static class Global
 {
@@ -52,6 +53,7 @@ public static class Global
     //Social
     public static CalendarManager CalendarMgr { get { return CalendarManager.Instance; } }
     public static SocialManager SocialMgr { get { return SocialManager.Instance; } }
+    public static WhoListStorageManager WhoListStorageMgr { get { return WhoListStorageManager.Instance; } }
 
     //Scripts
     public static ScriptManager ScriptMgr { get { return ScriptManager.Instance; } }
@@ -92,6 +94,7 @@ public static class Global
     public static AreaTriggerDataStorage AreaTriggerDataStorage { get { return AreaTriggerDataStorage.Instance; } }
     public static CharacterTemplateDataStorage CharacterTemplateDataStorage { get { return CharacterTemplateDataStorage.Instance; } }
     public static ConversationDataStorage ConversationDataStorage { get { return ConversationDataStorage.Instance; } }
+    public static CharacterCache CharacterCacheStorage { get { return CharacterCache.Instance; } }
 
     //Misc
     public static ConditionManager ConditionMgr { get { return ConditionManager.Instance; } }

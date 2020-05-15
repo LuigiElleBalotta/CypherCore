@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ namespace Game
                     ulong guildID = 0;
 
                     if (flags.HasAnyFlag(CalendarFlags.GuildEvent) || flags.HasAnyFlag(CalendarFlags.WithoutInvites))
-                        guildID = Player.GetGuildIdFromDB(ownerGUID);
+                        guildID = Global.CharacterCacheStorage.GetCharacterGuildIdByGuid(ownerGUID);
 
                     CalendarEvent calendarEvent = new CalendarEvent(eventID, ownerGUID, guildID, type, textureID, date, flags, title, description, lockDate);
                     _events.Add(calendarEvent);
@@ -397,7 +397,7 @@ namespace Game
             ObjectGuid invitee = invite.InviteeGuid;
             Player player = Global.ObjAccessor.FindPlayer(invitee);
 
-            uint level = player ? player.getLevel() : Player.GetLevelFromDB(invitee);
+            uint level = player ? player.GetLevel() : Global.CharacterCacheStorage.GetCharacterLevelByGuid(invitee);
 
             SCalendarEventInvite packet = new SCalendarEventInvite();
             packet.EventID = calendarEvent != null ? calendarEvent.EventId : 0;
@@ -545,8 +545,8 @@ namespace Game
                 ObjectGuid inviteeGuid = calendarInvite.InviteeGuid;
                 Player invitee = Global.ObjAccessor.FindPlayer(inviteeGuid);
 
-                uint inviteeLevel = invitee ? invitee.getLevel() : Player.GetLevelFromDB(inviteeGuid);
-                uint inviteeGuildId = invitee ? invitee.GetGuildId() : Player.GetGuildIdFromDB(inviteeGuid);
+                uint inviteeLevel = invitee ? invitee.GetLevel() : Global.CharacterCacheStorage.GetCharacterLevelByGuid(inviteeGuid);
+                ulong inviteeGuildId = invitee ? invitee.GetGuildId() : Global.CharacterCacheStorage.GetCharacterGuildIdByGuid(inviteeGuid);
 
                 CalendarEventInviteInfo inviteInfo = new CalendarEventInviteInfo();
                 inviteInfo.Guid = inviteeGuid;

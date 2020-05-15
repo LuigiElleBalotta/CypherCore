@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -136,6 +136,7 @@ namespace Scripts.Northrend.IcecrownCitadel
         public const uint ImpalingSpear = 71443;
         public const uint AetherShield = 71463;
         public const uint HurlSpear = 71466;
+        public const uint DivineSurge = 71465;
 
         // Captain Arnath
         public const uint DominateMind = 14515;
@@ -145,9 +146,9 @@ namespace Scripts.Northrend.IcecrownCitadel
         public const uint FlashHealUndead = 71782;
         public const uint PowerWordShieldUndead = 71780;
         public const uint SmiteUndead = 71778;
-        public static uint SpellFlashHeal(bool isUndead) { return isUndead ? InstanceSpells.FlashHealUndead : InstanceSpells.FlashHealNormal; }
-        public static uint SpellPowerWordShield(bool isUndead) { return isUndead ? InstanceSpells.PowerWordShieldUndead : InstanceSpells.PowerWordShieldNormal; }
-        public static uint SpellSmite(bool isUndead) { return isUndead ? InstanceSpells.SmiteUndead : InstanceSpells.SmiteNormal; }
+        public static uint SpellFlashHeal(bool isUndead) { return isUndead ? FlashHealUndead : FlashHealNormal; }
+        public static uint SpellPowerWordShield(bool isUndead) { return isUndead ? PowerWordShieldUndead : PowerWordShieldNormal; }
+        public static uint SpellSmite(bool isUndead) { return isUndead ? SmiteUndead : SmiteNormal; }
 
         // Captain Brandon
         public const uint CrusaderStrike = 71549;
@@ -168,9 +169,9 @@ namespace Scripts.Northrend.IcecrownCitadel
         public const uint FelIronBombUndead = 71787;
         public const uint MachineGunUndead = 71788;
         public const uint RocketLaunchUndead = 71786;
-        public static uint SpellFelIronBomb(bool isUndead) { return isUndead ? InstanceSpells.FelIronBombUndead : InstanceSpells.FelIronBombNormal; }
-        public static uint SpellMachineGun(bool isUndead) { return isUndead ? InstanceSpells.MachineGunUndead : InstanceSpells.MachineGunNormal; }
-        public static uint SpellRocketLaunch(bool isUndead) { return isUndead ? InstanceSpells.RocketLaunchUndead : InstanceSpells.RocketLaunchNormal; }
+        public static uint SpellFelIronBomb(bool isUndead) { return isUndead ? FelIronBombUndead : FelIronBombNormal; }
+        public static uint SpellMachineGun(bool isUndead) { return isUndead ? MachineGunUndead : MachineGunNormal; }
+        public static uint SpellRocketLaunch(bool isUndead) { return isUndead ? RocketLaunchUndead : RocketLaunchNormal; }
 
         // Invisible Stalker (Float; Uninteractible; Largeaoi)
         public const uint SoulMissile = 72585;

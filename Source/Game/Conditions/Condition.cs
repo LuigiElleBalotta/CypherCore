@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Maps;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Text;
 
 namespace Game.Conditions
@@ -36,7 +35,7 @@ namespace Game.Conditions
 
         public bool Meets(ConditionSourceInfo sourceInfo)
         {
-            Contract.Assert(ConditionTarget < SharedConst.MaxConditionTargets);
+            Cypher.Assert(ConditionTarget < SharedConst.MaxConditionTargets);
             WorldObject obj = sourceInfo.mConditionTargets[ConditionTarget];
             // object not present, return false
             if (obj == null)
@@ -62,7 +61,7 @@ namespace Game.Conditions
                     if (player != null)
                     {
                         // don't allow 0 items (it's checked during table load)
-                        Contract.Assert(ConditionValue2 != 0);
+                        Cypher.Assert(ConditionValue2 != 0);
                         bool checkBank = ConditionValue3 != 0 ? true : false;
                         condMeets = player.HasItemCount(ConditionValue1, ConditionValue2, checkBank);
                     }
@@ -92,11 +91,11 @@ namespace Game.Conditions
                     break;
                 case ConditionTypes.Class:
                     if (unit != null)
-                        condMeets = Convert.ToBoolean(unit.getClassMask() & ConditionValue1);
+                        condMeets = Convert.ToBoolean(unit.GetClassMask() & ConditionValue1);
                     break;
                 case ConditionTypes.Race:
                     if (unit != null)
-                        condMeets = Convert.ToBoolean(unit.getRaceMask() & ConditionValue1);
+                        condMeets = Convert.ToBoolean(unit.GetRaceMask() & ConditionValue1);
                     break;
                 case ConditionTypes.Gender:
                     if (player != null)
@@ -170,7 +169,7 @@ namespace Game.Conditions
                     break;
                 case ConditionTypes.Level:
                     if (unit != null)
-                        condMeets = MathFunctions.CompareValues((ComparisionType)ConditionValue2, unit.getLevel(), ConditionValue1);
+                        condMeets = MathFunctions.CompareValues((ComparisionType)ConditionValue2, unit.GetLevel(), ConditionValue1);
                     break;
                 case ConditionTypes.DrunkenState:
                     if (player != null)
@@ -202,7 +201,7 @@ namespace Game.Conditions
                     }
                     break;
                 case ConditionTypes.TypeMask:
-                    condMeets = Convert.ToBoolean((TypeMask)ConditionValue1 & obj.objectTypeMask);
+                    condMeets = Convert.ToBoolean((TypeMask)ConditionValue1 & obj.ObjectTypeMask);
                     break;
                 case ConditionTypes.RelationTo:
                     {
@@ -268,7 +267,7 @@ namespace Game.Conditions
                         condMeets = MathFunctions.CompareValues((ComparisionType)ConditionValue2, unit.GetHealthPct(), ConditionValue1);
                     break;
                 case ConditionTypes.WorldState:
-                    condMeets = (ConditionValue2 == Global.WorldMgr.getWorldState((WorldStates)ConditionValue1));
+                    condMeets = (ConditionValue2 == Global.WorldMgr.GetWorldState((WorldStates)ConditionValue1));
                     break;
                 case ConditionTypes.PhaseId:
                     condMeets = obj.GetPhaseShift().HasPhase(ConditionValue1);
@@ -276,9 +275,6 @@ namespace Game.Conditions
                 case ConditionTypes.Title:
                     if (player != null)
                         condMeets = player.HasTitle(ConditionValue1);
-                    break;
-                case ConditionTypes.Spawnmask:
-                    condMeets = Convert.ToBoolean((1ul << (int)obj.GetMap().GetSpawnMode()) & ConditionValue1);
                     break;
                 case ConditionTypes.UnitState:
                     if (unit != null)
@@ -336,7 +332,7 @@ namespace Game.Conditions
                         {
                             Pet pet = player.GetPet();
                             if (pet)
-                                condMeets = (((1 << (int)pet.getPetType()) & ConditionValue1) != 0);
+                                condMeets = (((1 << (int)pet.GetPetType()) & ConditionValue1) != 0);
                         }
                         break;
                     }
@@ -373,6 +369,11 @@ namespace Game.Conditions
                         }
                         break;
                     }
+                case ConditionTypes.DifficultyId:
+                    {
+                        condMeets = (uint)obj.GetMap().GetDifficultyID() == ConditionValue1;
+                        break;
+                    }
                 default:
                     condMeets = false;
                     break;
@@ -398,20 +399,20 @@ namespace Game.Conditions
             GridMapTypeMask mask = 0;
             switch (ConditionType)
             {
-                case ConditionTypes.DistanceTo:
-                case ConditionTypes.WorldState:
-                case ConditionTypes.PhaseId:
-                case ConditionTypes.Spawnmask:
-                case ConditionTypes.NearCreature:
-                case ConditionTypes.NearGameobject:
                 case ConditionTypes.ActiveEvent:
+                case ConditionTypes.Areaid:
+                case ConditionTypes.DifficultyId:
+                case ConditionTypes.DistanceTo:
                 case ConditionTypes.InstanceInfo:
                 case ConditionTypes.Mapid:
-                case ConditionTypes.Areaid:
+                case ConditionTypes.NearCreature:
+                case ConditionTypes.NearGameobject:
                 case ConditionTypes.None:
-                case ConditionTypes.Zoneid:
-                case ConditionTypes.TerrainSwap:
+                case ConditionTypes.PhaseId:
                 case ConditionTypes.RealmAchievement:
+                case ConditionTypes.TerrainSwap:
+                case ConditionTypes.WorldState:
+                case ConditionTypes.Zoneid:
                     mask |= GridMapTypeMask.All;
                     break;
                 case ConditionTypes.Gender:
@@ -486,13 +487,13 @@ namespace Game.Conditions
                     mask |= GridMapTypeMask.Player;
                     break;
                 default:
-                    Contract.Assert(false, "Condition.GetSearcherTypeMaskForCondition - missing condition handling!");
+                    Cypher.Assert(false, "Condition.GetSearcherTypeMaskForCondition - missing condition handling!");
                     break;
             }
             return mask;
         }
 
-        public bool isLoaded()
+        public bool IsLoaded()
         {
             return ConditionType > ConditionTypes.None || ReferenceId != 0;
         }

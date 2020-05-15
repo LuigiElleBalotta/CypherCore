@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -148,7 +148,7 @@ namespace Game
 
             _initialized = true;
 
-            _previousTimestamp = Time.GetMSTime();
+            _previousTimestamp = GameTime.GetGameTimeMS();
         }
 
         public override void RequestData()
@@ -162,7 +162,7 @@ namespace Game
             if (_otherChecksTodo.Empty())
                 _otherChecksTodo.AddRange(Global.WardenCheckMgr.OtherChecksIdPool);
 
-            _serverTicks = Time.GetMSTime();
+            _serverTicks = GameTime.GetGameTimeMS();
 
             ushort id;
             WardenCheckType type;
@@ -185,7 +185,7 @@ namespace Game
             }
 
             ByteBuffer buffer = new ByteBuffer();
-            buffer.WriteUInt8(WardenOpcodes.Smsg_CheatChecksRequest);
+            buffer.WriteUInt8((byte)WardenOpcodes.Smsg_CheatChecksRequest);
 
             for (uint i = 0; i < WorldConfig.GetUIntValue(WorldCfg.WardenNumOtherChecks); ++i)
             {
@@ -207,7 +207,7 @@ namespace Game
                     case WardenCheckType.MPQ:
                     case WardenCheckType.LuaStr:
                     case WardenCheckType.Driver:
-                        buffer.WriteUInt8(wd.Str.GetByteCount());
+                        buffer.WriteUInt8((byte)wd.Str.GetByteCount());
                         buffer.WriteString(wd.Str);
                         break;
                     default:
@@ -219,7 +219,7 @@ namespace Game
 
             // Add TIMING_CHECK
             buffer.WriteUInt8(0x00);
-            buffer.WriteUInt8((int)WardenCheckType.Timing ^ xorByte);
+            buffer.WriteUInt8((byte)((int)WardenCheckType.Timing ^ xorByte));
 
             byte index = 1;
 
@@ -228,7 +228,7 @@ namespace Game
                 wd = Global.WardenCheckMgr.GetWardenDataById(checkId);
 
                 type = wd.Type;
-                buffer.WriteUInt8((int)type ^ xorByte);
+                buffer.WriteUInt8((byte)((int)type ^ xorByte));
                 switch (type)
                 {
                     case WardenCheckType.Memory:
@@ -314,7 +314,7 @@ namespace Game
             // TIMING_CHECK
             {
                 byte result = buff.ReadUInt8();
-                /// @todo test it.
+                // @todo test it.
                 if (result == 0x00)
                 {
                     Log.outWarn(LogFilter.Warden, "{0} failed timing check. Action: {1}", _session.GetPlayerInfo(), Penalty());
@@ -323,7 +323,7 @@ namespace Game
 
                 uint newClientTicks = buff.ReadUInt32();
 
-                uint ticksNow = Time.GetMSTime();
+                uint ticksNow = GameTime.GetGameTimeMS();
                 uint ourTicks = newClientTicks + (ticksNow - _serverTicks);
 
                 Log.outDebug(LogFilter.Warden, "ServerTicks {0}", ticksNow);         // Now

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.HeraldVolazj
 
         public override void DamageTaken(Unit pAttacker, ref uint damage)
         {
-            if (me.HasFlag(UnitFields.Flags, UnitFlags.NotSelectable))
+            if (me.HasUnitFlag(UnitFlags.NotSelectable))
                 damage = 0;
 
             if ((GetHealthPct(0) >= 66 && GetHealthPct(damage) < 66) ||
@@ -110,7 +110,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.HeraldVolazj
                     // Channel visual
                     DoCast(me, SpellIds.InsanityVisual, true);
                     // Unattackable
-                    me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                    me.AddUnitFlag(UnitFlags.NotSelectable);
                     me.SetControlled(true, UnitState.Stunned);
                 }
 
@@ -167,7 +167,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.HeraldVolazj
 
             // Cleanup
             Summons.DespawnAll();
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+            me.RemoveUnitFlag(UnitFlags.NotSelectable);
             me.SetControlled(false, UnitState.Stunned);
         }
 
@@ -200,7 +200,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.HeraldVolazj
                         return;
                     else
                     {
-                        nextPhase = visage.GetPhaseShift().GetPhases().First().Id;
+                        nextPhase = visage.GetPhaseShift().GetPhases().First().Key;
                         break;
                     }
                 }
@@ -231,7 +231,7 @@ namespace Scripts.Northrend.AzjolNerub.Ahnkahet.HeraldVolazj
                     return;
 
                 insanityHandled = 0;
-                me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable);
+                me.RemoveUnitFlag(UnitFlags.NotSelectable);
                 me.SetControlled(false, UnitState.Stunned);
                 me.RemoveAurasDueToSpell(SpellIds.InsanityVisual);
             }

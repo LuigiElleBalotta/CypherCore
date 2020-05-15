@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@ namespace Game.Entities
         ObjectGuid m_suppressedTarget; // Stores the creature's "real" target while casting
         float m_suppressedOrientation; // Stores the creature's "real" orientation while casting
 
+        long _lastDamagedTime; // Part of Evade mechanics
         MultiMap<byte, byte> m_textRepeat = new MultiMap<byte, byte>();
 
         public ulong m_PlayerDamageReq;
@@ -41,7 +42,7 @@ namespace Game.Entities
         public bool m_isTempWorldObject; //true when possessed
 
         ReactStates reactState;                           // for AI, not charmInfo
-        public MovementGeneratorType m_defaultMovementType { get; set; }
+        public MovementGeneratorType DefaultMovementType { get; set; }
         public ulong m_spawnId;
         byte m_equipmentId;
         sbyte m_originalEquipmentId; // can be -1
@@ -92,7 +93,6 @@ namespace Game.Entities
         public ObjectGuid lootingGroupLowGUID;                         // used to find group which is looting corpse
         ObjectGuid m_lootRecipient;
         ObjectGuid m_lootRecipientGroup;
-        ObjectGuid _skinner;
     }
 
     public enum ObjectCellMoveState

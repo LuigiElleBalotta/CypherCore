@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Delete orphaned guild rank entries before loading the valid ones
-                DB.Characters.Execute("DELETE gr FROM guild_rank gr LEFT JOIN guild g ON gr.guildId = g.guildId WHERE g.guildId IS NULL");
+                DB.Characters.DirectExecute("DELETE gr FROM guild_rank gr LEFT JOIN guild g ON gr.guildId = g.guildId WHERE g.guildId IS NULL");
 
                 //                                                   0    1      2       3                4
                 SQLResult result = DB.Characters.Query("SELECT guildid, rid, rname, rights, BankMoneyPerDay FROM guild_rank ORDER BY guildid ASC, rid ASC");
@@ -173,8 +173,8 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Delete orphaned guild member entries before loading the valid ones
-                DB.Characters.Execute("DELETE gm FROM guild_member gm LEFT JOIN guild g ON gm.guildId = g.guildId WHERE g.guildId IS NULL");
-                DB.Characters.Execute("DELETE gm FROM guild_member_withdraw gm LEFT JOIN guild_member g ON gm.guid = g.guid WHERE g.guid IS NULL");
+                DB.Characters.DirectExecute("DELETE gm FROM guild_member gm LEFT JOIN guild g ON gm.guildId = g.guildId WHERE g.guildId IS NULL");
+                DB.Characters.DirectExecute("DELETE gm FROM guild_member_withdraw gm LEFT JOIN guild_member g ON gm.guid = g.guid WHERE g.guid IS NULL");
 
                                                       //           0           1        2     3      4        5       6       7       8       9       10
                 SQLResult result = DB.Characters.Query("SELECT gm.guildid, gm.guid, rank, pnote, offnote, w.tab0, w.tab1, w.tab2, w.tab3, w.tab4, w.tab5, " +
@@ -210,7 +210,7 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Delete orphaned guild bank right entries before loading the valid ones
-                DB.Characters.Execute("DELETE gbr FROM guild_bank_right gbr LEFT JOIN guild g ON gbr.guildId = g.guildId WHERE g.guildId IS NULL");
+                DB.Characters.DirectExecute("DELETE gbr FROM guild_bank_right gbr LEFT JOIN guild g ON gbr.guildId = g.guildId WHERE g.guildId IS NULL");
 
                 //      0        1      2    3        4
                 SQLResult result = DB.Characters.Query("SELECT guildid, TabId, rid, gbright, SlotPerDay FROM guild_bank_right ORDER BY guildid ASC, TabId ASC");
@@ -242,7 +242,7 @@ namespace Game
             {
                 uint oldMSTime = Time.GetMSTime();
 
-                DB.Characters.Execute("DELETE FROM guild_eventlog WHERE LogGuid > {0}", GuildConst.EventLogMaxRecords);
+                DB.Characters.DirectExecute("DELETE FROM guild_eventlog WHERE LogGuid > {0}", GuildConst.EventLogMaxRecords);
 
                                                         //          0        1        2          3            4            5        6
                 SQLResult result = DB.Characters.Query("SELECT guildid, LogGuid, EventType, PlayerGuid1, PlayerGuid2, NewRank, TimeStamp FROM guild_eventlog ORDER BY TimeStamp DESC, LogGuid DESC");
@@ -275,7 +275,7 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Remove log entries that exceed the number of allowed entries per guild
-                DB.Characters.Execute("DELETE FROM guild_bank_eventlog WHERE LogGuid > {0}", GuildConst.BankLogMaxRecords);
+                DB.Characters.DirectExecute("DELETE FROM guild_bank_eventlog WHERE LogGuid > {0}", GuildConst.BankLogMaxRecords);
 
                                                         //          0        1      2        3          4           5            6               7          8
                 SQLResult result = DB.Characters.Query("SELECT guildid, TabId, LogGuid, EventType, PlayerGuid, ItemOrMoney, ItemStackCount, DestTabId, TimeStamp FROM guild_bank_eventlog ORDER BY TimeStamp DESC, LogGuid DESC");
@@ -307,7 +307,7 @@ namespace Game
             {
                 uint oldMSTime = Time.GetMSTime();
 
-                DB.Characters.Execute("DELETE FROM guild_newslog WHERE LogGuid > {0}", GuildConst.NewsLogMaxRecords);
+                DB.Characters.DirectExecute("DELETE FROM guild_newslog WHERE LogGuid > {0}", GuildConst.NewsLogMaxRecords);
 
                                                             //      0        1        2          3           4      5      6
                 SQLResult result = DB.Characters.Query("SELECT guildid, LogGuid, EventType, PlayerGuid, Flags, Value, Timestamp FROM guild_newslog ORDER BY TimeStamp DESC, LogGuid DESC");
@@ -338,11 +338,10 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Delete orphaned guild bank tab entries before loading the valid ones
-                DB.Characters.Execute("DELETE gbt FROM guild_bank_tab gbt LEFT JOIN guild g ON gbt.guildId = g.guildId WHERE g.guildId IS NULL");
-
-                                                        //         0        1      2        3        4
+                DB.Characters.DirectExecute("DELETE gbt FROM guild_bank_tab gbt LEFT JOIN guild g ON gbt.guildId = g.guildId WHERE g.guildId IS NULL");
+                
+                //                                              0        1      2        3        4
                 SQLResult result = DB.Characters.Query("SELECT guildid, TabId, TabName, TabIcon, TabText FROM guild_bank_tab ORDER BY guildid ASC, TabId ASC");
-
                 if (result.IsEmpty())
                 {
                     Log.outInfo(LogFilter.ServerLoading, "Loaded 0 guild bank tabs. DB table `guild_bank_tab` is empty.");
@@ -371,7 +370,7 @@ namespace Game
                 uint oldMSTime = Time.GetMSTime();
 
                 // Delete orphan guild bank items
-                DB.Characters.Execute("DELETE gbi FROM guild_bank_item gbi LEFT JOIN guild g ON gbi.guildId = g.guildId WHERE g.guildId IS NULL");
+                DB.Characters.DirectExecute("DELETE gbi FROM guild_bank_item gbi LEFT JOIN guild g ON gbi.guildId = g.guildId WHERE g.guildId IS NULL");
 
                 SQLResult result = DB.Characters.Query(DB.Characters.GetPreparedStatement(CharStatements.SEL_GUILD_BANK_ITEMS));
                 if (result.IsEmpty())
@@ -383,7 +382,7 @@ namespace Game
                     uint count = 0;
                     do
                     {
-                        ulong guildId = result.Read<ulong>(45);
+                        ulong guildId = result.Read<ulong>(43);
                         Guild guild = GetGuildById(guildId);
                         if (guild)
                             guild.LoadBankItemFromDB(result.GetFields());
@@ -401,30 +400,20 @@ namespace Game
             {
                 uint oldMSTime = Time.GetMSTime();
 
-                long achievementCount = 0;
-                long criteriaCount = 0;
-
-                SQLResult achievementResult;
-                SQLResult criteriaResult;
                 foreach (var pair in GuildStore)
                 {
                     PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_GUILD_ACHIEVEMENT);
                     stmt.AddValue(0, pair.Key);
-                    achievementResult = DB.Characters.Query(stmt);
+                    SQLResult achievementResult = DB.Characters.Query(stmt);
 
                     stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_GUILD_ACHIEVEMENT_CRITERIA);
                     stmt.AddValue(0, pair.Key);
-                    criteriaResult = DB.Characters.Query(stmt);
-
-                    if (!achievementResult.IsEmpty())
-                        achievementCount += achievementResult.GetRowCount();
-                    if (!criteriaResult.IsEmpty())
-                        criteriaCount += criteriaResult.GetRowCount();
+                    SQLResult criteriaResult = DB.Characters.Query(stmt);
 
                     pair.Value.GetAchievementMgr().LoadFromDB(achievementResult, criteriaResult);
                 }
 
-                Log.outInfo(LogFilter.ServerLoading, "Loaded {0} guild achievements and {1} criterias in {2} ms", achievementCount, criteriaCount, Time.GetMSTimeDiffToNow(oldMSTime));
+                Log.outInfo(LogFilter.ServerLoading, "Loaded guild achievements and criterias in {0} ms", Time.GetMSTimeDiffToNow(oldMSTime));
             }
 
             // 11. Validate loaded guild data

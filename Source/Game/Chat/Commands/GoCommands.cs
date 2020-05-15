@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ using Game.Maps;
 using Game.SupportSystem;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game.Chat.Commands
 {
@@ -40,7 +39,7 @@ namespace Game.Chat.Commands
             Player player = handler.GetSession().GetPlayer();
 
             // "id" or number or [name] Shift-click form |color|Hcreature_entry:creature_id|h[name]|h|r
-            string param1 = handler.extractKeyFromLink(args, "Hcreature", "Hcreature_entry");
+            string param1 = handler.ExtractKeyFromLink(args, "Hcreature", "Hcreature_entry");
             if (string.IsNullOrEmpty(param1))
                 return false;
 
@@ -71,14 +70,15 @@ namespace Game.Chat.Commands
                 handler.SendSysMessage(CypherStrings.CommandGocreatnotfound);
                 return false;
             }
-            if (result.GetRowCount() > 1)
-                handler.SendSysMessage(CypherStrings.CommandGocreatmultiple);
 
             float x = result.Read<float>(0);
             float y = result.Read<float>(1);
             float z = result.Read<float>(2);
             float o = result.Read<float>(3);
             uint mapId = result.Read<ushort>(4);
+
+            if (result.NextRow())
+                handler.SendSysMessage(CypherStrings.CommandGocreatmultiple);
 
             if (!GridDefines.IsValidMapCoord(mapId, x, y, z, o) || Global.ObjectMgr.IsTransportMap(mapId))
             {
@@ -113,16 +113,16 @@ namespace Game.Chat.Commands
             if (graveyardId == 0)
                 return false;
 
-            WorldSafeLocsRecord gy = CliDB.WorldSafeLocsStorage.LookupByKey(graveyardId);
+            WorldSafeLocsEntry gy = Global.ObjectMgr.GetWorldSafeLoc(graveyardId);
             if (gy == null)
             {
                 handler.SendSysMessage(CypherStrings.CommandGraveyardnoexist, graveyardId);
                 return false;
             }
 
-            if (!GridDefines.IsValidMapCoord(gy.MapID, gy.Loc.X, gy.Loc.Y, gy.Loc.Z))
+            if (!GridDefines.IsValidMapCoord(gy.Loc))
             {
-                handler.SendSysMessage(CypherStrings.InvalidTargetCoord, gy.Loc.X, gy.Loc.Y, gy.MapID);
+                handler.SendSysMessage(CypherStrings.InvalidTargetCoord, gy.Loc.GetPositionX(), gy.Loc.GetPositionY(), gy.Loc.GetMapId());
                 return false;
             }
 
@@ -136,7 +136,7 @@ namespace Game.Chat.Commands
             else
                 player.SaveRecallPosition();
 
-            player.TeleportTo(gy.MapID, gy.Loc.X, gy.Loc.Y, gy.Loc.Z, (gy.Facing * MathFunctions.PI) / 180); // Orientation is initially in degrees
+            player.TeleportTo(gy.Loc);
             return true;
         }
 
@@ -195,7 +195,7 @@ namespace Game.Chat.Commands
             Player player = handler.GetSession().GetPlayer();
 
             // number or [name] Shift-click form |color|Hgameobject:go_guid|h[name]|h|r
-            string id = handler.extractKeyFromLink(args, "Hgameobject");
+            string id = handler.ExtractKeyFromLink(args, "Hgameobject");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -249,7 +249,7 @@ namespace Game.Chat.Commands
 
             Player player = handler.GetSession().GetPlayer();
 
-            string id = handler.extractKeyFromLink(args, "Hquest");
+            string id = handler.ExtractKeyFromLink(args, "Hquest");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -262,18 +262,18 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            float x, y, z = 0;
-            uint mapId = 0;
+            float x, y, z;
+            uint mapId;
 
-            var poiData = Global.ObjectMgr.GetQuestPOIList(questID);
+            var poiData = Global.ObjectMgr.GetQuestPOIData(questID);
             if (poiData != null)
             {
-                var data = poiData[0];
+                var data = poiData.QuestPOIBlobDataStats[0];
 
                 mapId = (uint)data.MapID;
 
-                x = data.points[0].X;
-                y = data.points[0].Y;
+                x = data.QuestPOIBlobPointStats[0].X;
+                y = data.QuestPOIBlobPointStats[0].Y;
             }
             else
             {
@@ -312,7 +312,7 @@ namespace Game.Chat.Commands
             if (args.Empty())
                 return false;
 
-            string id = handler.extractKeyFromLink(args, "Htaxinode");
+            string id = handler.ExtractKeyFromLink(args, "Htaxinode");
             if (string.IsNullOrEmpty(id))
                 return false;
 
@@ -405,7 +405,7 @@ namespace Game.Chat.Commands
             if (x == 0.0f || y == 0.0f)
                 return false;
 
-            string idStr = handler.extractKeyFromLink(args, "Harea");       // string or [name] Shift-click form |color|Harea:area_id|h[name]|h|r
+            string idStr = handler.ExtractKeyFromLink(args, "Harea");       // string or [name] Shift-click form |color|Harea:area_id|h[name]|h|r
             if (!uint.TryParse(idStr, out uint areaId))
                 areaId = player.GetZoneId();
 
@@ -418,7 +418,7 @@ namespace Game.Chat.Commands
 
             // update to parent zone if exist (client map show only zones without parents)
             AreaTableRecord zoneEntry = areaEntry.ParentAreaID != 0 ? CliDB.AreaTableStorage.LookupByKey(areaEntry.ParentAreaID) : areaEntry;
-            Contract.Assert(zoneEntry != null);
+            Cypher.Assert(zoneEntry != null);
 
             Map map = Global.MapMgr.CreateBaseMap(zoneEntry.ContinentID);
 
@@ -570,7 +570,6 @@ namespace Game.Chat.Commands
             string goX = args.NextString();
             string goY = args.NextString();
             string goZ = args.NextString();
-            string id = args.NextString();
             string port = args.NextString();
 
             float x, y, z, o;

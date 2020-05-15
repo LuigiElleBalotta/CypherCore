@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Entities;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.AI
@@ -73,32 +72,23 @@ namespace Game.AI
             if (!me.IsWithinMeleeRange(victim))
                 return;
 
-            bool sparAttack = me.GetFactionTemplateEntry().ShouldSparAttack() && victim.GetFactionTemplateEntry().ShouldSparAttack();
             //Make sure our attack is ready and we aren't currently casting before checking distance
-            if (me.isAttackReady())
+            if (me.IsAttackReady())
             {
-                if (sparAttack)
-                    me.FakeAttackerStateUpdate(victim);
-                else
-                    me.AttackerStateUpdate(victim);
-
-                me.resetAttackTimer();
+                me.AttackerStateUpdate(victim);
+                me.ResetAttackTimer();
             }
 
-            if (me.haveOffhandWeapon() && me.isAttackReady(WeaponAttackType.OffAttack))
+            if (me.HaveOffhandWeapon() && me.IsAttackReady(WeaponAttackType.OffAttack))
             {
-                if (sparAttack)
-                    me.FakeAttackerStateUpdate(victim, WeaponAttackType.OffAttack);
-                else
-                    me.AttackerStateUpdate(victim, WeaponAttackType.OffAttack);
-
-                me.resetAttackTimer(WeaponAttackType.OffAttack);
+                me.AttackerStateUpdate(victim, WeaponAttackType.OffAttack);
+                me.ResetAttackTimer(WeaponAttackType.OffAttack);
             }
         }
 
         public bool DoSpellAttackIfReady(uint spell)
         {
-            if (me.HasUnitState(UnitState.Casting) || !me.isAttackReady())
+            if (me.HasUnitState(UnitState.Casting) || !me.IsAttackReady())
                 return true;
 
             var spellInfo = Global.SpellMgr.GetSpellInfo(spell);
@@ -107,7 +97,7 @@ namespace Game.AI
                 if (me.IsWithinCombatRange(me.GetVictim(), spellInfo.GetMaxRange(false)))
                 {
                     me.CastSpell(me.GetVictim(), spellInfo, TriggerCastFlags.None);
-                    me.resetAttackTimer();
+                    me.ResetAttackTimer();
                     return true;
                 }
             }
@@ -123,17 +113,17 @@ namespace Game.AI
         // Select the targets satifying the predicate.
         public Unit SelectTarget(SelectAggroTarget targetType, uint position, ISelector selector)
         {
-            var threatlist = GetThreatManager().getThreatList();
+            var threatlist = GetThreatManager().GetThreatList();
             if (position >= threatlist.Count)
                 return null;
 
             List<Unit> targetList = new List<Unit>();
             Unit currentVictim = null;
 
-            var currentVictimReference = GetThreatManager().getCurrentVictim();
+            var currentVictimReference = GetThreatManager().GetCurrentVictim();
             if (currentVictimReference != null)
             {
-                currentVictim = currentVictimReference.getTarget();
+                currentVictim = currentVictimReference.GetTarget();
 
                 // Current victim always goes first
                 if (currentVictim && selector.Check(currentVictim))
@@ -142,10 +132,10 @@ namespace Game.AI
 
             foreach (var hostileRef in threatlist)
             {
-                if (currentVictim != null && hostileRef.getTarget() != currentVictim && selector.Check(hostileRef.getTarget()))
-                    targetList.Add(hostileRef.getTarget());
-                else if (currentVictim == null && selector.Check(hostileRef.getTarget()))
-                    targetList.Add(hostileRef.getTarget());
+                if (currentVictim != null && hostileRef.GetTarget() != currentVictim && selector.Check(hostileRef.GetTarget()))
+                    targetList.Add(hostileRef.GetTarget());
+                else if (currentVictim == null && selector.Check(hostileRef.GetTarget()))
+                    targetList.Add(hostileRef.GetTarget());
             }
 
             if (position >= targetList.Count)
@@ -188,13 +178,13 @@ namespace Game.AI
         {
             var targetList = new List<Unit>();
 
-            var threatlist = GetThreatManager().getThreatList();
+            var threatlist = GetThreatManager().GetThreatList();
             if (threatlist.Empty())
                 return targetList;
 
             foreach (var hostileRef in threatlist)
-                if (selector.Check(hostileRef.getTarget()))
-                    targetList.Add(hostileRef.getTarget());
+                if (selector.Check(hostileRef.GetTarget()))
+                    targetList.Add(hostileRef.GetTarget());
 
             if (targetList.Count < maxTargets)
                 return targetList;
@@ -366,7 +356,7 @@ namespace Game.AI
 
         public virtual void OnCharmed(bool apply) { }
 
-        public virtual void DoAction(int param) { }
+        public virtual void DoAction(int action) { }
         public virtual uint GetData(uint id = 0) { return 0; }
         public virtual void SetData(uint id, uint value) { }
         public virtual void SetGUID(ObjectGuid guid, int id = 0) { }
@@ -378,15 +368,15 @@ namespace Game.AI
         public virtual void HealDone(Unit to, uint addhealth) { }
         public virtual void SpellInterrupted(uint spellId, uint unTimeMs) {}
 
-        public virtual void sGossipHello(Player player) { }
-        public virtual void sGossipSelect(Player player, uint menuId, uint gossipListId) { }
-        public virtual void sGossipSelectCode(Player player, uint menuId, uint gossipListId, string code) { }
-        public virtual void sQuestAccept(Player player, Quest quest) { }
-        public virtual void sQuestSelect(Player player, Quest quest) { }
-        public virtual void sQuestComplete(Player player, Quest quest) { }
-        public virtual void sQuestReward(Player player, Quest quest, uint opt) { }
-        public virtual bool sOnDummyEffect(Unit caster, uint spellId, int effIndex) { return false; }
-        public virtual void sOnGameEvent(bool start, ushort eventId) { }
+        public virtual void GossipHello(Player player) { }
+        public virtual void GossipSelect(Player player, uint menuId, uint gossipListId) { }
+        public virtual void GossipSelectCode(Player player, uint menuId, uint gossipListId, string code) { }
+        public virtual void QuestAccept(Player player, Quest quest) { }
+        public virtual void QuestSelect(Player player, Quest quest) { }
+        public virtual void QuestComplete(Player player, Quest quest) { }
+        public virtual void QuestReward(Player player, Quest quest, uint opt) { }
+        public virtual bool OnDummyEffect(Unit caster, uint spellId, int effIndex) { return false; }
+        public virtual void OnGameEvent(bool start, ushort eventId) { }
 
         public static AISpellInfoType[] AISpellInfo;
 
@@ -472,7 +462,7 @@ namespace Game.AI
             _caster = caster;
             _spellInfo = Global.SpellMgr.GetSpellInfo(spellId);
 
-            Contract.Assert(_spellInfo != null);
+            Cypher.Assert(_spellInfo != null);
         }
 
         public bool Check(Unit target)
@@ -517,7 +507,7 @@ namespace Game.AI
                         minRange += rangeMod;
                 }
 
-                if (_caster.isMoving() && target.isMoving() && !_caster.IsWalking() && !target.IsWalking() &&
+                if (_caster.IsMoving() && target.IsMoving() && !_caster.IsWalking() && !target.IsWalking() &&
                     (_spellInfo.RangeEntry.Flags.HasAnyFlag(SpellRangeFlag.Melee) || target.IsTypeId(TypeId.Player)))
                     rangeMod += 8.0f / 3.0f;
             }
@@ -562,14 +552,84 @@ namespace Game.AI
             if (_playerOnly && !target.IsTypeId(TypeId.Player))
                 return false;
 
-            HostileReference currentVictim = _source.GetThreatManager().getCurrentVictim();
+            HostileReference currentVictim = _source.GetThreatManager().GetCurrentVictim();
             if (currentVictim != null)
-                return target.GetGUID() != currentVictim.getUnitGuid();
+                return target.GetGUID() != currentVictim.GetUnitGuid();
 
             return target != _source.GetVictim();
         }
 
         Unit _source;
         bool _playerOnly;
+    }
+
+    // Simple selector for units using mana
+    class PowerUsersSelector : ISelector
+    {
+        public PowerUsersSelector(Unit unit, PowerType power, float dist, bool playerOnly)
+        {
+            _me = unit;
+            _power = power;
+            _dist = dist;
+            _playerOnly = playerOnly;
+        }
+
+        public bool Check(Unit target)
+        {
+            if (_me == null || target == null)
+                return false;
+
+            if (target.GetPowerType() != _power)
+                return false;
+
+            if (_playerOnly && target.GetTypeId() != TypeId.Player)
+                return false;
+
+            if (_dist > 0.0f && !_me.IsWithinCombatRange(target, _dist))
+                return false;
+
+            if (_dist < 0.0f && _me.IsWithinCombatRange(target, -_dist))
+                return false;
+
+            return true;
+        }
+
+        Unit _me;
+        PowerType _power;
+        float _dist;
+        bool _playerOnly;
+    }
+
+    class FarthestTargetSelector : ISelector
+    {
+        public FarthestTargetSelector(Unit unit, float dist, bool playerOnly, bool inLos)
+        {
+            _me = unit;
+            _dist = dist;
+            _playerOnly = playerOnly;
+            _inLos = inLos;
+        }
+
+        public bool Check(Unit target)
+        {
+            if (_me == null || target == null)
+                return false;
+
+            if (_playerOnly && target.GetTypeId() != TypeId.Player)
+                return false;
+
+            if (_dist > 0.0f && !_me.IsWithinCombatRange(target, _dist))
+                return false;
+
+            if (_inLos && !_me.IsWithinLOSInMap(target))
+                return false;
+
+            return true;
+        }
+
+        Unit _me;
+        float _dist;
+        bool _playerOnly;
+        bool _inLos;
     }
 }

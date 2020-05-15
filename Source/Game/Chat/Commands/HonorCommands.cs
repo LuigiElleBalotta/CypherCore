@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ namespace Game.Chat.Commands
         [Command("update", RBACPermissions.CommandHonorUpdate)]
         static bool HandleHonorUpdateCommand(StringArguments args, CommandHandler handler)
         {
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (!target)
             {
                 handler.SendSysMessage(CypherStrings.PlayerNotFound);
@@ -51,7 +51,7 @@ namespace Game.Chat.Commands
                 if (args.Empty())
                     return false;
 
-                Player target = handler.getSelectedPlayer();
+                Player target = handler.GetSelectedPlayer();
                 if (!target)
                 {
                     handler.SendSysMessage(CypherStrings.PlayerNotFound);
@@ -70,7 +70,7 @@ namespace Game.Chat.Commands
             [Command("kill", RBACPermissions.CommandHonorAddKill)]
             static bool HandleHonorAddKillCommand(StringArguments args, CommandHandler handler)
             {
-                Unit target = handler.getSelectedUnit();
+                Unit target = handler.GetSelectedUnit();
                 if (!target)
                 {
                     handler.SendSysMessage(CypherStrings.PlayerNotFound);

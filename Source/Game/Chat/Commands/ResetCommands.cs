@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ namespace Game.Chat
         {
             Player target;
             ObjectGuid targetGuid;
-            if (!handler.extractPlayerTarget(args, out target, out targetGuid))
+            if (!handler.ExtractPlayerTarget(args, out target, out targetGuid))
                 return false;
 
             if (target)
@@ -48,11 +48,10 @@ namespace Game.Chat
         static bool HandleResetHonorCommand(StringArguments args, CommandHandler handler)
         {
             Player target;
-            if (!handler.extractPlayerTarget(args, out target))
+            if (!handler.ExtractPlayerTarget(args, out target))
                 return false;
 
-            target.SetUInt32Value(PlayerFields.Kills, 0);
-            target.SetUInt32Value(PlayerFields.LifetimeHonorableKills, 0);
+            target.ResetHonorStats();
             target.UpdateCriteria(CriteriaTypes.EarnHonorableKill);
 
             return true;
@@ -73,19 +72,19 @@ namespace Game.Chat
             if (!player.HasAuraType(AuraType.ModShapeshift))
                 player.SetShapeshiftForm(ShapeShiftForm.None);
 
-            player.setFactionForRace(player.GetRace());
-            player.SetUInt32Value(UnitFields.DisplayPower, (uint)powerType);
+            player.SetFactionForRace(player.GetRace());
+            player.SetPowerType(powerType);
 
             // reset only if player not in some form;
             if (player.GetShapeshiftForm() == ShapeShiftForm.None)
                 player.InitDisplayIds();
 
-            player.SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, (byte)UnitBytes2Flags.PvP);
+            player.SetPvpFlags(UnitPVPStateFlags.PvP);
 
-            player.SetUInt32Value(UnitFields.Flags, (uint)UnitFlags.PvpAttackable);
+            player.SetUnitFlags(UnitFlags.PvpAttackable);
 
             //-1 is default value
-            player.SetUInt32Value(PlayerFields.WatchedFactionIndex, 0xFFFFFFFF);
+            player.SetWatchedFactionIndex(0xFFFFFFFF);
             return true;
         }
 
@@ -93,13 +92,13 @@ namespace Game.Chat
         static bool HandleResetLevelCommand(StringArguments args, CommandHandler handler)
         {
             Player target;
-            if (!handler.extractPlayerTarget(args, out target))
+            if (!handler.ExtractPlayerTarget(args, out target))
                 return false;
 
             if (!HandleResetStatsOrLevelHelper(target))
                 return false;
 
-            byte oldLevel = (byte)target.getLevel();
+            byte oldLevel = (byte)target.GetLevel();
 
             // set starting level
             uint startLevel = (uint)(target.GetClass() != Class.Deathknight ? WorldConfig.GetIntValue(WorldCfg.StartPlayerLevel) : WorldConfig.GetIntValue(WorldCfg.StartDeathKnightPlayerLevel));
@@ -110,7 +109,7 @@ namespace Game.Chat
             target.InitStatsForLevel(true);
             target.InitTaxiNodesForLevel();
             target.InitTalentForLevel();
-            target.SetUInt32Value(PlayerFields.Xp, 0);
+            target.SetXP(0);
 
             target._ApplyAllLevelScaleItemMods(true);
 
@@ -130,7 +129,7 @@ namespace Game.Chat
             Player target;
             ObjectGuid targetGuid;
             string targetName;
-            if (!handler.extractPlayerTarget(args, out target, out targetGuid, out targetName))
+            if (!handler.ExtractPlayerTarget(args, out target, out targetGuid, out targetName))
                 return false;
 
             if (target)
@@ -158,7 +157,7 @@ namespace Game.Chat
         static bool HandleResetStatsCommand(StringArguments args, CommandHandler handler)
         {
             Player target;
-            if (!handler.extractPlayerTarget(args, out target))
+            if (!handler.ExtractPlayerTarget(args, out target))
                 return false;
 
             if (!HandleResetStatsOrLevelHelper(target))
@@ -179,7 +178,7 @@ namespace Game.Chat
             ObjectGuid targetGuid;
             string targetName;
 
-            if (!handler.extractPlayerTarget(args, out target, out targetGuid, out targetName))
+            if (!handler.ExtractPlayerTarget(args, out target, out targetGuid, out targetName))
             {
                 /* TODO: 6.x remove/update pet talents
                 // Try reset talents as Hunter Pet
@@ -228,7 +227,7 @@ namespace Game.Chat
                 stmt.AddValue(1, targetGuid.GetCounter());
                 DB.Characters.Execute(stmt);
 
-                string nameLink = handler.playerLink(targetName);
+                string nameLink = handler.PlayerLink(targetName);
                 handler.SendSysMessage(CypherStrings.ResetTalentsOffline, nameLink);
                 return true;
             }

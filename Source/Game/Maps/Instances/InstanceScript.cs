@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,21 +23,20 @@ using Game.Groups;
 using Game.Network.Packets;
 using Game.Scenarios;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Text;
 
 namespace Game.Maps
 {
     public class InstanceScript : ZoneScript
     {
-        public InstanceScript(Map map)
+        public InstanceScript(InstanceMap map)
         {
             instance = map;
         }
 
         public void SaveToDB()
         {
-            InstanceScenario scenario = instance.ToInstanceMap().GetInstanceScenario();
+            InstanceScenario scenario = instance.GetInstanceScenario();
             if (scenario != null)
                 scenario.SaveToDB();
 
@@ -157,7 +156,7 @@ namespace Game.Maps
         {
             foreach (var data in objectData)
             {
-                Contract.Assert(!objectInfo.ContainsKey(data.entry));
+                Cypher.Assert(!objectInfo.ContainsKey(data.entry));
                 objectInfo[data.entry] = data.type;
             }
         }
@@ -216,7 +215,7 @@ namespace Game.Maps
 
         public BossInfo GetBossInfo(uint id)
         {
-            Contract.Assert(id < bosses.Count);
+            Cypher.Assert(id < bosses.Count);
             return bosses[id];
         }
 
@@ -306,7 +305,7 @@ namespace Game.Maps
                         {
                             Creature minion = instance.GetCreature(guid);
                             if (minion)
-                                if (minion.isWorldBoss() && minion.IsAlive())
+                                if (minion.IsWorldBoss() && minion.IsAlive())
                                     return false;
                         }
                     }
@@ -318,6 +317,11 @@ namespace Game.Maps
                                 uint resInterval = GetCombatResurrectionChargeInterval();
                                 InitializeCombatResurrections(1, resInterval);
                                 SendEncounterStart(1, 9, resInterval, resInterval);
+
+                                var playerList = instance.GetPlayers();
+                                foreach (var player in playerList)
+                                        if (player.IsAlive())
+                                            player.ProcSkillsAndAuras(null, ProcFlags.EncounterStart, ProcFlags.None, ProcFlagsSpellType.MaskAll, ProcFlagsSpellPhase.None, ProcFlagsHit.None, null, null, null);
                                 break;
                             }
                         case EncounterState.Fail:
@@ -398,15 +402,14 @@ namespace Game.Maps
 
         void ReadSaveDataBossStates(StringArguments data)
         {
-            uint bossId = 0;
-            foreach (var i in bosses)
+            foreach (var pair in bosses)
             {
                 EncounterState buff = (EncounterState)data.NextUInt32();
                 if (buff == EncounterState.InProgress || buff == EncounterState.Fail || buff == EncounterState.Special)
                     buff = EncounterState.NotStarted;
 
                 if (buff < EncounterState.ToBeDecided)
-                    SetBossState(bossId++, buff);
+                    SetBossState(pair.Key, buff);
             }
         }
 
@@ -457,9 +460,9 @@ namespace Game.Maps
             {
                 if (go.GetGoType() == GameObjectTypes.Door || go.GetGoType() == GameObjectTypes.Button)
                 {
-                    if (go.getLootState() == LootState.Ready)
+                    if (go.GetLootState() == LootState.Ready)
                         go.UseDoorOrButton(withRestoreTime, useAlternativeState);
-                    else if (go.getLootState() == LootState.Activated)
+                    else if (go.GetLootState() == LootState.Activated)
                         go.ResetDoorOrButton();
                 }
                 else
@@ -479,7 +482,7 @@ namespace Game.Maps
             {
                 if (go.GetGoType() == GameObjectTypes.Door || go.GetGoType() == GameObjectTypes.Button)
                 {
-                    if (go.getLootState() == LootState.Activated)
+                    if (go.GetLootState() == LootState.Activated)
                         go.ResetDoorOrButton();
                 }
                 else
@@ -507,7 +510,7 @@ namespace Game.Maps
                         break;
                 }
 
-                if (go.isSpawned())
+                if (go.IsSpawned())
                     return;
 
                 go.SetRespawnTime((int)timeToDespawn);
@@ -714,9 +717,9 @@ namespace Game.Maps
                 {
                     Group grp = player.GetGroup();
                     if (grp != null)
-                        if (grp.isLFGGroup())
+                        if (grp.IsLFGGroup())
                         {
-                            Global.LFGMgr.FinishDungeon(grp.GetGUID(), dungeonId);
+                            Global.LFGMgr.FinishDungeon(grp.GetGUID(), dungeonId, instance);
                             return;
                         }
                 }
@@ -840,7 +843,7 @@ namespace Game.Maps
 
         public virtual void WriteSaveDataMore(StringBuilder data) { }
 
-        public Map instance;
+        public InstanceMap instance;
         List<char> headers = new List<char>();
         Dictionary<uint, BossInfo> bosses = new Dictionary<uint, BossInfo>();
         MultiMap<uint, DoorInfo> doors = new MultiMap<uint, DoorInfo>();

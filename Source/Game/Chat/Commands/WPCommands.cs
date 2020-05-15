@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ using Framework.IO;
 using Game.Entities;
 using Game.Maps;
 using System;
+using System.Collections.Generic;
 
 namespace Game.Chat.Commands
 {
@@ -32,13 +33,13 @@ namespace Game.Chat.Commands
         {
             // optional
             string path_number = null;
-            uint pathid = 0;
+            uint pathid;
 
             if (!args.Empty())
                 path_number = args.NextString();
 
             uint point = 0;
-            Creature target = handler.getSelectedCreature();
+            Creature target = handler.GetSelectedCreature();
 
             PreparedStatement stmt;
 
@@ -107,7 +108,7 @@ namespace Game.Chat.Commands
                 return false;
 
             string arg_id = args.NextString();
-            uint id = 0;
+            uint id;
             if (show == "add")
             {
                 if (!uint.TryParse(arg_id, out id))
@@ -314,7 +315,7 @@ namespace Game.Chat.Commands
                             return false;
 
                         stmt = DB.World.GetPreparedStatement(WorldStatements.UPD_WAYPOINT_SCRIPT_Z);
-                        stmt.AddValue(0, args);
+                        stmt.AddValue(0, arg3);
                         stmt.AddValue(1, id);
                         DB.World.Execute(stmt);
 
@@ -364,8 +365,7 @@ namespace Game.Chat.Commands
             string path_number = args.NextString();
 
             uint pathid;
-            ulong guidLow;
-            Creature target = handler.getSelectedCreature();
+            Creature target = handler.GetSelectedCreature();
 
             // Did player provide a path_id?
             if (string.IsNullOrEmpty(path_number))
@@ -389,7 +389,7 @@ namespace Game.Chat.Commands
                 return true;
             }
 
-            guidLow = target.GetSpawnId();
+            ulong guidLow = target.GetSpawnId();
 
             PreparedStatement stmt = DB.World.GetPreparedStatement(WorldStatements.SEL_CREATURE_ADDON_BY_GUID);
             stmt.AddValue(0, guidLow);
@@ -445,15 +445,12 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            // Next arg is: <PATHID> <WPNUM> <ARGUMENT>
-            string arg_str;
-
             // Did user provide a GUID
             // or did the user select a creature?
             // . variable lowguid is filled with the GUID of the NPC
             uint pathid;
             uint point;
-            Creature target = handler.getSelectedCreature();
+            Creature target = handler.GetSelectedCreature();
 
             // User did select a visual waypoint?
             if (!target || target.GetEntry() != 1)
@@ -502,7 +499,7 @@ namespace Game.Chat.Commands
 
             // We have the waypoint number and the GUID of the "master npc"
             // Text is enclosed in "<>", all other arguments not
-            arg_str = args.NextString();
+            string arg_str = args.NextString();
 
             // Check for argument
             if (show != "del" && show != "move" && arg_str == null)
@@ -553,7 +550,7 @@ namespace Game.Chat.Commands
                 }
 
                 PhasingHandler.InheritPhaseShift(creature, chr);
-                creature.SaveToDB(map.GetId(), 1ul << (int)map.GetSpawnMode());
+                creature.SaveToDB(map.GetId(), new List<Difficulty>() { map.GetDifficultyID() });
 
                 ulong dbGuid = creature.GetSpawnId();
 
@@ -627,8 +624,8 @@ namespace Game.Chat.Commands
             // second arg: GUID (optional, if a creature is selected)
             string guid_str = args.NextString();
 
-            uint pathid = 0;
-            Creature target = handler.getSelectedCreature();
+            uint pathid;
+            Creature target = handler.GetSelectedCreature();
 
             // Did player provide a PathID?
 
@@ -773,7 +770,7 @@ namespace Game.Chat.Commands
                     }
 
                     PhasingHandler.InheritPhaseShift(creature, chr);
-                    creature.SaveToDB(map.GetId(), 1ul << (int)map.GetSpawnMode());
+                    creature.SaveToDB(map.GetId(), new List<Difficulty>() { map.GetDifficultyID() });
 
                     ulong dbGuid = creature.GetSpawnId();
 
@@ -839,7 +836,7 @@ namespace Game.Chat.Commands
                 }
 
                 PhasingHandler.InheritPhaseShift(creature, chr);
-                creature.SaveToDB(map.GetId(), 1ul << (int)map.GetSpawnMode());
+                creature.SaveToDB(map.GetId(), new List<Difficulty>() { map.GetDifficultyID() });
 
                 ulong dbGuid = creature.GetSpawnId();
 
@@ -894,7 +891,7 @@ namespace Game.Chat.Commands
                 }
 
                 PhasingHandler.InheritPhaseShift(creature, chr);
-                creature.SaveToDB(map.GetId(), 1ul << (int)map.GetSpawnMode());
+                creature.SaveToDB(map.GetId(), new List<Difficulty>() { map.GetDifficultyID() });
 
                 ulong dbGuid = creature.GetSpawnId();
 
@@ -976,7 +973,7 @@ namespace Game.Chat.Commands
         [Command("unload", RBACPermissions.CommandWpUnload)]
         static bool HandleWpUnLoadCommand(StringArguments args, CommandHandler handler)
         {
-            Creature target = handler.getSelectedCreature();
+            Creature target = handler.GetSelectedCreature();
             if (!target)
             {
                 handler.SendSysMessage("|cff33ffffYou must select a target.|r");

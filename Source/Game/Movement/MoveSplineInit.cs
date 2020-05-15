@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,30 +37,30 @@ namespace Game.Movement
             args.walk = unit.HasUnitMovementFlag(MovementFlag.Walking);
             args.flags.SetUnsetFlag(SplineFlag.Flying, unit.HasUnitMovementFlag(MovementFlag.CanFly | MovementFlag.DisableGravity));
             args.flags.SetUnsetFlag(SplineFlag.SmoothGroundPath, true); // enabled by default, CatmullRom mode or client config "pathSmoothing" will disable this
-            args.flags.SetUnsetFlag(SplineFlag.Steering, unit.HasFlag64(UnitFields.NpcFlags, NPCFlags.Steering));
+            args.flags.SetUnsetFlag(SplineFlag.Steering, unit.HasNpcFlag2(NPCFlags2.Steering));
         }
 
         UnitMoveType SelectSpeedType(MovementFlag moveFlags)
         {
-            if (Convert.ToBoolean(moveFlags & (MovementFlag.Flying | MovementFlag.CanFly | MovementFlag.DisableGravity)))
+            if (moveFlags.HasAnyFlag(MovementFlag.Flying))
             {
-                if (Convert.ToBoolean(moveFlags & MovementFlag.Backward))
+                if (moveFlags.HasAnyFlag(MovementFlag.Backward))
                     return UnitMoveType.FlightBack;
                 else
                     return UnitMoveType.Flight;
             }
-            else if (Convert.ToBoolean(moveFlags & MovementFlag.Swimming))
+            else if (moveFlags.HasAnyFlag(MovementFlag.Swimming))
             {
-                if (Convert.ToBoolean(moveFlags & MovementFlag.Backward))
+                if (moveFlags.HasAnyFlag(MovementFlag.Backward))
                     return UnitMoveType.SwimBack;
                 else
                     return UnitMoveType.Swim;
             }
-            else if (Convert.ToBoolean(moveFlags & MovementFlag.Walking))
+            else if (moveFlags.HasAnyFlag(MovementFlag.Walking))
             {
                 return UnitMoveType.Walk;
             }
-            else if (Convert.ToBoolean(moveFlags & MovementFlag.Backward))
+            else if (moveFlags.HasAnyFlag(MovementFlag.Backward))
                 return UnitMoveType.RunBack;
 
             // Flying creatures use MOVEMENTFLAG_CAN_FLY or MOVEMENTFLAG_DISABLE_GRAVITY
@@ -70,7 +70,7 @@ namespace Game.Movement
 
         public int Launch()
         {
-            MoveSpline move_spline = unit.moveSpline;
+            MoveSpline move_spline = unit.MoveSpline;
 
             bool transport = !unit.GetTransGUID().IsEmpty();
             Vector4 real_position = new Vector4();            
@@ -103,7 +103,7 @@ namespace Game.Movement
             move_spline.onTransport = !unit.GetTransGUID().IsEmpty();
 
             MovementFlag moveFlags = unit.m_movementInfo.GetMovementFlags();
-            if (!args.flags.hasFlag(SplineFlag.Backward))
+            if (!args.flags.HasFlag(SplineFlag.Backward))
                 moveFlags = (moveFlags & ~MovementFlag.Backward) | MovementFlag.Forward;
             else
                 moveFlags = (moveFlags & ~MovementFlag.Forward) | MovementFlag.Backward;
@@ -146,7 +146,7 @@ namespace Game.Movement
 
         public void Stop()
         {
-            MoveSpline move_spline = unit.moveSpline;
+            MoveSpline move_spline = unit.MoveSpline;
 
             // No need to stop if we are not moving
             if (move_spline.Finalized())
@@ -179,7 +179,7 @@ namespace Game.Movement
             packet.MoverGUID = unit.GetGUID();
             packet.Pos = new Vector3(loc.X, loc.Y, loc.Z);
             packet.SplineData.StopDistanceTolerance = 2;
-            packet.SplineData.ID = move_spline.GetId();
+            packet.SplineData.Id = move_spline.GetId();
 
             if (transport)
             {

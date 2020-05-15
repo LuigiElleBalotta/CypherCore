@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.DataStorage;
 using Game.Entities;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Garrisons
@@ -173,7 +172,7 @@ namespace Game.Garrisons
         //todo check this method, might be slow.....
         public List<GarrAbilityRecord> RollFollowerAbilities(uint garrFollowerId, GarrFollowerRecord follower, uint quality, uint faction, bool initial)
         {
-            Contract.Assert(faction< 2);
+            Cypher.Assert(faction< 2);
 
             bool hasForcedExclusiveTrait = false;
             List<GarrAbilityRecord> result = new List<GarrAbilityRecord>();
@@ -245,7 +244,7 @@ namespace Game.Garrisons
             if (slots[0] > forcedAbilities.Count + abilityList.Count)
             {
                 List<GarrAbilityRecord> classSpecAbilities = GetClassSpecAbilities(follower, faction);
-                List<GarrAbilityRecord> classSpecAbilitiesTemp = classSpecAbilities.Except(forcedAbilities).ToList();
+                IEnumerable<GarrAbilityRecord> classSpecAbilitiesTemp = classSpecAbilities.Except(forcedAbilities);
 
                 abilityList = classSpecAbilitiesTemp.Union(abilityList).ToList();
                 abilityList.RandomResize((uint)Math.Max(0, slots[0] - forcedAbilities.Count));

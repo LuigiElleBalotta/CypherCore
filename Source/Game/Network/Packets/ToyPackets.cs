@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 using Framework.Constants;
 using Game.Entities;
 using System.Collections.Generic;
+using System;
 
 namespace Game.Network.Packets
 {
@@ -54,20 +55,36 @@ namespace Game.Network.Packets
             _worldPacket.WriteBit(IsFullUpdate);
             _worldPacket.FlushBits();
 
-            // both lists have to have the same size
-            _worldPacket.WriteUInt32(Toys.Count);
-            _worldPacket.WriteUInt32(Toys.Count);
+            // all lists have to have the same size
+            _worldPacket.WriteInt32(Toys.Count);
+            _worldPacket.WriteInt32(Toys.Count);
+            _worldPacket.WriteInt32(Toys.Count);
 
-            foreach (var item in Toys)
-                _worldPacket.WriteUInt32(item.Key);
+            foreach (var pair in Toys)
+                _worldPacket.WriteUInt32(pair.Key);
 
-            foreach (var favourite in Toys)
-                _worldPacket.WriteBit(favourite.Value);
+            foreach (var pair in Toys)
+                _worldPacket.WriteBit(pair.Value.HasAnyFlag(ToyFlags.Favorite));
+
+            foreach (var pair in Toys)
+                _worldPacket.WriteBit(pair.Value.HasAnyFlag(ToyFlags.HasFanfare));
 
             _worldPacket.FlushBits();
         }
 
         public bool IsFullUpdate = false;
-        public Dictionary<uint, bool> Toys = new Dictionary<uint, bool>();
+        public Dictionary<uint, ToyFlags> Toys = new Dictionary<uint, ToyFlags>();
+    }
+
+    class ToyClearFanfare : ClientPacket
+    {
+        public ToyClearFanfare(WorldPacket packet) : base(packet) { }
+
+        public override void Read()
+        {
+            ItemID = _worldPacket.ReadUInt32();
+        }
+
+        public uint ItemID;
     }
 }

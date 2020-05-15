@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ using Game.AI;
 using Game.Network.Packets;
 using Game.Spells;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Entities
@@ -89,7 +88,7 @@ namespace Game.Entities
                         if (IsCharmed())
                         {
                             i_disabledAI = i_AI;
-                            if (isPossessed() || IsVehicle())
+                            if (IsPossessed() || IsVehicle())
                                 i_AI = new PossessedAI(ToCreature());
                             else
                                 i_AI = new PetAI(ToCreature());
@@ -163,12 +162,13 @@ namespace Game.Entities
 
                 minion.SetOwnerGUID(GetGUID());
 
-                m_Controlled.Add(minion);
+                if (!m_Controlled.Contains(minion))
+                    m_Controlled.Add(minion);
 
                 if (IsTypeId(TypeId.Player))
                 {
                     minion.m_ControlledByPlayer = true;
-                    minion.SetFlag(UnitFields.Flags, UnitFlags.PvpAttackable);
+                    minion.AddUnitFlag(UnitFlags.PvpAttackable);
                 }
 
                 // Can only have one pet. If a new one is summoned, dismiss the old one.
@@ -196,17 +196,19 @@ namespace Game.Entities
                 }
 
                 if (minion.HasUnitTypeMask(UnitTypeMask.Guardian))
-                    AddGuidValue(UnitFields.Summon, minion.GetGUID());
+                    if (GetMinionGUID().IsEmpty())
+                        SetMinionGUID(minion.GetGUID());
 
                 if (minion.m_Properties != null && minion.m_Properties.Title == SummonType.Minipet)
                 {
                     SetCritterGUID(minion.GetGUID());
-                    if (GetTypeId() == TypeId.Player)
-                        minion.SetGuidValue(UnitFields.BattlePetCompanionGuid, GetGuidValue(PlayerFields.SummonedBattlePetId));
+                    Player thisPlayer = ToPlayer();
+                    if (thisPlayer != null)
+                        minion.SetBattlePetCompanionGUID(thisPlayer.m_activePlayerData.SummonedBattlePetGUID);
                 }
 
                 // PvP, FFAPvP
-                minion.SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, GetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag));
+                minion.SetPvpFlags(GetPvpFlags());
 
                 // FIXME: hack, speed must be set only at follow
                 if (IsTypeId(TypeId.Player) && minion.IsPet())
@@ -214,7 +216,7 @@ namespace Game.Entities
                         minion.SetSpeedRate(i, m_speed_rate[(int)i]);
 
                 // Send infinity cooldown - client does that automatically but after relog cooldown needs to be set again
-                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(minion.GetUInt32Value(UnitFields.CreatedBySpell));
+                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(minion.m_unitData.CreatedBySpell);
                 if (spellInfo != null && spellInfo.IsCooldownStartedOnEvent())
                     GetSpellHistory().StartCooldown(spellInfo, 0, null, true);
             }
@@ -255,13 +257,14 @@ namespace Game.Entities
                     }
                 }
 
-                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(minion.GetUInt32Value(UnitFields.CreatedBySpell));
+                SpellInfo spellInfo = Global.SpellMgr.GetSpellInfo(minion.m_unitData.CreatedBySpell);
                 // Remove infinity cooldown
                 if (spellInfo != null && spellInfo.IsCooldownStartedOnEvent())
                     GetSpellHistory().SendCooldownEvent(spellInfo);
 
-                if (RemoveGuidValue(UnitFields.Summon, minion.GetGUID()))
+                if (GetMinionGUID() == minion.GetGUID())
                 {
+                    SetMinionGUID(ObjectGuid.Empty);
                     // Check if there is another minion
                     foreach (var unit in m_Controlled)
                     {
@@ -269,26 +272,24 @@ namespace Game.Entities
                         if (GetGUID() == unit.GetCharmerGUID())
                             continue;
 
-                        Contract.Assert(unit.GetOwnerGUID() == GetGUID());
+                        Cypher.Assert(unit.GetOwnerGUID() == GetGUID());
                         if (unit.GetOwnerGUID() != GetGUID())
                         {
-                            Contract.Assert(false);
+                            Cypher.Assert(false);
                         }
-                        Contract.Assert(unit.IsTypeId(TypeId.Unit));
+                        Cypher.Assert(unit.IsTypeId(TypeId.Unit));
 
                         if (!unit.HasUnitTypeMask(UnitTypeMask.Guardian))
                             continue;
 
-                        if (AddGuidValue(UnitFields.Summon, unit.GetGUID()))
+                        SetMinionGUID(unit.GetGUID());
+                        // show another pet bar if there is no charm bar
+                        if (GetTypeId() == TypeId.Player && GetCharmGUID().IsEmpty())
                         {
-                            // show another pet bar if there is no charm bar
-                            if (IsTypeId(TypeId.Player) && GetCharmGUID().IsEmpty())
-                            {
-                                if (unit.IsPet())
-                                    ToPlayer().PetSpellInitialize();
-                                else
-                                    ToPlayer().CharmSpellInitialize();
-                            }
+                            if (unit.IsPet())
+                                ToPlayer().PetSpellInitialize();
+                            else
+                                ToPlayer().CharmSpellInitialize();
                         }
                         break;
                     }
@@ -308,8 +309,8 @@ namespace Game.Entities
             if (charmer.IsTypeId(TypeId.Player))
                 charmer.RemoveAurasByType(AuraType.Mounted);
 
-            Contract.Assert(type != CharmType.Possess || charmer.IsTypeId(TypeId.Player));
-            Contract.Assert((type == CharmType.Vehicle) == IsVehicle());
+            Cypher.Assert(type != CharmType.Possess || charmer.IsTypeId(TypeId.Player));
+            Cypher.Assert((type == CharmType.Vehicle) == IsVehicle());
 
             Log.outDebug(LogFilter.Unit, "SetCharmedBy: charmer {0} (GUID {1}), charmed {2} (GUID {3}), type {4}.", charmer.GetEntry(), charmer.GetGUID().ToString(), GetEntry(), GetGUID().ToString(), type);
 
@@ -364,36 +365,38 @@ namespace Game.Entities
             if (aurApp != null && aurApp.GetRemoveMode() != 0)
                 return false;
 
-            _oldFactionId = getFaction();
-            SetFaction(charmer.getFaction());
+            _oldFactionId = GetFaction();
+            SetFaction(charmer.GetFaction());
 
             // Set charmed
             charmer.SetCharm(this, true);
 
-            Player player;
             if (IsTypeId(TypeId.Unit))
             {
                 ToCreature().GetAI().OnCharmed(true);
                 GetMotionMaster().MoveIdle();
             }
-            else if (player = ToPlayer())
+            else
             {
-                if (player.isAFK())
-                    player.ToggleAFK();
-
-                Creature creatureCharmer = charmer.ToCreature();
-                if (charmer.IsTypeId(TypeId.Unit)) // we are charmed by a creature
+                Player player = ToPlayer();
+                if (player)
                 {
-                    // change AI to charmed AI on next Update tick
-                    NeedChangeAI = true;
-                    if (IsAIEnabled)
-                    {
-                        IsAIEnabled = false;
-                        player.GetAI().OnCharmed(true);
-                    }
-                }
+                    if (player.IsAFK())
+                        player.ToggleAFK();
 
-                player.SetClientControl(this, false);
+                    if (charmer.IsTypeId(TypeId.Unit)) // we are charmed by a creature
+                    {
+                        // change AI to charmed AI on next Update tick
+                        NeedChangeAI = true;
+                        if (IsAIEnabled)
+                        {
+                            IsAIEnabled = false;
+                            player.GetAI().OnCharmed(true);
+                        }
+                    }
+
+                    player.SetClientControl(this, false);
+                }
             }
 
             // charm is set by aura, and aura effect remove handler was called during apply handler execution
@@ -416,14 +419,14 @@ namespace Game.Entities
                 switch (type)
                 {
                     case CharmType.Vehicle:
-                        SetFlag(UnitFields.Flags, UnitFlags.PlayerControlled);
+                        AddUnitFlag(UnitFlags.PlayerControlled);
                         playerCharmer.SetClientControl(this, true);
                         playerCharmer.VehicleSpellInitialize();
                         break;
                     case CharmType.Possess:
                         AddUnitState(UnitState.Possessed);
-                        SetFlag(UnitFields.Flags, UnitFlags.PlayerControlled);
-                        charmer.SetFlag(UnitFields.Flags, UnitFlags.RemoveClientControl);
+                        AddUnitFlag(UnitFlags.PlayerControlled);
+                        charmer.AddUnitFlag(UnitFlags.RemoveClientControl);
                         playerCharmer.SetClientControl(this, true);
                         playerCharmer.PossessSpellInitialize();
                         break;
@@ -434,14 +437,14 @@ namespace Game.Entities
                             if (cinfo != null && cinfo.CreatureType == CreatureType.Demon)
                             {
                                 // to prevent client crash
-                                SetByteValue(UnitFields.Bytes0, 1, (byte)Class.Mage);
+                                SetClass(Class.Mage);
 
                                 // just to enable stat window
                                 if (GetCharmInfo() != null)
                                     GetCharmInfo().SetPetNumber(Global.ObjectMgr.GeneratePetNumber(), true);
 
                                 // if charmed two demons the same session, the 2nd gets the 1st one's name
-                                SetUInt32Value(UnitFields.PetNameTimestamp, (uint)Time.UnixTime); // cast can't be helped
+                                SetPetNameTimestamp((uint)Time.UnixTime); // cast can't be helped
                             }
                         }
                         playerCharmer.CharmSpellInitialize();
@@ -474,7 +477,7 @@ namespace Game.Entities
 
             CastStop();
             CombatStop(); // @todo CombatStop(true) may cause crash (interrupt spells)
-            getHostileRefManager().deleteReferences();
+            GetHostileRefManager().DeleteReferences();
             DeleteThreatList();
 
             if (_oldFactionId != 0)
@@ -503,8 +506,8 @@ namespace Game.Entities
             if (!charmer)
                 return;
 
-            Contract.Assert(type != CharmType.Possess || charmer.IsTypeId(TypeId.Player));
-            Contract.Assert(type != CharmType.Vehicle || (IsTypeId(TypeId.Unit) && IsVehicle()));
+            Cypher.Assert(type != CharmType.Possess || charmer.IsTypeId(TypeId.Player));
+            Cypher.Assert(type != CharmType.Vehicle || (IsTypeId(TypeId.Unit) && IsVehicle()));
 
             charmer.SetCharm(this, false);
 
@@ -516,13 +519,13 @@ namespace Game.Entities
                     case CharmType.Vehicle:
                         playerCharmer.SetClientControl(this, false);
                         playerCharmer.SetClientControl(charmer, true);
-                        RemoveFlag(UnitFields.Flags, UnitFlags.PlayerControlled);
+                        RemoveUnitFlag(UnitFlags.PlayerControlled);
                         break;
                     case CharmType.Possess:
                         playerCharmer.SetClientControl(this, false);
                         playerCharmer.SetClientControl(charmer, true);
-                        charmer.RemoveFlag(UnitFields.Flags, UnitFlags.RemoveClientControl);
-                        RemoveFlag(UnitFields.Flags, UnitFlags.PlayerControlled);
+                        charmer.RemoveUnitFlag(UnitFlags.RemoveClientControl);
+                        RemoveUnitFlag(UnitFlags.PlayerControlled);
                         ClearUnitState(UnitState.Possessed);
                         break;
                     case CharmType.Charm:
@@ -531,7 +534,7 @@ namespace Game.Entities
                             CreatureTemplate cinfo = ToCreature().GetCreatureTemplate();
                             if (cinfo != null && cinfo.CreatureType == CreatureType.Demon)
                             {
-                                SetByteValue(UnitFields.Bytes0, 1, (byte)cinfo.UnitClass);
+                                SetClass((Class)cinfo.UnitClass);
                                 if (GetCharmInfo() != null)
                                     GetCharmInfo().SetPetNumber(0, true);
                                 else
@@ -564,17 +567,19 @@ namespace Game.Entities
 
         public void GetAllMinionsByEntry(List<TempSummon> Minions, uint entry)
         {
-            foreach (var unit in m_Controlled)
+            for (var i = 0; i < m_Controlled.Count; ++i)
             {
+                Unit unit = m_Controlled[i];
                 if (unit.GetEntry() == entry && unit.IsSummon()) // minion, actually
                     Minions.Add(unit.ToTempSummon());
             }
         }
 
-        void RemoveAllMinionsByEntry(uint entry)
+        public void RemoveAllMinionsByEntry(uint entry)
         {
-            foreach (var unit in m_Controlled.ToList())
+            for (var i = 0; i < m_Controlled.Count; ++i)
             {
+                Unit unit = m_Controlled[i];
                 if (unit.GetEntry() == entry && unit.IsTypeId(TypeId.Unit)
                     && unit.ToCreature().IsSummon()) // minion, actually
                     unit.ToTempSummon().UnSummon();
@@ -588,56 +593,66 @@ namespace Game.Entities
             {
                 if (IsTypeId(TypeId.Player))
                 {
-                    if (!AddGuidValue(UnitFields.Charm, charm.GetGUID()))
+                    if (GetCharmGUID().IsEmpty())
+                        SetCharmGUID(charm.GetGUID());
+                    else
                         Log.outFatal(LogFilter.Unit, "Player {0} is trying to charm unit {1}, but it already has a charmed unit {2}", GetName(), charm.GetEntry(), GetCharmGUID());
 
                     charm.m_ControlledByPlayer = true;
                     // @todo maybe we can use this flag to check if controlled by player
-                    charm.SetFlag(UnitFields.Flags, UnitFlags.PvpAttackable);
+                    charm.AddUnitFlag(UnitFlags.PvpAttackable);
                 }
                 else
                     charm.m_ControlledByPlayer = false;
 
                 // PvP, FFAPvP
-                charm.SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, GetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag));
+                charm.SetPvpFlags(GetPvpFlags());
 
-                if (!charm.AddGuidValue(UnitFields.CharmedBy, GetGUID()))
+                if (charm.GetCharmGUID().IsEmpty())
+                    charm.SetCharmerGUID(GetGUID());
+                else
                     Log.outFatal(LogFilter.Unit, "Unit {0} is being charmed, but it already has a charmer {1}", charm.GetEntry(), charm.GetCharmerGUID());
 
                 _isWalkingBeforeCharm = charm.IsWalking();
                 if (_isWalkingBeforeCharm)
                     charm.SetWalk(false);
 
-                m_Controlled.Add(charm);
+                if (!m_Controlled.Contains(charm))
+                    m_Controlled.Add(charm);
             }
             else
             {
                 if (IsTypeId(TypeId.Player))
                 {
-                    if (!RemoveGuidValue(UnitFields.Charm, charm.GetGUID()))
+                    if (GetCharmGUID() == charm.GetGUID())
+                        SetCharmGUID(ObjectGuid.Empty);
+                    else
                         Log.outFatal(LogFilter.Unit, "Player {0} is trying to uncharm unit {1}, but it has another charmed unit {2}", GetName(), charm.GetEntry(), GetCharmGUID());
                 }
 
-                if (!charm.RemoveGuidValue(UnitFields.CharmedBy, GetGUID()))
+                if (charm.GetCharmerGUID() == GetGUID())
+                    charm.SetCharmerGUID(ObjectGuid.Empty);
+                else
                     Log.outFatal(LogFilter.Unit, "Unit {0} is being uncharmed, but it has another charmer {1}", charm.GetEntry(), charm.GetCharmerGUID());
+
                 Player player = charm.GetCharmerOrOwnerPlayerOrPlayerItself();
                 if (charm.IsTypeId(TypeId.Player))
                 {
                     charm.m_ControlledByPlayer = true;
-                    charm.SetFlag(UnitFields.Flags, UnitFlags.PvpAttackable);
+                    charm.AddUnitFlag(UnitFlags.PvpAttackable);
                     charm.ToPlayer().UpdatePvPState();
                 }
                 else if (player)
                 {
                     charm.m_ControlledByPlayer = true;
-                    charm.SetFlag(UnitFields.Flags, UnitFlags.PvpAttackable);
-                    charm.SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, player.GetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag));
+                    charm.AddUnitFlag(UnitFlags.PvpAttackable);
+                    charm.SetPvpFlags(player.GetPvpFlags());
                 }
                 else
                 {
                     charm.m_ControlledByPlayer = false;
-                    charm.RemoveFlag(UnitFields.Flags, UnitFlags.PvpAttackable);
-                    charm.SetByteValue(UnitFields.Bytes2, UnitBytes2Offsets.PvpFlag, 0);
+                    charm.RemoveUnitFlag(UnitFlags.PvpAttackable);
+                    charm.SetPvpFlags(UnitPVPStateFlags.None);
                 }
 
                 if (charm.IsWalking() != _isWalkingBeforeCharm)
@@ -745,7 +760,7 @@ namespace Game.Entities
             if (!pet.CreateBaseAtCreature(creatureTarget))
                 return null;
 
-            uint level = creatureTarget.GetLevelForTarget(this) + 5 < getLevel() ? (getLevel() - 5) : creatureTarget.GetLevelForTarget(this);
+            uint level = creatureTarget.GetLevelForTarget(this) + 5 < GetLevel() ? (GetLevel() - 5) : creatureTarget.GetLevelForTarget(this);
 
             InitTamedPet(pet, level, spell_id);
 
@@ -763,7 +778,7 @@ namespace Game.Entities
 
             Pet pet = new Pet(ToPlayer(), PetType.Hunter);
 
-            if (!pet.CreateBaseAtCreatureInfo(creatureInfo, this) || !InitTamedPet(pet, getLevel(), spell_id))
+            if (!pet.CreateBaseAtCreatureInfo(creatureInfo, this) || !InitTamedPet(pet, GetLevel(), spell_id))
                 return null;
 
             return pet;
@@ -772,11 +787,11 @@ namespace Game.Entities
         bool InitTamedPet(Pet pet, uint level, uint spell_id)
         {
             pet.SetCreatorGUID(GetGUID());
-            pet.SetFaction(getFaction());
-            pet.SetUInt32Value(UnitFields.CreatedBySpell, spell_id);
+            pet.SetFaction(GetFaction());
+            pet.SetCreatedBySpell(spell_id);
 
             if (IsTypeId(TypeId.Player))
-                pet.SetUInt32Value(UnitFields.Flags, (uint)UnitFlags.PvpAttackable);
+                pet.AddUnitFlag(UnitFlags.PvpAttackable);
 
             if (!pet.InitStatsForLevel(level))
             {

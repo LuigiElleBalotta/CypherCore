@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ namespace Scripts.World.BossEmeraldDragons
         public override void Reset()
         {
             base.Reset();
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable | UnitFlags.NonAttackable);
+            me.RemoveUnitFlag(UnitFlags.NotSelectable | UnitFlags.NonAttackable);
             me.SetReactState(ReactStates.Aggressive);
             DoCast(me, Spells.MarkOfNatureAura, true);
 
@@ -478,7 +478,7 @@ namespace Scripts.World.BossEmeraldDragons
                     _shades += (byte)Spells.TaerarShadeSpells.Length;
 
                     DoCast(Spells.Shade);
-                    me.SetFlag(UnitFields.Flags, UnitFlags.NotSelectable | UnitFlags.NonAttackable);
+                    me.AddUnitFlag(UnitFlags.NotSelectable | UnitFlags.NonAttackable);
                     me.SetReactState(ReactStates.Passive);
 
                     ++_stage;
@@ -497,7 +497,7 @@ namespace Scripts.World.BossEmeraldDragons
                     {
                         _banished = false;
 
-                        me.RemoveFlag(UnitFields.Flags, UnitFlags.NotSelectable | UnitFlags.NonAttackable);
+                        me.RemoveUnitFlag(UnitFlags.NotSelectable | UnitFlags.NonAttackable);
                         me.RemoveAurasDueToSpell(Spells.Shade);
                         me.SetReactState(ReactStates.Aggressive);
                     }

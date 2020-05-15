@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,34 +40,34 @@ namespace Game
             Values[WorldCfg.EnableSinfoLogin] = GetDefaultValue("Server.LoginInfo", 0);
 
             // Read all rates from the config file
-            Action<WorldCfg, string> setRegenRate = (WorldCfg rate, string configKey) =>
+            void SetRegenRate(WorldCfg rate, string configKey)
             {
                 Values[rate] = GetDefaultValue(configKey, 1.0f);
-                if ((float)Values[rate] < 0.0f)
+                if ((float) Values[rate] < 0.0f)
                 {
                     Log.outError(LogFilter.ServerLoading, "{0} ({1}) must be > 0. Using 1 instead.", configKey, Values[rate]);
                     Values[rate] = 1;
                 }
-            };
+            }
 
-            setRegenRate(WorldCfg.RateHealth, "Rate.Health");
-            setRegenRate(WorldCfg.RatePowerMana, "Rate.Mana");
-            setRegenRate(WorldCfg.RatePowerRageIncome, "Rate.Rage.Gain");
-            setRegenRate(WorldCfg.RatePowerRageLoss, "Rate.Rage.Loss");
-            setRegenRate(WorldCfg.RatePowerFocus, "Rate.Focus");
-            setRegenRate(WorldCfg.RatePowerEnergy, "Rate.Energy");
-            setRegenRate(WorldCfg.RatePowerComboPointsLoss, "Rate.ComboPoints.Loss");
-            setRegenRate(WorldCfg.RatePowerRunicPowerIncome, "Rate.RunicPower.Gain");
-            setRegenRate(WorldCfg.RatePowerRunicPowerLoss, "Rate.RunicPower.Loss");
-            setRegenRate(WorldCfg.RatePowerSoulShards, "Rate.SoulShards.Loss");
-            setRegenRate(WorldCfg.RatePowerLunarPower, "Rate.LunarPower.Loss");
-            setRegenRate(WorldCfg.RatePowerHolyPower, "Rate.HolyPower.Loss");
-            setRegenRate(WorldCfg.RatePowerMaelstrom, "Rate.Maelstrom.Loss");
-            setRegenRate(WorldCfg.RatePowerChi, "Rate.Chi.Loss");
-            setRegenRate(WorldCfg.RatePowerInsanity, "Rate.Insanity.Loss");
-            setRegenRate(WorldCfg.RatePowerArcaneCharges, "Rate.ArcaneCharges.Loss");
-            setRegenRate(WorldCfg.RatePowerFury, "Rate.Fury.Loss");
-            setRegenRate(WorldCfg.RatePowerPain, "Rate.Pain.Loss");
+            SetRegenRate(WorldCfg.RateHealth, "Rate.Health");
+            SetRegenRate(WorldCfg.RatePowerMana, "Rate.Mana");
+            SetRegenRate(WorldCfg.RatePowerRageIncome, "Rate.Rage.Gain");
+            SetRegenRate(WorldCfg.RatePowerRageLoss, "Rate.Rage.Loss");
+            SetRegenRate(WorldCfg.RatePowerFocus, "Rate.Focus");
+            SetRegenRate(WorldCfg.RatePowerEnergy, "Rate.Energy");
+            SetRegenRate(WorldCfg.RatePowerComboPointsLoss, "Rate.ComboPoints.Loss");
+            SetRegenRate(WorldCfg.RatePowerRunicPowerIncome, "Rate.RunicPower.Gain");
+            SetRegenRate(WorldCfg.RatePowerRunicPowerLoss, "Rate.RunicPower.Loss");
+            SetRegenRate(WorldCfg.RatePowerSoulShards, "Rate.SoulShards.Loss");
+            SetRegenRate(WorldCfg.RatePowerLunarPower, "Rate.LunarPower.Loss");
+            SetRegenRate(WorldCfg.RatePowerHolyPower, "Rate.HolyPower.Loss");
+            SetRegenRate(WorldCfg.RatePowerMaelstrom, "Rate.Maelstrom.Loss");
+            SetRegenRate(WorldCfg.RatePowerChi, "Rate.Chi.Loss");
+            SetRegenRate(WorldCfg.RatePowerInsanity, "Rate.Insanity.Loss");
+            SetRegenRate(WorldCfg.RatePowerArcaneCharges, "Rate.ArcaneCharges.Loss");
+            SetRegenRate(WorldCfg.RatePowerFury, "Rate.Fury.Loss");
+            SetRegenRate(WorldCfg.RatePowerPain, "Rate.Pain.Loss");
 
             Values[WorldCfg.RateSkillDiscovery] = GetDefaultValue("Rate.Skill.Discovery", 1.0f);
             Values[WorldCfg.RateDropItemPoor] = GetDefaultValue("Rate.Drop.Item.Poor", 1.0f);
@@ -610,9 +610,9 @@ namespace Game
             else
                 Values[WorldCfg.Expansion] = GetDefaultValue("Expansion", Expansion.WarlordsOfDraenor);
 
-            Values[WorldCfg.ChatfloodMessageCount] = GetDefaultValue("ChatFlood.MessageCount", 10);
-            Values[WorldCfg.ChatfloodMessageDelay] = GetDefaultValue("ChatFlood.MessageDelay", 1);
-            Values[WorldCfg.ChatfloodMuteTime] = GetDefaultValue("ChatFlood.MuteTime", 10);
+            Values[WorldCfg.ChatFloodMessageCount] = GetDefaultValue("ChatFlood.MessageCount", 10);
+            Values[WorldCfg.ChatFloodMessageDelay] = GetDefaultValue("ChatFlood.MessageDelay", 1);
+            Values[WorldCfg.ChatFloodMuteTime] = GetDefaultValue("ChatFlood.MuteTime", 10);
 
             Values[WorldCfg.EventAnnounce] = GetDefaultValue("Event.Announce", false);
 
@@ -675,9 +675,7 @@ namespace Game
             Values[WorldCfg.ThreatRadius] = GetDefaultValue("ThreatRadius", 60.0f);
 
             // always use declined names in the russian client
-            Values[WorldCfg.DeclinedNamesUsed] =
-
-                ((RealmZones)Values[WorldCfg.RealmZone] == RealmZones.Russian) ? true : GetDefaultValue("DeclinedNames", false);
+            Values[WorldCfg.DeclinedNamesUsed] = (RealmZones)Values[WorldCfg.RealmZone] == RealmZones.Russian || GetDefaultValue("DeclinedNames", false);
 
             Values[WorldCfg.ListenRangeSay] = GetDefaultValue("ListenRange.Say", 25.0f);
             Values[WorldCfg.ListenRangeTextemote] = GetDefaultValue("ListenRange.TextEmote", 25.0f);
@@ -727,26 +725,22 @@ namespace Game
             {
                 // overwrite DB/old value
                 if (clientCacheId > 0)
-                {
                     Values[WorldCfg.ClientCacheVersion] = clientCacheId;
-                    Log.outInfo(LogFilter.ServerLoading, "Client cache version set to: {0}", clientCacheId);
-                }
                 else
                     Log.outError(LogFilter.ServerLoading, "ClientCacheVersion can't be negative {0}, ignored.", clientCacheId);
             }
+            Log.outInfo(LogFilter.ServerLoading, "Client cache version set to: {0}", clientCacheId);
 
             int hotfixCacheId = GetDefaultValue("HotfixCacheVersion", 0);
             if (hotfixCacheId != 0)
             {
                 // overwrite DB/old value
                 if (hotfixCacheId > 0)
-                {
                     Values[WorldCfg.HotfixCacheVersion] = hotfixCacheId;
-                    Log.outInfo(LogFilter.ServerLoading, "Hotfix cache version set to: {0}", hotfixCacheId);
-                }
                 else
                     Log.outError(LogFilter.ServerLoading, "HotfixCacheVersion can't be negative {0}, ignored.", hotfixCacheId);
             }
+            Log.outInfo(LogFilter.ServerLoading, "Hotfix cache version set to: {0}", hotfixCacheId);
 
             Values[WorldCfg.GuildNewsLogCount] = GetDefaultValue("Guild.NewsLogRecordsCount", GuildConst.NewsLogMaxRecords);
             if ((int)Values[WorldCfg.GuildNewsLogCount] > GuildConst.NewsLogMaxRecords)
@@ -812,8 +806,6 @@ namespace Game
             Values[WorldCfg.ShowKickInWorld] = GetDefaultValue("ShowKickInWorld", false);
             Values[WorldCfg.ShowMuteInWorld] = GetDefaultValue("ShowMuteInWorld", false);
             Values[WorldCfg.ShowBanInWorld] = GetDefaultValue("ShowBanInWorld", false);
-            Values[WorldCfg.IntervalLogUpdate] = GetDefaultValue("RecordUpdateTimeDiffInterval", 60000);
-            Values[WorldCfg.MinLogUpdate] = GetDefaultValue("MinRecordUpdateTimeDiff", 100);
             Values[WorldCfg.Numthreads] = GetDefaultValue("MapUpdate.Threads", 1);
             Values[WorldCfg.MaxResultsLookupCommands] = GetDefaultValue("Command.LookupMaxResults", 0);
 
@@ -909,6 +901,12 @@ namespace Game
             // prevent character rename on character customization
             Values[WorldCfg.PreventRenameCustomization] = GetDefaultValue("PreventRenameCharacterOnCustomization", false);
 
+            // Allow 5-man parties to use raid warnings
+            Values[WorldCfg.ChatPartyRaidWarnings] = GetDefaultValue("PartyRaidWarnings", false);
+
+            // Allow to cache data queries
+            Values[WorldCfg.CacheDataQueries] = GetDefaultValue("CacheDataQueries", true);
+
             // Check Invalid Position
             Values[WorldCfg.CreatureCheckInvalidPostion] = GetDefaultValue("Creature.CheckInvalidPosition", false);
             Values[WorldCfg.GameobjectCheckInvalidPostion] = GetDefaultValue("GameObject.CheckInvalidPosition", false);
@@ -926,6 +924,11 @@ namespace Game
         public static int GetIntValue(WorldCfg confi)
         {
             return Convert.ToInt32(Values.LookupByKey(confi));
+        }
+
+        public static ulong GetUInt64Value(WorldCfg confi)
+        {
+            return Convert.ToUInt64(Values.LookupByKey(confi));
         }
 
         public static bool GetBoolValue(WorldCfg confi)

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2012-2014 Arctium Emulation <http://arctium.org>
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -49,7 +49,7 @@ namespace Framework.Cryptography
             sha.TransformBlock(bytes, 0, bytes.Length, bytes, 0);
         }
 
-        public void Finish(byte[] data, int length)
+        public void Finish(byte[] data)
         {
             sha.TransformFinalBlock(data, 0, data.Length);
 
@@ -114,11 +114,6 @@ namespace Framework.Cryptography
 
     public class HmacSha256 : HMACSHA256
     {
-        public HmacSha256() : base()
-        {
-            Initialize();
-        }
-
         public HmacSha256(byte[] key) : base(key)
         {
             Initialize();

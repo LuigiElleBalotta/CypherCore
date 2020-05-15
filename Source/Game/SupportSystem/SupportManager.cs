@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ namespace Game.SupportSystem
                     return _suggestionTicketList.LookupByKey(Id) as T;
             }
 
-            return default(T);
+            return default;
         }
 
         public uint GetOpenTicketCount<T>() where T : Ticket

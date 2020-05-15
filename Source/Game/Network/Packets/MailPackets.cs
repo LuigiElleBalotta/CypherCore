@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Mails.Count);
+            _worldPacket.WriteInt32(Mails.Count);
             _worldPacket.WriteInt32(TotalNumRecords);
 
             Mails.ForEach(p => p.Write(_worldPacket));
@@ -283,9 +283,9 @@ namespace Game.Network.Packets
         }
     }
 
-    public class NotifyRecievedMail : ServerPacket
+    public class NotifyReceivedMail : ServerPacket
     {
-        public NotifyRecievedMail() : base(ServerOpcodes.NotifyReceivedMail) { }
+        public NotifyReceivedMail() : base(ServerOpcodes.NotifyReceivedMail) { }
 
         public override void Write()
         {
@@ -317,8 +317,8 @@ namespace Game.Network.Packets
             Item = new ItemInstance(item);
             Count = item.GetCount();
             Charges = item.GetSpellCharges();
-            MaxDurability = item.GetUInt32Value(ItemFields.MaxDurability);
-            Durability = item.GetUInt32Value(ItemFields.Durability);
+            MaxDurability = item.m_itemData.MaxDurability;
+            Durability = item.m_itemData.Durability;
             Unlocked = !item.IsLocked();
 
             for (EnchantmentSlot slot = 0; slot < EnchantmentSlot.MaxInspected; slot++)
@@ -330,7 +330,7 @@ namespace Game.Network.Packets
             }
 
             byte i = 0;
-            foreach (ItemDynamicFieldGems gemData in item.GetGems())
+            foreach (SocketedGem gemData in item.m_itemData.Gems)
             {
                 if (gemData.ItemId != 0)
                 {
@@ -346,11 +346,11 @@ namespace Game.Network.Packets
         public void Write(WorldPacket data)
         {
             data.WriteUInt8(Position);
-            data.WriteUInt32(AttachID);
-            data.WriteInt32(Count);
+            data.WriteInt32(AttachID);
+            data.WriteUInt32(Count);
             data.WriteInt32(Charges);
-            data.WriteInt32(MaxDurability);
-            data.WriteInt32(Durability);
+            data.WriteUInt32(MaxDurability);
+            data.WriteUInt32(Durability);
             Item.Write(data);
             data.WriteBits(Enchants.Count, 4);
             data.WriteBits(Gems.Count, 2);
@@ -400,7 +400,7 @@ namespace Game.Network.Packets
             StationeryID = (int)mail.stationery;
             SentMoney = mail.money;
             Flags = (int)mail.checkMask;
-            DaysLeft = (mail.expire_time - Time.UnixTime) / Time.Day;
+            DaysLeft = (float)(mail.expire_time - Time.UnixTime) / Time.Day;
             MailTemplateID = (int)mail.mailTemplateId;
             Subject = mail.subject;
             Body = mail.body;
@@ -423,7 +423,7 @@ namespace Game.Network.Packets
             data.WriteInt32(Flags);
             data.WriteFloat(DaysLeft);
             data.WriteInt32(MailTemplateID);
-            data.WriteUInt32(Attachments.Count);
+            data.WriteInt32(Attachments.Count);
 
             data.WriteBit(SenderCharacter.HasValue);
             data.WriteBit(AltSenderID.HasValue);
@@ -437,7 +437,7 @@ namespace Game.Network.Packets
                 data.WritePackedGuid(SenderCharacter.Value);
 
             if (AltSenderID.HasValue)
-                data.WriteInt32(AltSenderID.Value);
+                data.WriteUInt32(AltSenderID.Value);
 
             data.WriteString(Subject);
             data.WriteString(Body);

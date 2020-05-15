@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -309,10 +309,7 @@ namespace Scripts.Northrend.FrozenHalls.ForgeOfSouls.Bronjahm
         void FilterTargets(List<WorldObject> targets)
         {
             Unit caster = GetCaster();
-            targets.RemoveAll(target =>
-            {
-                return caster.GetExactDist2d(target) <= 10.0f;
-            });
+            targets.RemoveAll(target => caster.GetExactDist2d(target) <= 10.0f);
         }
 
         public override void Register()

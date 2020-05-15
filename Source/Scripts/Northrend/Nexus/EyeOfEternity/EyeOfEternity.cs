@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
 
         class instance_eye_of_eternity_InstanceMapScript : InstanceScript
         {
-            public instance_eye_of_eternity_InstanceMapScript(Map map) : base(map)
+            public instance_eye_of_eternity_InstanceMapScript(InstanceMap map) : base(map)
             {
                 SetHeaders("EOE");
                 SetBossNumber(EyeOfEternityConst.MaxEncounter);
@@ -131,7 +131,7 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
 
                         GameObject platform = instance.GetGameObject(platformGUID);
                         if (platform)
-                            platform.RemoveFlag(GameObjectFields.Flags, GameObjectFlags.Destroyed);
+                            platform.RemoveFlag(GameObjectFlags.Destroyed);
                     }
                     else if (state == EncounterState.Done)
                         SpawnGameObject(InstanceGameObjects.ExitPortal, exitPortalPosition);
@@ -139,11 +139,11 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
                 return true;
             }
 
-            /// @todo this should be handled in map, maybe add a summon function in map
+            // @todo this should be handled in map, maybe add a summon function in map
             // There is no other way afaik...
             void SpawnGameObject(uint entry, Position pos)
             {
-                GameObject go = GameObject.CreateGameObject(entry, instance, pos, Quaternion.WAxis, 255, GameObjectState.Ready);
+                GameObject go = GameObject.CreateGameObject(entry, instance, pos, Quaternion.fromEulerAnglesZYX(pos.GetOrientation(), 0.0f, 0.0f), 255, GameObjectState.Ready);
                 if (go)
                     instance.AddToMap(go);
             }
@@ -218,7 +218,7 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
 
                     GameObject iris = instance.GetGameObject(irisGUID);
                     if (iris)
-                        iris.SetFlag(GameObjectFields.Flags, GameObjectFlags.InUse);
+                        iris.AddFlag(GameObjectFlags.InUse);
 
                     Creature malygos = instance.GetCreature(malygosGUID);
                     if (malygos)
@@ -235,7 +235,7 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
                 Creature malygos = instance.GetCreature(malygosGUID);
                 if (malygos)
                 {
-                    var threatList = malygos.GetThreatManager().getThreatList();
+                    var threatList = malygos.GetThreatManager().GetThreatList();
                     foreach (var guid in vortexTriggers)
                     {
                         if (threatList.Empty())
@@ -251,7 +251,7 @@ namespace Scripts.Northrend.Nexus.EyeOfEternity
                                 if (counter >= 5)
                                     break;
 
-                                Unit target = refe.getTarget();
+                                Unit target = refe.GetTarget();
                                 if (target)
                                 {
                                     Player player = target.ToPlayer();

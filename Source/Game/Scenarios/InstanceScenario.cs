@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -138,7 +138,7 @@ namespace Game.Scenarios
 
                     SetCriteriaProgress(criteria, counter, null, ProgressType.Set);
 
-                    List<CriteriaTree> trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(criteria.ID);
+                    List<CriteriaTree> trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(criteria.Id);
                     if (trees != null)
                     {
                         foreach (CriteriaTree tree in trees)
@@ -163,7 +163,7 @@ namespace Game.Scenarios
 
         public override string GetOwnerInfo()
         {
-            return string.Format("Instance ID {0}", _map.GetInstanceId());
+            return $"Instance ID {_map.GetInstanceId()}";
         }
 
         public override void SendPacket(ServerPacket data)

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(LastUpdateID);
-            _worldPacket.WriteUInt32(Items.Count);
+            _worldPacket.WriteInt32(Items.Count);
 
             foreach (BlackMarketItem item in Items)
                 item.Write(_worldPacket);
@@ -104,7 +104,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteUInt32(MarketID);
-            _worldPacket.WriteUInt32(Result);
+            _worldPacket.WriteUInt32((uint)Result);
             Item.Write(_worldPacket);
         }
 
@@ -163,14 +163,14 @@ namespace Game.Network.Packets
 
         public void Write(WorldPacket data)
         {
-            data.WriteInt32(MarketID);
-            data.WriteInt32(SellerNPC);
-            data.WriteInt32(Quantity);
+            data.WriteUInt32(MarketID);
+            data.WriteUInt32(SellerNPC);
+            data.WriteUInt32(Quantity);
             data.WriteUInt64(MinBid);
             data.WriteUInt64(MinIncrement);
             data.WriteUInt64(CurrentBid);
-            data.WriteInt32(SecondsRemaining);
-            data.WriteInt32(NumBids);
+            data.WriteUInt32(SecondsRemaining);
+            data.WriteUInt32(NumBids);
             Item.Write(data);
             data.WriteBit(HighBid);
             data.FlushBits();

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@ using Framework.GameMath;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Framework.Dynamic;
+using Game.Network;
 
 namespace Game.Entities
 {
@@ -79,39 +81,98 @@ namespace Game.Entities
         }
     }
 
+    /// <summary>
+    /// Scale array definition
+    /// 0 - time offset from creation for starting of scaling
+    /// 1+2,3+4 are values for curve points Vector2[2]
+    //  5 is packed curve information (has_no_data & 1) | ((interpolation_mode & 0x7) << 1) | ((first_point_offset & 0x7FFFFF) << 4) | ((point_count & 0x1F) << 27)
+    /// 6 bool is_override, only valid for AREATRIGGER_OVERRIDE_SCALE_CURVE, if true then use data from AREATRIGGER_OVERRIDE_SCALE_CURVE instead of ScaleCurveId from CreateObject
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit)]
     public class AreaTriggerScaleInfo
     {
-        public AreaTriggerScaleInfo()
-        {
-            OverrideScale = new OverrideScaleStruct[SharedConst.MaxAreatriggerScale];
-            ExtraScale = new ExtraScaleStruct[SharedConst.MaxAreatriggerScale];
+        [FieldOffset(0)]
+        public StructuredData Structured;
 
-            ExtraScale[5].AsFloat = 1.0000001f;
-            ExtraScale[6].AsInt32 = 1;
-        }
-
-        public OverrideScaleStruct[] OverrideScale;
-        public ExtraScaleStruct[] ExtraScale;
+        [FieldOffset(0)]
+        public RawData Raw;
 
         [StructLayout(LayoutKind.Explicit)]
-        public struct OverrideScaleStruct
+        public struct StructuredData
         {
             [FieldOffset(0)]
-            public int AsInt32;
+            public uint StartTimeOffset;
 
-            [FieldOffset(0)]
-            public float AsFloat;
+            [FieldOffset(4)]
+            public float X;
+
+            [FieldOffset(8)]
+            public float Y;
+
+            [FieldOffset(12)]
+            public float Z;
+
+            [FieldOffset(16)]
+            public float W;
+
+            [FieldOffset(20)]
+            public uint CurveParameters;
+
+            [FieldOffset(24)]
+            public uint OverrideActive;
+
+            public struct curveparameters
+            {
+                public uint Raw;
+
+                public uint NoData { get { return Raw & 1; } }
+                public uint InterpolationMode { get { return (Raw & 0x7) << 1; } }
+                public uint FirstPointOffset { get { return (Raw & 0x7FFFFF) << 4; } }
+                public uint PointCount { get { return (Raw & 0x1F) << 27; } }
+            }
         }
 
-        [StructLayout(LayoutKind.Explicit)]
-        public struct ExtraScaleStruct
+        public unsafe struct RawData
         {
-            [FieldOffset(0)]
-            public int AsInt32;
-
-            [FieldOffset(0)]
-            public float AsFloat;
+            public fixed uint Data[SharedConst.MaxAreatriggerScale];
         }
+    }
+
+    public struct AreaTriggerCircularMovementInfo
+    {
+        public void Write(WorldPacket data)
+        {
+            data.WriteBit(PathTarget.HasValue);
+            data.WriteBit(Center.HasValue);
+            data.WriteBit(CounterClockwise);
+            data.WriteBit(CanLoop);
+
+            data.WriteUInt32(TimeToTarget);
+            data.WriteInt32(ElapsedTimeForMovement);
+            data.WriteUInt32(StartDelay);
+            data.WriteFloat(Radius);
+            data.WriteFloat(BlendFromRadius);
+            data.WriteFloat(InitialAngle);
+            data.WriteFloat(ZOffset);
+
+            if (PathTarget.HasValue)
+                data.WritePackedGuid(PathTarget.Value);
+
+            if (Center.HasValue)
+                data.WriteVector3(Center.Value);
+        }
+
+        public Optional<ObjectGuid> PathTarget;
+        public Optional<Vector3> Center;
+        public bool CounterClockwise;
+        public bool CanLoop;
+        public uint TimeToTarget;
+        public int ElapsedTimeForMovement;
+        public uint StartDelay;
+        public float Radius;
+        public float BlendFromRadius;
+        public float InitialAngle;
+        public float ZOffset;
     }
 
     public class AreaTriggerTemplate : AreaTriggerData
@@ -127,13 +188,7 @@ namespace Game.Entities
                     }
                 case AreaTriggerTypes.Box:
                     {
-                        unsafe
-                        {
-                            fixed (float* ptr = BoxDatas.Extents)
-                            {
-                                MaxSearchRadius = (float)Math.Sqrt(ptr[0] * ptr[0] / 4 + ptr[1] * ptr[1] / 4);
-                            }
-                        }
+                        MaxSearchRadius = (float)Math.Sqrt(BoxDatas.Extents[0] * BoxDatas.Extents[0] / 4 + BoxDatas.Extents[1] * BoxDatas.Extents[1] / 4);
                         break;
                     }
                 case AreaTriggerTypes.Polygon:
@@ -179,8 +234,17 @@ namespace Game.Entities
         public List<AreaTriggerAction> Actions = new List<AreaTriggerAction>();
     }
 
-    public class AreaTriggerMiscTemplate
+    public unsafe class AreaTriggerMiscTemplate
     {
+        public AreaTriggerMiscTemplate()
+        {
+            // legacy code from before it was known what each curve field does
+            // wtf? thats not how you pack curve data
+            ExtraScale.Raw.Data[5] = (uint)1.0000001f;
+            // also OverrideActive does nothing on ExtraScale
+            ExtraScale.Structured.OverrideActive = 1;
+        }
+
         public bool HasSplines() { return SplinePoints.Count >= 2; }
 
         public uint MiscId;
@@ -191,12 +255,17 @@ namespace Game.Entities
         public uint MorphCurveId;
         public uint FacingCurveId;
 
+        public uint AnimId;
+        public uint AnimKitId;
+
         public uint DecalPropertiesId;
 
         public uint TimeToTarget;
         public uint TimeToTargetScale;
 
-        public AreaTriggerScaleInfo ScaleInfo = new AreaTriggerScaleInfo();
+        public AreaTriggerScaleInfo OverrideScale = new AreaTriggerScaleInfo();
+        public AreaTriggerScaleInfo ExtraScale = new AreaTriggerScaleInfo();
+        public AreaTriggerCircularMovementInfo CircularMovementInfo;
 
         public AreaTriggerTemplate Template;
         public List<Vector3> SplinePoints = new List<Vector3>();

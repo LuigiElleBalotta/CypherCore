@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@ namespace Game.Network
 {
     public abstract class ClientPacket : IDisposable
     {
-        public ClientPacket(WorldPacket worldPacket)
+        protected ClientPacket(WorldPacket worldPacket)
         {
             _worldPacket = worldPacket;
         }
@@ -48,13 +48,13 @@ namespace Game.Network
 
     public abstract class ServerPacket
     {
-        public ServerPacket(ServerOpcodes opcode)
+        protected ServerPacket(ServerOpcodes opcode)
         {
             connectionType = ConnectionType.Realm;
             _worldPacket = new WorldPacket(opcode);
         }
 
-        public ServerPacket(ServerOpcodes opcode, ConnectionType type = ConnectionType.Realm)
+        protected ServerPacket(ServerOpcodes opcode, ConnectionType type = ConnectionType.Realm)
         {
             connectionType = type;
             _worldPacket = new WorldPacket(opcode);
@@ -108,9 +108,9 @@ namespace Game.Network
             this.opcode = (uint)opcode;
         }
 
-        public WorldPacket(byte[] data, uint opcode) : base(data)
+        public WorldPacket(byte[] data) : base(data)
         {
-            this.opcode = opcode;
+            opcode = ReadUInt16();
         }
 
         public ObjectGuid ReadPackedGuid()
@@ -223,18 +223,23 @@ namespace Game.Network
         uint opcode;
     }
 
-    public class ServerPacketHeader
+    public class PacketHeader
     {
-        public ServerPacketHeader(uint size, ServerOpcodes opcode)
+        public int Size;
+        public byte[] Tag = new byte[12];
+
+        public void Read(byte[] buffer)
         {
-            Size = size + 2;
-            Opcode = opcode;
+            Size = BitConverter.ToInt32(buffer, 0);
+            Buffer.BlockCopy(buffer, 4, Tag, 0, 12);
+        }
 
-            data = BitConverter.GetBytes(Size).Combine(BitConverter.GetBytes((ushort)opcode));
-        }        
+        public void Write(ByteBuffer byteBuffer)
+        {
+            byteBuffer.WriteInt32(Size);
+            byteBuffer.WriteBytes(Tag, 12);
+        }
 
-        public ServerOpcodes Opcode { get; set; }
-        public uint Size { get; set; }
-        public byte[] data { get; set; }
+        public bool IsValidSize() { return Size < 0x10000; }
     }
 }

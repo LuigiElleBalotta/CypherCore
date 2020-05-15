@@ -140,7 +140,7 @@ PacketLogFile = "CypherCore.pkt"
 #
 
 Appender.Console = 1,3,0
-Appender.Server = 2,2,0
+Appender.Server = 2,1,0
 Appender.GM = 2,2,0,gm/gm_{0}.log
 Appender.DBErrors = 2,4,0,DBErrors.log
 
@@ -167,7 +167,7 @@ Logger.ServerLoading = 3,Console Server
 Logger.Commands = 3,Console GM
 Logger.Sql = 3,Console DBErrors
 Logger.SqlUpdates = 3,Console Server
-Logger.Network = 1,Console Server
+Logger.Network = 3,Console Server
 
 #Logger.Achievement=3,Console Server
 #Logger.AreaTrigger=3,Console Server
@@ -464,7 +464,7 @@ MaxCoreStuckTime = 0
 AddonChannel = 1
 
 #
-#    MapUpdate.Threads (NYI)
+#    MapUpdate.Threads
 #        Description: Number of threads to update maps.
 #        Default:     1
 
@@ -632,15 +632,16 @@ DeclinedNames = 0
 #    Expansion
 #        Description: Allow server to use content from expansions. Checks for expansion-related
 #                     map files, client compatibility and class/race character creation.
-#        Default:     6 - (Expansion 6)
-#		      5 - (Expansion 5)
+#        Default:     7 - (Expansion 7)
+#					  6 - (Expansion 6)
+#       		      5 - (Expansion 5)
 #                     4 - (Expansion 4)
 #                     3 - (Expansion 3)
 #                     2 - (Expansion 2)
 #                     1 - (Expansion 1)
 #                     0 - (Disabled, Ignore and disable expansion content (maps, races, classes)
 
-Expansion = 6
+Expansion = 7
 
 #
 #    MinPlayerName
@@ -791,9 +792,9 @@ SkipCinematics = 0
 #        Description: Maximum level that can be reached by players.
 #        Important:   Levels beyond 100 are not recommended at all.
 #        Range:       1-255
-#        Default:     100
+#        Default:     120
 
-MaxPlayerLevel = 110
+MaxPlayerLevel = 120
 
 #
 #    MinDualSpecLevel
@@ -1196,6 +1197,17 @@ Account.PasswordChangeSecurity = 0
 #        Default:     1222964635
 
 BirthdayTime = 1222964635
+
+#
+#   CacheDataQueries
+#        Description: Server caches data queries at startup. 
+#                     Can be disabled if not enough memory is available.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled)
+#
+#
+
+ CacheDataQueries = 1
 
 #
 #   FeatureSystem.BpayStore.Enabled
@@ -1729,6 +1741,14 @@ PreserveCustomChannels = 1
 PreserveCustomChannelDuration = 14
 
 #
+#    PartyRaidWarnings
+#        Description: Allow any user to use raid warnings when in a 5-man party.
+#        Default:     0 - (Disabled, Blizzlike)
+#                     1 - (Enabled)
+
+PartyRaidWarnings = 0
+
+#
 ###################################################################################################
 
 ###################################################################################################
@@ -1889,6 +1909,7 @@ Support.SuggestionsEnabled = 0
 #        Default:     1 - (Raid)
 #                     0 - (Party)
 #                     2 - (Faction)
+#                     3 - (None)
 
 Visibility.GroupMode = 1
 
@@ -1897,15 +1918,15 @@ Visibility.GroupMode = 1
 #    Visibility.Distance.Instances
 #    Visibility.Distance.BGArenas
 #        Description: Visibility distance to see other players or gameobjects.
-#                     Visibility on continents on retail ~90 yards. In BG/Arenas ~533.
+#                     Visibility on continents on retail ~100 yards. In BG/Arenas ~533.
 #                     For instances default ~170.
 #                     Max limited by grid size: 533.33333
 #                     Min limit is max aggro radius (45) * Rate.Creature.Aggro
-#        Default:     90  - (Visibility.Distance.Continents)
+#        Default:     100  - (Visibility.Distance.Continents)
 #                     170 - (Visibility.Distance.Instances)
 #                     533 - (Visibility.Distance.BGArenas)
 
-Visibility.Distance.Continents = 90
+Visibility.Distance.Continents = 100
 Visibility.Distance.Instances = 170
 Visibility.Distance.BGArenas = 533
 

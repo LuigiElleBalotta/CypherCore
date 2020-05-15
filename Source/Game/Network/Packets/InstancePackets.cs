@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,11 +41,11 @@ namespace Game.Network.Packets
         {
             _worldPacket.WriteInt32(LockList.Count);
 
-            foreach (InstanceLockInfos lockInfos in LockList)
+            foreach (InstanceLock lockInfos in LockList)
                 lockInfos.Write(_worldPacket);
         }
 
-        public List<InstanceLockInfos> LockList = new List<InstanceLockInfos>();
+        public List<InstanceLock> LockList = new List<InstanceLock>();
     }
 
     class ResetInstances : ClientPacket
@@ -121,7 +121,7 @@ namespace Game.Network.Packets
         public override void Write()
         {
             _worldPacket.WriteInt32(Delay);
-            _worldPacket.WriteUInt32(Reason);
+            _worldPacket.WriteUInt32((uint)Reason);
         }
 
         public int Delay;
@@ -153,9 +153,9 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt8(Type);
+            _worldPacket.WriteUInt8((byte)Type);
             _worldPacket.WriteUInt32(MapID);
-            _worldPacket.WriteUInt32(DifficultyID);
+            _worldPacket.WriteUInt32((uint)DifficultyID);
             _worldPacket.WriteBit(Locked);
             _worldPacket.WriteBit(Extended);
             _worldPacket.FlushBits();
@@ -270,7 +270,7 @@ namespace Game.Network.Packets
     }
 
     //Structs
-    public struct InstanceLockInfos
+    public struct InstanceLock
     {
         public void Write(WorldPacket data)
         {

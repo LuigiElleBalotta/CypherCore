@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,11 +32,17 @@ namespace Framework.Collections
 
         public StringArray(string str, params string[] separator)
         {
+            if (str.IsEmpty())
+                return;
+
             _str = str.Split(separator, StringSplitOptions.RemoveEmptyEntries);
         }
 
         public StringArray(string str, params char[] separator)
         {
+            if (str.IsEmpty())
+                return;
+
             _str = str.Split(separator, StringSplitOptions.RemoveEmptyEntries);
         }
 
@@ -51,7 +57,12 @@ namespace Framework.Collections
             return _str.GetEnumerator();
         }
 
-        public int Length { get { return _str.Length; } }
+        public bool IsEmpty()
+        {
+            return _str == null || _str.Length == 0;
+        }
+
+        public int Length => _str != null ? _str.Length : 0;
 
         string[] _str;
     }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ namespace Game.Chat.Commands
         static bool HandleTitlesCurrentCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Htitle:title_id|h[name]|h|r
-            string id_p = handler.extractKeyFromLink(args, "Htitle");
+            string id_p = handler.ExtractKeyFromLink(args, "Htitle");
             if (string.IsNullOrEmpty(id_p))
                 return false;
 
@@ -41,7 +41,7 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (!target)
             {
                 handler.SendSysMessage(CypherStrings.NoCharSelected);
@@ -62,7 +62,7 @@ namespace Game.Chat.Commands
             string tNameLink = handler.GetNameLink(target);
 
             target.SetTitle(titleInfo);                            // to be sure that title now known
-            target.SetUInt32Value(PlayerFields.ChosenTitle, titleInfo.MaskID);
+            target.SetChosenTitle(titleInfo.MaskID);
 
             handler.SendSysMessage(CypherStrings.TitleCurrentRes, id, (target.GetGender() == Gender.Male ? titleInfo.Name : titleInfo.Name1)[handler.GetSessionDbcLocale()], tNameLink);
             return true;
@@ -72,7 +72,7 @@ namespace Game.Chat.Commands
         static bool HandleTitlesAddCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Htitle:title_id|h[name]|h|r
-            string id_p = handler.extractKeyFromLink(args, "Htitle");
+            string id_p = handler.ExtractKeyFromLink(args, "Htitle");
             if (string.IsNullOrEmpty(id_p))
                 return false;
 
@@ -82,7 +82,7 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (!target)
             {
                 handler.SendSysMessage(CypherStrings.NoCharSelected);
@@ -114,7 +114,7 @@ namespace Game.Chat.Commands
         static bool HandleTitlesRemoveCommand(StringArguments args, CommandHandler handler)
         {
             // number or [name] Shift-click form |color|Htitle:title_id|h[name]|h|r
-            string id_p = handler.extractKeyFromLink(args, "Htitle");
+            string id_p = handler.ExtractKeyFromLink(args, "Htitle");
             if (string.IsNullOrEmpty(id_p))
                 return false;
 
@@ -124,7 +124,7 @@ namespace Game.Chat.Commands
                 return false;
             }
 
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (!target)
             {
                 handler.SendSysMessage(CypherStrings.NoCharSelected);
@@ -150,9 +150,9 @@ namespace Game.Chat.Commands
 
             handler.SendSysMessage(CypherStrings.TitleRemoveRes, id, titleNameStr, tNameLink);
 
-            if (!target.HasTitle(target.GetUInt32Value(PlayerFields.ChosenTitle)))
+            if (!target.HasTitle(target.m_playerData.PlayerTitle))
             {
-                target.SetUInt32Value(PlayerFields.ChosenTitle, 0);
+                target.SetChosenTitle(0);
                 handler.SendSysMessage(CypherStrings.CurrentTitleReset, tNameLink);
             }
 
@@ -171,7 +171,7 @@ namespace Game.Chat.Commands
 
                 ulong titles = args.NextUInt64();
 
-                Player target = handler.getSelectedPlayer();
+                Player target = handler.GetSelectedPlayer();
                 if (!target)
                 {
                     handler.SendSysMessage(CypherStrings.NoCharSelected);
@@ -185,16 +185,16 @@ namespace Game.Chat.Commands
                 ulong titles2 = titles;
 
                 foreach (CharTitlesRecord tEntry in CliDB.CharTitlesStorage.Values)
-                    titles2 &= ~(1ul << (int)tEntry.MaskID);
+                    titles2 &= ~(1ul << tEntry.MaskID);
 
                 titles &= ~titles2;                                     // remove not existed titles
 
-                target.SetUInt64Value(PlayerFields.KnownTitles, titles);
+                target.SetKnownTitles(0, titles);
                 handler.SendSysMessage(CypherStrings.Done);
 
-                if (!target.HasTitle(target.GetUInt32Value(PlayerFields.ChosenTitle)))
+                if (!target.HasTitle(target.m_playerData.PlayerTitle))
                 {
-                    target.SetUInt32Value(PlayerFields.ChosenTitle, 0);
+                    target.SetChosenTitle(0);
                     handler.SendSysMessage(CypherStrings.CurrentTitleReset, handler.GetNameLink(target));
                 }
 

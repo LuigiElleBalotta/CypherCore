@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Framework.Dynamic
@@ -78,6 +77,7 @@ namespace Framework.Dynamic
         /// Calls the optional callback on successfully finish.
         /// </summary>
         /// <param name="milliseconds"></param>
+        /// <param name="callback"></param>
         /// <returns></returns>
         public TaskScheduler Update(uint milliseconds, success_t callback = null)
         {
@@ -89,6 +89,7 @@ namespace Framework.Dynamic
         /// Calls the optional callback on successfully finish.
         /// </summary>
         /// <param name="difftime"></param>
+        /// <param name="callback"></param>
         /// <returns></returns>
         TaskScheduler Update(TimeSpan difftime, success_t callback = null)
         {
@@ -157,7 +158,7 @@ namespace Framework.Dynamic
 
         public TaskScheduler CancelAll()
         {
-            /// Clear the task holder
+            // Clear the task holder
             _task_holder.Clear();
             _asyncHolder.Clear();
             return this;
@@ -165,10 +166,7 @@ namespace Framework.Dynamic
 
         public TaskScheduler CancelGroup(uint group)
         {
-            _task_holder.RemoveIf(task =>
-            {
-                return task.IsInGroup(group);
-            });
+            _task_holder.RemoveIf(task => task.IsInGroup(@group));
             return this;
         }
 
@@ -571,7 +569,7 @@ namespace Framework.Dynamic
         /// Returns the repeat counter which increases every time the task is repeated.
         /// </summary>
         /// <returns></returns>
-        uint GetRepeatCounter()
+        public uint GetRepeatCounter()
         {
             return _task._repeated;
         }
@@ -603,7 +601,7 @@ namespace Framework.Dynamic
         /// <returns></returns>
         public TaskContext CancelGroup(uint group)
         {
-            return Dispatch(() => CancelGroup(group));
+            return Dispatch(() => _owner.CancelGroup(group));
         }
 
         /// <summary>
@@ -613,7 +611,7 @@ namespace Framework.Dynamic
         /// <returns></returns>
         public TaskContext CancelGroupsOf(List<uint> groups)
         {
-            return Dispatch(() => CancelGroupsOf(groups));
+            return Dispatch(() => _owner.CancelGroupsOf(groups));
         }
 
         /// <summary>
@@ -623,7 +621,7 @@ namespace Framework.Dynamic
         {
             // This was adapted to TC to prevent static analysis tools from complaining.
             // If you encounter this assertion check if you repeat a TaskContext more then 1 time!
-            Contract.Assert(!_consumed, "Bad task logic, task context was consumed already!");
+            Cypher.Assert(!_consumed, "Bad task logic, task context was consumed already!");
         }
 
         /// <summary>
@@ -689,10 +687,7 @@ namespace Framework.Dynamic
         public TaskContext Schedule(TimeSpan time, Action<TaskContext> task)
         {
             var end = _task._end;
-            return Dispatch(scheduler =>
-            {
-                return scheduler.ScheduleAt(end, time, task);
-            });
+            return Dispatch(scheduler => scheduler.ScheduleAt(end, time, task));
         }
         public TaskContext Schedule(TimeSpan time, Action task) { return Schedule(time, delegate (TaskContext task1) { task(); }); }
 
@@ -709,7 +704,7 @@ namespace Framework.Dynamic
         public TaskContext Schedule(TimeSpan time, uint group, Action<TaskContext> task)
         {
             var end = _task._end;
-            return Dispatch(scheduler => { return scheduler.ScheduleAt(end, time, group, task); });
+            return Dispatch(scheduler => scheduler.ScheduleAt(end, time, @group, task));
         }
         public TaskContext Schedule(TimeSpan time, uint group, Action task) { return Schedule(time, group, delegate (TaskContext task1) { task(); }); }
 

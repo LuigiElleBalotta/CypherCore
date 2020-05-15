@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -97,6 +97,7 @@ namespace Game.Collision
             uint tx = (uint)tx_f;
             if (tx_f < 0.0f || tx >= iTilesX)
                 return false;
+
             float ty_f = (pos.Y - iCorner.Y) / MapConst.LiquidTileSize;
             uint ty = (uint)ty_f;
             if (ty_f < 0.0f || ty >= iTilesY)
@@ -127,7 +128,7 @@ namespace Game.Collision
             return true;
         }
 
-        public static WmoLiquid readFromFile(BinaryReader reader)
+        public static WmoLiquid ReadFromFile(BinaryReader reader)
         {
             WmoLiquid liquid = new WmoLiquid();
 
@@ -139,14 +140,10 @@ namespace Game.Collision
             if (liquid.iTilesX != 0 && liquid.iTilesY != 0)
             {
                 uint size = (liquid.iTilesX + 1) * (liquid.iTilesY + 1);
-                liquid.iHeight = new float[size];
-                for (var i = 0; i < size; i++)
-                    liquid.iHeight[i] = reader.ReadSingle();
+                liquid.iHeight = reader.ReadArray<float>(size);
 
                 size = liquid.iTilesX * liquid.iTilesY;
-                liquid.iFlags = new byte[size];
-                for (var i = 0; i < size; i++)
-                    liquid.iFlags[i] = reader.ReadByte();
+                liquid.iFlags = reader.ReadArray<byte>(size);
             }
             else
             {
@@ -196,21 +193,20 @@ namespace Game.Collision
             iLiquid = null;
         }
 
-        void setLiquidData(WmoLiquid liquid)
+        void SetLiquidData(WmoLiquid liquid)
         {
             iLiquid = liquid;
-            liquid = null;
         }
 
-        public bool readFromFile(BinaryReader reader)
+        public bool ReadFromFile(BinaryReader reader)
         {
-            uint chunkSize = 0;
-            uint count = 0;
             triangles.Clear();
             vertices.Clear();
             iLiquid = null;
 
-            iBound = reader.ReadStruct<AxisAlignedBox>();
+            var lo = reader.Read<Vector3>();
+            var hi = reader.Read<Vector3>();
+            iBound = new AxisAlignedBox(lo, hi);
             iMogpFlags = reader.ReadUInt32();
             iGroupWMOID = reader.ReadUInt32();
 
@@ -218,8 +214,8 @@ namespace Game.Collision
             if (reader.ReadStringFromChars(4) != "VERT")
                 return false;
 
-            chunkSize = reader.ReadUInt32();
-            count = reader.ReadUInt32();
+            uint chunkSize = reader.ReadUInt32();
+            uint count = reader.ReadUInt32();
             if (count == 0)
                 return false;
 
@@ -234,19 +230,21 @@ namespace Game.Collision
             count = reader.ReadUInt32();
 
             for (var i = 0; i < count; ++i)
-                triangles.Add(reader.ReadStruct<MeshTriangle>());
+                triangles.Add(reader.Read<MeshTriangle>());
 
             // read mesh BIH
             if (reader.ReadStringFromChars(4) != "MBIH")
                 return false;
-            meshTree.readFromFile(reader);
+
+            meshTree.ReadFromFile(reader);
 
             // write liquid data
-            if (reader.ReadStringFromChars(4).ToString() != "LIQU")
+            if (reader.ReadStringFromChars(4) != "LIQU")
                 return false;
+
             chunkSize = reader.ReadUInt32();
             if (chunkSize > 0)
-                iLiquid = WmoLiquid.readFromFile(reader);
+                iLiquid = WmoLiquid.ReadFromFile(reader);
 
             return true;
         }
@@ -257,7 +255,7 @@ namespace Game.Collision
                 return false;
 
             GModelRayCallback callback = new GModelRayCallback(triangles, vertices);
-            meshTree.intersectRay(ray, callback, ref distance, stopAtFirstHit);
+            meshTree.IntersectRay(ray, callback, ref distance, stopAtFirstHit);
             return callback.hit;
         }
 
@@ -266,7 +264,7 @@ namespace Game.Collision
             z_dist = 0f;
             if (triangles.Empty() || !iBound.contains(pos))
                 return false;
-            GModelRayCallback callback = new GModelRayCallback(triangles, vertices);
+
             Vector3 rPos = pos - 0.1f * down;
             float dist = float.PositiveInfinity;
             Ray ray = new Ray(rPos, down);
@@ -291,7 +289,7 @@ namespace Game.Collision
             return 0;
         }
 
-        public override AxisAlignedBox getBounds() { return iBound; }
+        public override AxisAlignedBox GetBounds() { return iBound; }
 
         public uint GetMogpFlags() { return iMogpFlags; }
 
@@ -313,15 +311,23 @@ namespace Game.Collision
             RootWMOID = 0;
         }
 
-        public override bool IntersectRay(Ray ray, ref float distance, bool stopAtFirstHit)
+        public override bool IntersectRay(Ray ray, ref float distance, bool stopAtFirstHit, ModelIgnoreFlags ignoreFlags)
         {
+            // If the caller asked us to ignore certain objects we should check flags
+            if ((ignoreFlags & ModelIgnoreFlags.M2) != ModelIgnoreFlags.Nothing)
+            {
+                // M2 models are not taken into account for LoS calculation if caller requested their ignoring.
+                if ((Flags & (uint)ModelFlags.M2) != 0)
+                    return false;
+            }
+
             // small M2 workaround, maybe better make separate class with virtual intersection funcs
             // in any case, there's no need to use a bound tree if we only have one submodel
             if (groupModels.Count == 1)
                 return groupModels[0].IntersectRay(ray, ref distance, stopAtFirstHit);
 
             WModelRayCallBack isc = new WModelRayCallBack(groupModels);
-            groupTree.intersectRay(ray, isc, ref distance, stopAtFirstHit);
+            groupTree.IntersectRay(ray, isc, ref distance, stopAtFirstHit);
             return isc.hit;
         }
 
@@ -332,7 +338,7 @@ namespace Game.Collision
                 return false;
 
             WModelAreaCallback callback = new WModelAreaCallback(groupModels, down);
-            groupTree.intersectPoint(p, callback);
+            groupTree.IntersectPoint(p, callback);
             if (callback.hit != null)
             {
                 info.rootId = (int)RootWMOID;
@@ -352,7 +358,7 @@ namespace Game.Collision
                 return false;
 
             WModelAreaCallback callback = new WModelAreaCallback(groupModels, down);
-            groupTree.intersectPoint(p, callback);
+            groupTree.IntersectPoint(p, callback);
             if (callback.hit != null)
             {
                 info.hitModel = callback.hit;
@@ -362,46 +368,49 @@ namespace Game.Collision
             return false;
         }
 
-        public bool readFile(string filename)
+        public bool ReadFile(string filename)
         {
             if (!File.Exists(filename))
-                return false;
+            {
+                filename = filename + ".vmo";
+                if (!File.Exists(filename))
+                    return false;
+            }
+
             using (BinaryReader reader = new BinaryReader(new FileStream(filename, FileMode.Open, FileAccess.Read)))
             {
-                uint chunkSize = 0;
-                uint count = 0;
                 if (reader.ReadStringFromChars(8) != MapConst.VMapMagic)
                     return false;
 
                 if (reader.ReadStringFromChars(4) != "WMOD")
                     return false;
-                chunkSize = reader.ReadUInt32();
+
+                reader.ReadUInt32(); //chunkSize notused
                 RootWMOID = reader.ReadUInt32();
 
                 // read group models
                 if (reader.ReadStringFromChars(4) != "GMOD")
                     return false;
 
-                count = reader.ReadUInt32();
+                uint count = reader.ReadUInt32();
                 for (var i = 0; i < count; ++i)
                 {
                     GroupModel group = new GroupModel();
-                    group.readFromFile(reader);
+                    group.ReadFromFile(reader);
                     groupModels.Add(group);
                 }
 
                 // read group BIH
                 if (reader.ReadStringFromChars(4) != "GBIH")
                     return false;
-                groupTree.readFromFile(reader);
 
-
-                return true;
+                return groupTree.ReadFromFile(reader);
             }
         }
 
         List<GroupModel> groupModels = new List<GroupModel>();
         BIH groupTree = new BIH();
         uint RootWMOID;
+        public uint Flags;
     }
 }

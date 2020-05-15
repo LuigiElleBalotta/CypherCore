@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@ using Game.DataStorage;
 using Game.Entities;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 
 namespace Game
 {
@@ -104,7 +103,6 @@ namespace Game
                                 if (uint.TryParse(array[i++], out uint id))
                                     data.param1.Add(id);
                             }
-                                
                         }
 
                         break;
@@ -289,7 +287,7 @@ namespace Game
 
         public bool IsDisabledFor(DisableType type, uint entry, Unit unit, byte flags = 0)
         {
-            Contract.Assert(type < DisableType.Max);
+            Cypher.Assert(type < DisableType.Max);
             if (!m_DisableMap.ContainsKey(type) || m_DisableMap[type].Empty())
                 return false;
 

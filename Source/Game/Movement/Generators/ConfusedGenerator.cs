@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ namespace Game.Movement
         public override void DoInitialize(T owner)
         {
             owner.AddUnitState(UnitState.Confused);
-            owner.SetFlag(UnitFields.Flags, UnitFlags.Confused);
+            owner.AddUnitFlag(UnitFlags.Confused);
             owner.GetPosition(out i_x, out i_y, out i_z);
 
             if (!owner.IsAlive() || owner.IsStopped())
@@ -45,13 +45,13 @@ namespace Game.Movement
         {
             if (owner.IsTypeId(TypeId.Player))
             {
-                owner.RemoveFlag(UnitFields.Flags, UnitFlags.Confused);
+                owner.RemoveUnitFlag(UnitFlags.Confused);
                 owner.ClearUnitState(UnitState.Confused | UnitState.ConfusedMove);
                 owner.StopMoving();
             }
             else if (owner.IsTypeId(TypeId.Unit))
             {
-                owner.RemoveFlag(UnitFields.Flags, UnitFlags.Confused);
+                owner.RemoveUnitFlag(UnitFlags.Confused);
                 owner.ClearUnitState(UnitState.Confused | UnitState.ConfusedMove);
                 if (owner.GetVictim())
                     owner.SetTarget(owner.GetVictim().GetGUID());
@@ -79,7 +79,7 @@ namespace Game.Movement
                 // currently moving, update location
                 owner.AddUnitState(UnitState.ConfusedMove);
 
-                if (owner.moveSpline.Finalized())
+                if (owner.MoveSpline.Finalized())
                     i_nextMoveTime.Reset(RandomHelper.IRand(800, 1500));
             }
             else

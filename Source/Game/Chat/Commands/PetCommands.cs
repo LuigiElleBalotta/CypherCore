@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ namespace Game.Chat
         static bool HandlePetCreateCommand(StringArguments args, CommandHandler handler)
         {
             Player player = handler.GetSession().GetPlayer();
-            Creature creatureTarget = handler.getSelectedCreature();
+            Creature creatureTarget = handler.GetSelectedCreature();
 
             if (!creatureTarget || creatureTarget.IsPet() || creatureTarget.IsTypeId(TypeId.Player))
             {
@@ -59,14 +59,14 @@ namespace Game.Chat
                 return false;
             }
 
-            creatureTarget.setDeathState(DeathState.JustDied);
+            creatureTarget.SetDeathState(DeathState.JustDied);
             creatureTarget.RemoveCorpse();
             creatureTarget.SetHealth(0); // just for nice GM-mode view
 
-            pet.SetGuidValue(UnitFields.CreatedBy, player.GetGUID());
-            pet.SetUInt32Value(UnitFields.FactionTemplate, player.getFaction());
+            pet.SetCreatorGUID(player.GetGUID());
+            pet.SetFaction(player.GetFaction());
 
-            if (!pet.InitStatsForLevel(creatureTarget.getLevel()))
+            if (!pet.InitStatsForLevel(creatureTarget.GetLevel()))
             {
                 Log.outError(LogFilter.ChatSystem, "InitStatsForLevel() in EffectTameCreature failed! Pet deleted.");
                 handler.SendSysMessage("Error 2");
@@ -74,7 +74,7 @@ namespace Game.Chat
             }
 
             // prepare visual effect for levelup
-            pet.SetUInt32Value(UnitFields.Level, creatureTarget.getLevel() - 1);
+            pet.SetLevel(creatureTarget.GetLevel() - 1);
 
             pet.GetCharmInfo().SetPetNumber(Global.ObjectMgr.GeneratePetNumber(), true);
             // this enables pet details window (Shift+P)
@@ -84,7 +84,7 @@ namespace Game.Chat
             pet.GetMap().AddToMap(pet.ToCreature());
 
             // visual effect for levelup
-            pet.SetUInt32Value(UnitFields.Level, creatureTarget.getLevel());
+            pet.SetLevel(creatureTarget.GetLevel());
 
             player.SetMinion(pet, true);
             pet.SavePetToDB(PetSaveMode.AsCurrent);
@@ -106,7 +106,7 @@ namespace Game.Chat
                 return false;
             }
 
-            uint spellId = handler.extractSpellIdFromLink(args);
+            uint spellId = handler.ExtractSpellIdFromLink(args);
             if (spellId == 0 || !Global.SpellMgr.HasSpellInfo(spellId))
                 return false;
 
@@ -125,7 +125,7 @@ namespace Game.Chat
                 return false;
             }
 
-            pet.learnSpell(spellId);
+            pet.LearnSpell(spellId);
 
             handler.SendSysMessage("Pet has learned spell {0}", spellId);
             return true;
@@ -144,10 +144,10 @@ namespace Game.Chat
                 return false;
             }
 
-            uint spellId = handler.extractSpellIdFromLink(args);
+            uint spellId = handler.ExtractSpellIdFromLink(args);
 
             if (pet.HasSpell(spellId))
-                pet.removeSpell(spellId, false);
+                pet.RemoveSpell(spellId, false);
             else
                 handler.SendSysMessage("Pet doesn't have that spell");
 
@@ -167,18 +167,18 @@ namespace Game.Chat
 
             int level = args.NextInt32();
             if (level == 0)
-                level = (int)(owner.getLevel() - pet.getLevel());
+                level = (int)(owner.GetLevel() - pet.GetLevel());
             if (level == 0 || level < -SharedConst.StrongMaxLevel || level > SharedConst.StrongMaxLevel)
             {
                 handler.SendSysMessage(CypherStrings.BadValue);
                 return false;
             }
 
-            int newLevel = (int)pet.getLevel() + level;
+            int newLevel = (int)pet.GetLevel() + level;
             if (newLevel < 1)
                 newLevel = 1;
-            else if (newLevel > owner.getLevel())
-                newLevel = (int)owner.getLevel();
+            else if (newLevel > owner.GetLevel())
+                newLevel = (int)owner.GetLevel();
 
             pet.GivePetLevel(newLevel);
             return true;
@@ -186,7 +186,7 @@ namespace Game.Chat
 
         static Pet GetSelectedPlayerPetOrOwn(CommandHandler handler)
         {
-            Unit target = handler.getSelectedUnit();
+            Unit target = handler.GetSelectedUnit();
             if (target)
             {
                 if (target.IsTypeId(TypeId.Player))

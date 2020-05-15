@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@ using Game.Groups;
 using Game.Maps;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace Game.Entities
@@ -60,7 +59,7 @@ namespace Game.Entities
             if (map == null)
             {
                 var entry = CliDB.MapStorage.LookupByKey(id);
-                Contract.Assert(entry != null);
+                Cypher.Assert(entry != null);
                 if (entry.ParentMapID != -1)
                 {
                     CreateBaseMap((uint)entry.ParentMapID);
@@ -73,7 +72,7 @@ namespace Game.Entities
                 lock(_mapsLock)
                     map = CreateBaseMap_i(entry);
             }
-            Contract.Assert(map != null);
+            Cypher.Assert(map != null);
             return map;
         }
 
@@ -83,16 +82,18 @@ namespace Game.Entities
             if (mapEntry.Instanceable())
                 map = new MapInstanced(mapEntry.Id, i_gridCleanUpDelay);
             else
-            {
                 map = new Map(mapEntry.Id, i_gridCleanUpDelay, 0, Difficulty.None);
-                map.LoadRespawnTimes();
-                map.LoadCorpseData();
-            }
 
             i_maps[mapEntry.Id] = map;
 
             foreach (uint childMapId in _parentMapData[mapEntry.Id])
                 map.AddChildTerrainMap(CreateBaseMap_i(CliDB.MapStorage.LookupByKey(childMapId)));
+
+            if (!mapEntry.Instanceable())
+            {
+                map.LoadRespawnTimes();
+                map.LoadCorpseData();
+            }
 
             return map;
         }
@@ -140,8 +141,7 @@ namespace Game.Entities
             if (instance == null)
                 return EnterState.CannotEnterUninstancedDungeon;
 
-            Difficulty targetDifficulty, requestedDifficulty;
-            targetDifficulty = requestedDifficulty = player.GetDifficultyID(entry);
+            Difficulty targetDifficulty = player.GetDifficultyID(entry);
             // Get the highest available difficulty if current setting is higher than the instance allows
             MapDifficultyRecord mapDiff = Global.DB2Mgr.GetDownscaledMapDifficultyData(entry.Id, ref targetDifficulty);
             if (mapDiff == null)
@@ -154,8 +154,8 @@ namespace Game.Entities
             string mapName = entry.MapName[Global.WorldMgr.GetDefaultDbcLocale()];
 
             Group group = player.GetGroup();
-            if (entry.IsRaid()) // can only enter in a raid group
-                if ((!group || !group.isRaidGroup()) && WorldConfig.GetBoolValue(WorldCfg.InstanceIgnoreRaid))
+            if (entry.IsRaid() && entry.Expansion() >= (Expansion)WorldConfig.GetIntValue(WorldCfg.Expansion)) // can only enter in a raid group but raids from old expansion don't need a group
+                if ((!group || !group.IsRaidGroup()) && WorldConfig.GetBoolValue(WorldCfg.InstanceIgnoreRaid))
                     return EnterState.CannotEnterNotInRaid;
 
             if (!player.IsAlive())
@@ -198,7 +198,7 @@ namespace Game.Entities
                 }
             }
             // players are only allowed to enter 10 instances per hour
-            if (entry.IsDungeon() && (player.GetGroup() == null || (player.GetGroup() != null && !player.GetGroup().isLFGGroup())))
+            if (entry.IsDungeon() && (player.GetGroup() == null || (player.GetGroup() != null && !player.GetGroup().IsLFGGroup())))
             {
                 uint instaceIdToCheck = 0;
                 InstanceSave save = player.GetInstanceSave(mapid);
@@ -224,10 +224,10 @@ namespace Game.Entities
                 return;
 
             var time = (uint)i_timer.GetCurrent();
-            foreach (var map in i_maps.Values.ToList())
+            foreach (var map in i_maps.Values)
             {
                 if (m_updater != null)
-                    m_updater.Enqueue(map, (uint)i_timer.GetCurrent());
+                    m_updater.ScheduleUpdate(map, (uint)i_timer.GetCurrent());
                 else
                     map.Update(time);
             }
@@ -235,7 +235,7 @@ namespace Game.Entities
             if (m_updater != null)
                 m_updater.Wait();
 
-            foreach (var map in i_maps.ToList())
+            foreach (var map in i_maps)
                 map.Value.DelayedUpdate(time);
 
             i_timer.SetCurrent(0);
@@ -245,8 +245,8 @@ namespace Game.Entities
         {
             GridCoord p = GridDefines.ComputeGridCoord(x, y);
 
-            uint gx = 63 - p.x_coord;
-            uint gy = 63 - p.y_coord;
+            uint gx = 63 - p.X_coord;
+            uint gy = 63 - p.Y_coord;
 
             return Map.ExistMap(mapid, gx, gy) && Map.ExistVMap(mapid, gx, gy);
         }
@@ -272,8 +272,12 @@ namespace Game.Entities
             foreach (var pair in i_maps.ToList())
             {
                 pair.Value.UnloadAll();
+                pair.Value.Dispose();
                 i_maps.Remove(pair.Key);
             }
+
+            if (m_updater != null)
+                m_updater.Deactivate();
         }
 
         public uint GetNumInstances()
@@ -281,7 +285,7 @@ namespace Game.Entities
             lock (_mapsLock)
             {
                 uint ret = 0;
-                foreach (var pair in i_maps.ToList())
+                foreach (var pair in i_maps)
                 {
                     Map map = pair.Value;
                     if (!map.Instanceable())

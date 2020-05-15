@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ namespace Game.Chat
             {
                 if (args.Empty())
                 {
-                    if (session.HasPermission(RBACPermissions.ChatUseStaffBadge) && session.GetPlayer().isGMChat())
+                    if (session.HasPermission(RBACPermissions.ChatUseStaffBadge) && session.GetPlayer().IsGMChat())
                         session.SendNotification(CypherStrings.GmChatOn);
                     else
                         session.SendNotification(CypherStrings.GmChatOff);
@@ -98,7 +98,7 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            Player target = handler.getSelectedPlayer();
+            Player target = handler.GetSelectedPlayer();
             if (target == null)
                 target = handler.GetPlayer();
 
@@ -206,7 +206,7 @@ namespace Game.Chat
 
             if (args.Empty())
             {
-                handler.SendSysMessage(CypherStrings.YouAre, _player.isGMVisible() ? Global.ObjectMgr.GetCypherString(CypherStrings.Visible) : Global.ObjectMgr.GetCypherString(CypherStrings.Invisible));
+                handler.SendSysMessage(CypherStrings.YouAre, _player.IsGMVisible() ? Global.ObjectMgr.GetCypherString(CypherStrings.Visible) : Global.ObjectMgr.GetCypherString(CypherStrings.Invisible));
                 return true;
             }
 

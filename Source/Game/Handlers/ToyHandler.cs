@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@ namespace Game
                 return;
             }
 
-            if (_collectionMgr.AddToy(item.GetEntry(), false))
+            if (_collectionMgr.AddToy(item.GetEntry(), false, false))
                 _player.DestroyItem(item.GetBagSlot(), item.GetSlot(), true);
         }
 
@@ -63,7 +63,7 @@ namespace Game
             if (!_collectionMgr.HasToy(itemId))
                 return;
 
-            var effect = item.Effects.Find(eff => { return packet.Cast.SpellID == eff.SpellID; });
+            var effect = item.Effects.Find(eff => packet.Cast.SpellID == eff.SpellID);
             if (effect == null)
                 return;
 
@@ -74,7 +74,7 @@ namespace Game
                 return;
             }
 
-            if (_player.isPossessing())
+            if (_player.IsPossessing())
                 return;
 
             SpellCastTargets targets = new SpellCastTargets(_player, packet.Cast);
@@ -91,7 +91,13 @@ namespace Game
             spell.m_misc.Data0 = packet.Cast.Misc[0];
             spell.m_misc.Data1 = packet.Cast.Misc[1];
             spell.m_castFlagsEx |= SpellCastFlagsEx.UseToySpell;
-            spell.prepare(targets);
+            spell.Prepare(targets);
+        }
+
+        [WorldPacketHandler(ClientOpcodes.ToyClearFanfare)]
+        void HandleToyClearFanfare(ToyClearFanfare toyClearFanfare)
+        {
+            _collectionMgr.ToyClearFanfare(toyClearFanfare.ItemID);
         }
     }
 }

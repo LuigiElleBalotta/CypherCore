@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ namespace Game.Network.Packets
             {
                 TransmogrifyItem item = new TransmogrifyItem();
                 item.Read(_worldPacket);
-                Items.Add(item);
+                Items[i] = item;
             }
 
             CurrentSpecOnly = _worldPacket.HasBit();
@@ -53,15 +53,20 @@ namespace Game.Network.Packets
         {
             _worldPacket.WriteBit(IsFullUpdate);
             _worldPacket.WriteBit(IsSetFavorite);
-            _worldPacket.WriteUInt32(FavoriteAppearances.Count);
+            _worldPacket.WriteInt32(FavoriteAppearances.Count);
+            _worldPacket.WriteInt32(NewAppearances.Count);
 
             foreach (uint itemModifiedAppearanceId in FavoriteAppearances)
                 _worldPacket.WriteUInt32(itemModifiedAppearanceId);
+
+            foreach (var newAppearance in NewAppearances)
+                _worldPacket.WriteUInt32(newAppearance);
         }
 
         public bool IsFullUpdate;
         public bool IsSetFavorite;
         public List<uint> FavoriteAppearances = new List<uint>();
+        public List<uint> NewAppearances = new List<uint>();
     }
 
     class OpenTransmogrifier : ServerPacket

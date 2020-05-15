@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,11 +36,11 @@ namespace Game.DataStorage
     {
         public TaxiPathBySourceAndDestination(uint _id, uint _price)
         {
-            ID = _id;
+            Id = _id;
             price = _price;
         }
 
-        public uint ID;
+        public uint Id;
         public uint price;
     }
 }

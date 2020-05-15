@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,20 +71,20 @@ public static class MathFunctions
     /// Returns the clamped value.
     /// result = (EpsilonF > Abs(value-calmpedValue)) ? calmpedValue : value;
     /// </returns>
-    /// <remarks><see cref="MathFunctions.EpsilonF"/> is used for tolerance.</remarks>
+    /// <remarks><see cref="MathFunctions.Epsilon"/> is used for tolerance.</remarks>
     public static float Clamp(float value, float calmpedValue)
     {
         return (Epsilon > Math.Abs(value - calmpedValue)) ? calmpedValue : value;
     }
     #endregion
 
-    static double eps(double a, double b)
+    static double eps(float a, float b)
     {
-        double aa = Math.Abs(a) + 1.0;
-        if (aa == double.PositiveInfinity)
-            return double.Epsilon;
-        else
-            return double.Epsilon * aa;
+        float aa = Math.Abs(a) + 1.0f;
+        if (float.IsPositiveInfinity(aa))
+            return 0.00001f;
+
+        return 0.00001f * aa;
     }
 
     public static float lerp(float a, float b, float f)
@@ -98,27 +98,27 @@ public static class MathFunctions
     }
 
     #region Fuzzy
-    public static bool fuzzyEq(double a, double b)
+    public static bool fuzzyEq(float a, float b)
     {
         return (a == b) || (Math.Abs(a - b) <= eps(a, b));
     }
-    public static bool fuzzyGt(double a, double b)
+    public static bool fuzzyGt(float a, float b)
     {
         return a > b + eps(a, b);
     }
-    public static bool fuzzyLt(double a, double b)
+    public static bool fuzzyLt(float a, float b)
     {
         return a < b - eps(a, b);
     }
-    public static bool fuzzyNe(double a, double b)
+    public static bool fuzzyNe(float a, float b)
     {
         return !fuzzyEq(a, b);
     }
-    public static bool fuzzyLe(double a, double b)
+    public static bool fuzzyLe(float a, float b)
     {
         return a < b + eps(a, b);
     }
-    public static bool fuzzyGe(double a, double b)
+    public static bool fuzzyGe(float a, float b)
     {
         return a > b - eps(a, b);
     }
@@ -207,7 +207,7 @@ public static class MathFunctions
                 return val1 <= val2;
             default:
                 // incorrect parameter
-                //Contract.Assert(false);
+                Cypher.Assert(false);
                 return false;
         }
 
@@ -228,7 +228,7 @@ public static class MathFunctions
                 return val1 <= val2;
             default:
                 // incorrect parameter
-                //Contract.Assert(false);
+                Cypher.Assert(false);
                 return false;
         }
     }

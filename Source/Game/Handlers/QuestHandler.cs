@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ using Game.Network;
 using Game.Network.Packets;
 using Game.DataStorage;
 using System.Collections.Generic;
-using System;
 
 namespace Game
 {
@@ -62,7 +61,7 @@ namespace Game
         [WorldPacketHandler(ClientOpcodes.QuestGiverHello)]
         void HandleQuestgiverHello(QuestGiverHello packet)
         {
-            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.QuestGiverGUID, NPCFlags.QuestGiver);
+            Creature creature = GetPlayer().GetNPCIfCanInteractWith(packet.QuestGiverGUID, NPCFlags.QuestGiver, NPCFlags2.None);
             if (creature == null)
             {
                 Log.outDebug(LogFilter.Network, "WORLD: HandleQuestgiverHello - {0} not found or you can't interact with him.", packet.QuestGiverGUID.ToString());
@@ -81,7 +80,7 @@ namespace Game
             GetPlayer().PrepareGossipMenu(creature, creature.GetCreatureTemplate().GossipMenuId, true);
             GetPlayer().SendPreparedGossip(creature);
 
-            creature.GetAI().sGossipHello(GetPlayer());
+            creature.GetAI().GossipHello(GetPlayer());
         }
 
         [WorldPacketHandler(ClientOpcodes.QuestGiverAcceptQuest)]
@@ -122,7 +121,7 @@ namespace Game
             }
             else
             {
-                if (!obj.hasQuest(packet.QuestID))
+                if (!obj.HasQuest(packet.QuestID))
                 {
                     CLOSE_GOSSIP_CLEAR_DIVIDER();
                     return;
@@ -165,7 +164,7 @@ namespace Game
                         var group = _player.GetGroup();
                         if (group)
                         {
-                            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                             {
                                 Player player = refe.GetSource();
 
@@ -187,9 +186,6 @@ namespace Game
 
                     _player.PlayerTalkClass.SendCloseGossip();
 
-                    if (quest.SourceSpellID > 0)
-                        _player.CastSpell(_player, quest.SourceSpellID, true);
-
                     return;
                 }
             }
@@ -202,7 +198,7 @@ namespace Game
         {
             // Verify that the guid is valid and is a questgiver or involved in the requested quest
             var obj = Global.ObjAccessor.GetObjectByTypeMask(GetPlayer(), packet.QuestGiverGUID, (TypeMask.Unit | TypeMask.GameObject | TypeMask.Item));
-            if (!obj || (!obj.hasQuest(packet.QuestID) && !obj.hasInvolvedQuest(packet.QuestID)))
+            if (!obj || (!obj.HasQuest(packet.QuestID) && !obj.HasInvolvedQuest(packet.QuestID)))
             {
                 GetPlayer().PlayerTalkClass.SendCloseGossip();
                 return;
@@ -311,7 +307,7 @@ namespace Game
             if (!quest.HasFlag(QuestFlags.AutoComplete))
             {
                 obj = Global.ObjAccessor.GetObjectByTypeMask(GetPlayer(), packet.QuestGiverGUID, TypeMask.Unit | TypeMask.GameObject);
-                if (!obj || !obj.hasInvolvedQuest(packet.QuestID))
+                if (!obj || !obj.HasInvolvedQuest(packet.QuestID))
                     return;
 
                 // some kind of WPE protection
@@ -355,7 +351,7 @@ namespace Game
                                 }
 
                                 if (creatureQGiver)
-                                    creatureQGiver.GetAI().sQuestReward(GetPlayer(), quest, packet.ItemChoiceID);
+                                    creatureQGiver.GetAI().QuestReward(GetPlayer(), quest, packet.ItemChoiceID);
                             }
                             break;
                         }
@@ -392,7 +388,7 @@ namespace Game
         void HandleQuestgiverRequestReward(QuestGiverRequestReward packet)
         {
             WorldObject obj = Global.ObjAccessor.GetObjectByTypeMask(GetPlayer(), packet.QuestGiverGUID, TypeMask.Unit | TypeMask.GameObject);
-            if (obj == null || !obj.hasInvolvedQuest(packet.QuestID))
+            if (obj == null || !obj.HasInvolvedQuest(packet.QuestID))
                 return;
 
             // some kind of WPE protection
@@ -471,7 +467,7 @@ namespace Game
                 if (!GetPlayer().IsInSameRaidWith(originalPlayer))
                     return;
 
-                if (!!originalPlayer.IsActiveQuest(packet.QuestID))
+                if (!originalPlayer.IsActiveQuest(packet.QuestID))
                     return;
 
                 if (!GetPlayer().CanTakeQuest(quest, true))
@@ -512,7 +508,7 @@ namespace Game
 
             if (!autoCompleteMode)
             {
-                if (!obj.hasInvolvedQuest(packet.QuestID))
+                if (!obj.HasInvolvedQuest(packet.QuestID))
                     return;
 
                 // some kind of WPE protection
@@ -567,7 +563,7 @@ namespace Game
             Group group = sender.GetGroup();
             if (!group)
                 return;
-            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+            for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
             {
                 Player receiver = refe.GetSource();
 
@@ -646,7 +642,7 @@ namespace Game
         {
             WorldQuestUpdate response = new WorldQuestUpdate();
 
-            /// @todo: 7.x Has to be implemented
+            // @todo: 7.x Has to be implemented
             //response.WorldQuestUpdates.push_back(WorldPackets::Quest::WorldQuestUpdateInfo(lastUpdate, questID, timer, variableID, value));
 
             SendPacket(response);
@@ -700,7 +696,7 @@ namespace Game
                     List<ItemPosCount> dest = new List<ItemPosCount>();
                     if (_player.CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, item.Id, (uint)item.Quantity) == InventoryResult.Ok)
                     {
-                        Item newItem = _player.StoreNewItem(dest, item.Id, true, ItemEnchantment.GenerateItemRandomPropertyId(item.Id), null, 0, item.BonusListIDs);
+                        Item newItem = _player.StoreNewItem(dest, item.Id, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(item.Id), null, ItemContext.QuestReward, item.BonusListIDs);
                         _player.SendNewItem(newItem, (uint)item.Quantity, true, false);
                     }
                 }

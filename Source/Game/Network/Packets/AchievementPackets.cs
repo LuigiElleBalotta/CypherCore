@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@ using Framework.Constants;
 using Game.Entities;
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using Framework.Dynamic;
 
 namespace Game.Network.Packets
 {
@@ -124,9 +124,9 @@ namespace Game.Network.Packets
         public ObjectGuid Sender;
     }
 
-    public class ServerFirstAchievement : ServerPacket
+    public class BroadcastAchievement  : ServerPacket
     {
-        public ServerFirstAchievement() : base(ServerOpcodes.ServerFirstAchievement) { }
+        public BroadcastAchievement() : base(ServerOpcodes.BroadcastAchievement) { }
 
         public override void Write()
         {
@@ -149,11 +149,11 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Progress.Count);
+            _worldPacket.WriteInt32(Progress.Count);
 
             foreach (GuildCriteriaProgress progress in Progress)
             {
-                _worldPacket.WriteInt32(progress.CriteriaID);
+                _worldPacket.WriteUInt32(progress.CriteriaID);
                 _worldPacket.WriteUInt32(progress.DateCreated);
                 _worldPacket.WriteUInt32(progress.DateStarted);
                 _worldPacket.WritePackedTime(progress.DateUpdated);
@@ -230,7 +230,7 @@ namespace Game.Network.Packets
 
         public override void Write()
         {
-            _worldPacket.WriteUInt32(Earned.Count());
+            _worldPacket.WriteInt32(Earned.Count);
 
             foreach (EarnedAchievement earned in Earned)
                 earned.Write(_worldPacket);
@@ -263,7 +263,7 @@ namespace Game.Network.Packets
         {
             _worldPacket.WritePackedGuid(GuildGUID);
             _worldPacket.WriteUInt32(AchievementID);
-            _worldPacket.WriteUInt32(Member.Count);
+            _worldPacket.WriteInt32(Member.Count);
             foreach (ObjectGuid guid in Member)
                 _worldPacket.WritePackedGuid(guid);
         }
@@ -303,7 +303,11 @@ namespace Game.Network.Packets
             data.WriteUInt32(TimeFromStart);
             data.WriteUInt32(TimeFromCreate);
             data.WriteBits(Flags, 4);
+            data.WriteBit(RafAcceptanceID.HasValue);
             data.FlushBits();
+
+            if (RafAcceptanceID.HasValue)
+                data.WriteUInt64(RafAcceptanceID.Value);
         }
 
         public uint Id;
@@ -313,6 +317,7 @@ namespace Game.Network.Packets
         public long Date;
         public uint TimeFromStart;
         public uint TimeFromCreate;
+        public Optional<ulong> RafAcceptanceID;
     }
 
     public struct GuildCriteriaProgress
@@ -330,8 +335,8 @@ namespace Game.Network.Packets
     {
         public void Write(WorldPacket data)
         {
-            data.WriteUInt32(Earned.Count);
-            data.WriteUInt32(Progress.Count);
+            data.WriteInt32(Earned.Count);
+            data.WriteInt32(Progress.Count);
 
             foreach (EarnedAchievement earned in Earned)
                 earned.Write(data);

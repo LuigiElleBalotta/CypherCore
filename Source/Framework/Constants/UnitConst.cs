@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ namespace Framework.Constants
     {
         HasLowerAnimForEnter = 0x01,
         HasLowerAnimForRide = 0x02,
-        Unk3 = 0x04,
+        DisableGravity = 0x04, // Passenger will not be affected by gravity
         ShouldUseVehSeatExitAnimOnVoluntaryExit = 0x08,
         Unk5 = 0x10,
         Unk6 = 0x20,
@@ -82,13 +82,6 @@ namespace Framework.Constants
         Totem = 1,
         MiniPet = 5,
         Quest = 6,
-    }
-    public enum PlayerTotemType
-    {
-        Fire = 63,
-        Earth = 81,
-        Water = 82,
-        Air = 83
     }
 
     public enum BaseModType
@@ -249,7 +242,7 @@ namespace Framework.Constants
     /// <summary>
     /// UnitStandStateType
     /// </summary>
-    public enum UnitStandStateType
+    public enum UnitStandStateType : byte
     {
         Stand = 0,
         Sit = 1,
@@ -263,23 +256,7 @@ namespace Framework.Constants
         Submerged = 9
     }
 
-    public struct UnitBytes0Offsets
-    {
-        public const byte Race = 0;
-        public const byte Class = 1;
-        public const byte PlayerClass = 2;
-        public const byte Gender = 3;
-    }
-
-    public struct UnitBytes1Offsets
-    {
-        public const byte StandState = 0;
-        public const byte PetTalents = 1;    // unused
-        public const byte VisFlag = 2;
-        public const byte AnimTier = 3;
-    }
-
-    public enum UnitStandFlags
+    public enum UnitVisFlags
     {
         Unk1 = 0x01,
         Creep = 0x02,
@@ -291,22 +268,16 @@ namespace Framework.Constants
 
     public enum UnitBytes1Flags
     {
+        None = 0x00,
         AlwaysStand = 0x01,
         Hover = 0x02,
         Unk3 = 0x04,
         All = 0xFF
     }
 
-    public struct UnitBytes2Offsets
+    public enum UnitPVPStateFlags
     {
-        public const byte SheathState = 0;
-        public const byte PvpFlag = 1;
-        public const byte PetFlags = 2;
-        public const byte ShapeshiftForm = 3;
-    }
-
-    public enum UnitBytes2Flags
-    {
+        None = 0x00,
         PvP = 0x01,
         Unk1 = 0x02,
         FFAPvp = 0x04,
@@ -317,8 +288,9 @@ namespace Framework.Constants
         Unk7 = 0x80,
     }
 
-    public enum UnitPetFlags
-    { 
+    public enum UnitPetFlags : byte
+    {
+        None = 0x00,
         CanBeRenamed = 0x01,
         CanBeAbandoned = 0x02
     }
@@ -457,6 +429,8 @@ namespace Framework.Constants
         Dead = 3,
         JustRespawned = 4
     }
+
+    [Flags]
     public enum UnitState : uint
     {
         Died = 0x01,                     // Player Has Fake Death Aura
@@ -488,6 +462,12 @@ namespace Framework.Constants
         ChaseMove = 0x4000000,
         FollowMove = 0x8000000,
         IgnorePathfinding = 0x10000000,
+        AllStateSupported = Died | MeleeAttacking | Stunned | Roaming | Chase
+                            | Fleeing | InFlight | Follow | Root | Confused
+                            | Distracted | Isolated | AttackPlayer | Casting
+                            | Possessed | Charging | Jumping | Move | Rotating
+                            | Evade | RoamingMove | ConfusedMove | FleeingMove
+                            | ChaseMove | FollowMove | IgnorePathfinding,
         Unattackable = InFlight,
         // For Real Move Using Movegen Check And Stop (Except Unstoppable Flight)
         Moving = RoamingMove | ConfusedMove | FleeingMove | ChaseMove | FollowMove,

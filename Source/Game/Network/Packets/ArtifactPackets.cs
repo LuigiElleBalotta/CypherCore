@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ namespace Game.Network.Packets
                 ArtifactPowerChoice artifactPowerChoice;
                 artifactPowerChoice.ArtifactPowerID = _worldPacket.ReadUInt32();
                 artifactPowerChoice.Rank = _worldPacket.ReadUInt8();
-                PowerChoices.Add(artifactPowerChoice);
+                PowerChoices[i] = artifactPowerChoice;
             }
         }
 

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -105,7 +105,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Anubarak
         public override void Reset()
         {
             base.Reset();
-            me.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+            me.RemoveUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
             instance.DoStopCriteriaTimer(CriteriaTimedTypes.Event, Misc.AchievGottaGoStartEvent);
             _nextSubmerge = 75;
             _petCount = 0;
@@ -332,7 +332,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Anubarak
                     {
                         me.RemoveAurasDueToSpell(SpellIds.Submerge);
                         me.RemoveAurasDueToSpell(SpellIds.ImpaleAura);
-                        me.RemoveFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+                        me.RemoveUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
                         DoCastSelf(SpellIds.Emerge);
                         _events.SetPhase(Misc.PhaseEmerge);
                         _events.ScheduleEvent(EventIds.Pound, TimeSpan.FromSeconds(13), TimeSpan.FromSeconds(18), 0, Misc.PhaseEmerge);
@@ -363,7 +363,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Anubarak
         {
             if (spell.Id == SpellIds.Submerge)
             {
-                me.SetFlag(UnitFields.Flags, UnitFlags.NonAttackable | UnitFlags.NotSelectable);
+                me.AddUnitFlag(UnitFlags.NonAttackable | UnitFlags.NotSelectable);
                 me.RemoveAurasDueToSpell(SpellIds.LeechingSwarm);
                 DoCastSelf(SpellIds.ImpaleAura, true);
 
@@ -511,7 +511,7 @@ namespace Scripts.Northrend.AzjolNerub.AzjolNerub.Anubarak
 
             if (diff >= _backstabTimer)
             {
-                if (me.GetVictim() && me.GetVictim().isInBack(me))
+                if (me.GetVictim() && me.GetVictim().IsInBack(me))
                     DoCastVictim(SpellIds.Backstab);
                 _backstabTimer = 6 * Time.InMilliseconds;
             }

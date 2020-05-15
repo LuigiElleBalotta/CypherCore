@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,21 +61,21 @@ namespace Game
                     tradeItem.Slot = i;
                     tradeItem.Item = new ItemInstance(item);
                     tradeItem.StackCount = (int)item.GetCount();
-                    tradeItem.GiftCreator = item.GetGuidValue(ItemFields.GiftCreator);
-                    if (!item.HasFlag(ItemFields.Flags, ItemFieldFlags.Wrapped))
+                    tradeItem.GiftCreator = item.GetGiftCreator();
+                    if (!item.HasItemFlag(ItemFieldFlags.Wrapped))
                     {
                         tradeItem.Unwrapped.HasValue = true;
                         TradeUpdated.UnwrappedTradeItem unwrappedItem = tradeItem.Unwrapped.Value;
                         unwrappedItem.EnchantID = (int)item.GetEnchantmentId(EnchantmentSlot.Perm);
                         unwrappedItem.OnUseEnchantmentID = (int)item.GetEnchantmentId(EnchantmentSlot.Use);
-                        unwrappedItem.Creator = item.GetGuidValue(ItemFields.Creator);
+                        unwrappedItem.Creator = item.GetCreator();
                         unwrappedItem.Charges = item.GetSpellCharges();
-                        unwrappedItem.Lock = item.GetTemplate().GetLockID() != 0 && !item.HasFlag(ItemFields.Flags, ItemFieldFlags.Unlocked);
-                        unwrappedItem.MaxDurability = item.GetUInt32Value(ItemFields.MaxDurability);
-                        unwrappedItem.Durability = item.GetUInt32Value(ItemFields.Durability);
+                        unwrappedItem.Lock = item.GetTemplate().GetLockID() != 0 && !item.HasItemFlag(ItemFieldFlags.Unlocked);
+                        unwrappedItem.MaxDurability = item.m_itemData.MaxDurability;
+                        unwrappedItem.Durability = item.m_itemData.Durability;
 
                         byte g = 0;
-                        foreach (ItemDynamicFieldGems gemData in item.GetGems())
+                        foreach (SocketedGem gemData in item.m_itemData.Gems)
                         {
                             if (gemData.ItemId != 0)
                             {
@@ -94,7 +94,7 @@ namespace Game
             SendPacket(tradeUpdated);
         }
 
-        void moveItems(Item[] myItems, Item[] hisItems)
+        void MoveItems(Item[] myItems, Item[] hisItems)
         {
             Player trader = GetPlayer().GetTrader();
             if (!trader)
@@ -124,8 +124,8 @@ namespace Game
                         }
 
                         // adjust time (depends on /played)
-                        if (myItems[i].HasFlag(ItemFields.Flags, ItemFieldFlags.BopTradeable))
-                            myItems[i].SetUInt32Value(ItemFields.CreatePlayedTime, trader.GetTotalPlayedTime() - (GetPlayer().GetTotalPlayedTime() - myItems[i].GetUInt32Value(ItemFields.CreatePlayedTime)));
+                        if (myItems[i].HasItemFlag(ItemFieldFlags.BopTradeable))
+                            myItems[i].SetCreatePlayedTime(trader.GetTotalPlayedTime() - (GetPlayer().GetTotalPlayedTime() - myItems[i].m_itemData.CreatePlayedTime));
                         // store
                         trader.MoveItemToInventory(traderDst, myItems[i], true, true);
                     }
@@ -143,8 +143,8 @@ namespace Game
                         
 
                         // adjust time (depends on /played)
-                        if (hisItems[i].HasFlag(ItemFields.Flags, ItemFieldFlags.BopTradeable))
-                            hisItems[i].SetUInt32Value(ItemFields.CreatePlayedTime, GetPlayer().GetTotalPlayedTime() - (trader.GetTotalPlayedTime() - hisItems[i].GetUInt32Value(ItemFields.CreatePlayedTime)));
+                        if (hisItems[i].HasItemFlag(ItemFieldFlags.BopTradeable))
+                            hisItems[i].SetCreatePlayedTime(GetPlayer().GetTotalPlayedTime() - (trader.GetTotalPlayedTime() - hisItems[i].m_itemData.CreatePlayedTime));
                         // store
                         GetPlayer().MoveItemToInventory(playerDst, hisItems[i], true, true);
                     }
@@ -176,7 +176,7 @@ namespace Game
             }
         }
 
-        static void setAcceptTradeMode(TradeData myTrade, TradeData hisTrade, Item[] myItems, Item[] hisItems)
+        static void SetAcceptTradeMode(TradeData myTrade, TradeData hisTrade, Item[] myItems, Item[] hisItems)
         {
             myTrade.SetInAcceptProcess(true);
             hisTrade.SetInAcceptProcess(true);
@@ -202,13 +202,13 @@ namespace Game
             }
         }
 
-        static void clearAcceptTradeMode(TradeData myTrade, TradeData hisTrade)
+        static void ClearAcceptTradeMode(TradeData myTrade, TradeData hisTrade)
         {
             myTrade.SetInAcceptProcess(false);
             hisTrade.SetInAcceptProcess(false);
         }
 
-        static void clearAcceptTradeMode(Item[] myItems, Item[] hisItems)
+        static void ClearAcceptTradeMode(Item[] myItems, Item[] hisItems)
         {
             // clear 'in-trade' flag
             for (byte i = 0; i < (int)TradeSlots.Count; ++i)
@@ -329,7 +329,7 @@ namespace Game
 
             if (his_trade.IsAccepted())
             {
-                setAcceptTradeMode(my_trade, his_trade, myItems, hisItems);
+                SetAcceptTradeMode(my_trade, his_trade, myItems, hisItems);
 
                 Spell my_spell = null;
                 SpellCastTargets my_targets = new SpellCastTargets();
@@ -347,8 +347,8 @@ namespace Game
                     if (spellEntry == null || !his_trade.GetItem(TradeSlots.NonTraded) ||
                         (my_trade.HasSpellCastItem() && !castItem))
                     {
-                        clearAcceptTradeMode(my_trade, his_trade);
-                        clearAcceptTradeMode(myItems, hisItems);
+                        ClearAcceptTradeMode(my_trade, his_trade);
+                        ClearAcceptTradeMode(myItems, hisItems);
 
                         my_trade.SetSpell(0);
                         return;
@@ -364,8 +364,8 @@ namespace Game
                     {
                         my_spell.SendCastResult(res);
 
-                        clearAcceptTradeMode(my_trade, his_trade);
-                        clearAcceptTradeMode(myItems, hisItems);
+                        ClearAcceptTradeMode(my_trade, his_trade);
+                        ClearAcceptTradeMode(myItems, hisItems);
 
                         my_spell.Dispose();
                         my_trade.SetSpell(0);
@@ -384,8 +384,8 @@ namespace Game
                     {
                         his_trade.SetSpell(0);
 
-                        clearAcceptTradeMode(my_trade, his_trade);
-                        clearAcceptTradeMode(myItems, hisItems);
+                        ClearAcceptTradeMode(my_trade, his_trade);
+                        ClearAcceptTradeMode(myItems, hisItems);
                         return;
                     }
 
@@ -399,8 +399,8 @@ namespace Game
                     {
                         his_spell.SendCastResult(res);
 
-                        clearAcceptTradeMode(my_trade, his_trade);
-                        clearAcceptTradeMode(myItems, hisItems);
+                        ClearAcceptTradeMode(my_trade, his_trade);
+                        ClearAcceptTradeMode(myItems, hisItems);
 
                         my_spell.Dispose();
                         his_spell.Dispose();
@@ -420,12 +420,12 @@ namespace Game
                 hisCanCompleteInfo.BagResult = trader.CanStoreItems(myItems, (int)TradeSlots.TradedCount, ref hisCanCompleteInfo.ItemID);
                 myCanCompleteInfo.BagResult = GetPlayer().CanStoreItems(hisItems, (int)TradeSlots.TradedCount, ref myCanCompleteInfo.ItemID);
 
-                clearAcceptTradeMode(myItems, hisItems);
+                ClearAcceptTradeMode(myItems, hisItems);
 
                 // in case of missing space report error
                 if (myCanCompleteInfo.BagResult != InventoryResult.Ok)
                 {
-                    clearAcceptTradeMode(my_trade, his_trade);
+                    ClearAcceptTradeMode(my_trade, his_trade);
 
                     myCanCompleteInfo.Status = TradeStatus.Failed;
                     trader.GetSession().SendTradeStatus(myCanCompleteInfo);
@@ -437,7 +437,7 @@ namespace Game
                 }
                 else if (hisCanCompleteInfo.BagResult != InventoryResult.Ok)
                 {
-                    clearAcceptTradeMode(my_trade, his_trade);
+                    ClearAcceptTradeMode(my_trade, his_trade);
 
                     hisCanCompleteInfo.Status = TradeStatus.Failed;
                     SendTradeStatus(hisCanCompleteInfo);
@@ -453,18 +453,18 @@ namespace Game
                 {
                     if (myItems[i])
                     {
-                        myItems[i].SetGuidValue(ItemFields.GiftCreator, GetPlayer().GetGUID());
+                        myItems[i].SetGiftCreator(GetPlayer().GetGUID());
                         GetPlayer().MoveItemFromInventory(myItems[i].GetBagSlot(), myItems[i].GetSlot(), true);
                     }
                     if (hisItems[i])
                     {
-                        hisItems[i].SetGuidValue(ItemFields.GiftCreator, trader.GetGUID());
+                        hisItems[i].SetGiftCreator(trader.GetGUID());
                         trader.MoveItemFromInventory(hisItems[i].GetBagSlot(), hisItems[i].GetSlot(), true);
                     }
                 }
 
                 // execute trade: 2. store
-                moveItems(myItems, hisItems);
+                MoveItems(myItems, hisItems);
 
                 // logging money                
                 if (HasPermission(RBACPermissions.LogGmTrade))
@@ -490,13 +490,13 @@ namespace Game
                 trader.ModifyMoney((long)my_trade.GetMoney());
 
                 if (my_spell)
-                    my_spell.prepare(my_targets);
+                    my_spell.Prepare(my_targets);
 
                 if (his_spell)
-                    his_spell.prepare(his_targets);
+                    his_spell.Prepare(his_targets);
 
                 // cleanup
-                clearAcceptTradeMode(my_trade, his_trade);
+                ClearAcceptTradeMode(my_trade, his_trade);
                 GetPlayer().SetTradeData(null);
                 trader.SetTradeData(null);
 
@@ -578,7 +578,7 @@ namespace Game
                 return;
             }
 
-            if (isLogingOut())
+            if (IsLogingOut())
             {
                 info.Status = TradeStatus.LoggingOut;
                 SendTradeStatus(info);
@@ -592,7 +592,7 @@ namespace Game
                 return;
             }
 
-            if (GetPlayer().getLevel() < WorldConfig.GetIntValue(WorldCfg.TradeLevelReq))
+            if (GetPlayer().GetLevel() < WorldConfig.GetIntValue(WorldCfg.TradeLevelReq))
             {
                 SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.TradeReq), WorldConfig.GetIntValue(WorldCfg.TradeLevelReq));
                 return;
@@ -635,7 +635,7 @@ namespace Game
                 return;
             }
 
-            if (pOther.GetSession().isLogingOut())
+            if (pOther.GetSession().IsLogingOut())
             {
                 info.Status = TradeStatus.TargetLoggingOut;
                 SendTradeStatus(info);
@@ -650,8 +650,8 @@ namespace Game
             }
 
             if ((pOther.GetTeam() != GetPlayer().GetTeam() || 
-                pOther.HasFlag(PlayerFields.FlagsEx, PlayerFlagsEx.MercenaryMode) ||
-                GetPlayer().HasFlag(PlayerFields.FlagsEx, PlayerFlagsEx.MercenaryMode)) &&
+                pOther.HasPlayerFlagEx(PlayerFlagsEx.MercenaryMode) ||
+                GetPlayer().HasPlayerFlagEx(PlayerFlagsEx.MercenaryMode)) &&
                 (!WorldConfig.GetBoolValue(WorldCfg.AllowTwoSideTrade) &&
                 !HasPermission(RBACPermissions.AllowTwoSideTrade)))
             {
@@ -667,7 +667,7 @@ namespace Game
                 return;
             }
 
-            if (pOther.getLevel() < WorldConfig.GetIntValue(WorldCfg.TradeLevelReq))
+            if (pOther.GetLevel() < WorldConfig.GetIntValue(WorldCfg.TradeLevelReq))
             {
                 SendNotification(Global.ObjectMgr.GetCypherString(CypherStrings.TradeOtherReq), WorldConfig.GetIntValue(WorldCfg.TradeLevelReq));
                 return;

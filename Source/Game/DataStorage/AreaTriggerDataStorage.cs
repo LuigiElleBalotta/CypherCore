@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@ using Framework.Constants;
 using Framework.Database;
 using Framework.GameMath;
 using Game.Entities;
-using System;
 using System.Collections.Generic;
 
 namespace Game.DataStorage
@@ -132,11 +131,8 @@ namespace Game.DataStorage
 
                     unsafe
                     {
-                        fixed (float* b = areaTriggerTemplate.DefaultDatas.Data)
-                        {
-                            for (byte i = 0; i < SharedConst.MaxAreatriggerEntityData; ++i)
-                                b[i] = templates.Read<float>(3 + i);
-                        }
+                        for (byte i = 0; i < SharedConst.MaxAreatriggerEntityData; ++i)
+                            areaTriggerTemplate.DefaultDatas.Data[i] = templates.Read<float>(3 + i);
                     }
 
                     areaTriggerTemplate.ScriptId = Global.ObjectMgr.GetScriptId(templates.Read<string>(9));
@@ -150,8 +146,8 @@ namespace Game.DataStorage
                 while (templates.NextRow());
             }
 
-            //                                                                  0            1              2            3             4             5              6                  7             8
-            SQLResult areatriggerSpellMiscs = DB.World.Query("SELECT SpellMiscId, AreaTriggerId, MoveCurveId, ScaleCurveId, MorphCurveId, FacingCurveId, DecalPropertiesId, TimeToTarget, TimeToTargetScale FROM `spell_areatrigger`");
+            //                                                        0            1              2            3             4             5              6       7          8                  9             10
+            SQLResult areatriggerSpellMiscs = DB.World.Query("SELECT SpellMiscId, AreaTriggerId, MoveCurveId, ScaleCurveId, MorphCurveId, FacingCurveId, AnimId, AnimKitId, DecalPropertiesId, TimeToTarget, TimeToTargetScale FROM `spell_areatrigger`");
             if (!areatriggerSpellMiscs.IsEmpty())
             {
                 do
@@ -168,25 +164,28 @@ namespace Game.DataStorage
                         continue;
                     }
 
-                    Func<uint, uint> ValidateAndSetCurve = value =>
+                    uint ValidateAndSetCurve(uint value)
                     {
                         if (value != 0 && !CliDB.CurveStorage.ContainsKey(value))
                         {
                             Log.outError(LogFilter.Sql, "Table `spell_areatrigger` has listed areatrigger (MiscId: {0}, Id: {1}) with invalid Curve ({2}), set to 0!", miscTemplate.MiscId, areatriggerId, value);
                             return 0;
                         }
+
                         return value;
-                    };
+                    }
 
                     miscTemplate.MoveCurveId = ValidateAndSetCurve(areatriggerSpellMiscs.Read<uint>(2));
                     miscTemplate.ScaleCurveId = ValidateAndSetCurve(areatriggerSpellMiscs.Read<uint>(3));
                     miscTemplate.MorphCurveId = ValidateAndSetCurve(areatriggerSpellMiscs.Read<uint>(4));
                     miscTemplate.FacingCurveId = ValidateAndSetCurve(areatriggerSpellMiscs.Read<uint>(5));
 
-                    miscTemplate.DecalPropertiesId = areatriggerSpellMiscs.Read<uint>(6);
+                    miscTemplate.AnimId = areatriggerSpellMiscs.Read<uint>(6);
+                    miscTemplate.AnimKitId = areatriggerSpellMiscs.Read<uint>(7);
+                    miscTemplate.DecalPropertiesId = areatriggerSpellMiscs.Read<uint>(8);
 
-                    miscTemplate.TimeToTarget = areatriggerSpellMiscs.Read<uint>(7);
-                    miscTemplate.TimeToTargetScale = areatriggerSpellMiscs.Read<uint>(8);
+                    miscTemplate.TimeToTarget = areatriggerSpellMiscs.Read<uint>(9);
+                    miscTemplate.TimeToTargetScale = areatriggerSpellMiscs.Read<uint>(10);
 
                     miscTemplate.SplinePoints = splinesBySpellMisc[miscTemplate.MiscId];
 
@@ -197,6 +196,64 @@ namespace Game.DataStorage
             else
             {
                 Log.outInfo(LogFilter.ServerLoading, "Loaded 0 Spell AreaTrigger templates. DB table `spell_areatrigger` is empty.");
+            }
+
+            //                                                       0            1           2             3                4             5        6                 7
+            SQLResult circularMovementInfos = DB.World.Query("SELECT SpellMiscId, StartDelay, CircleRadius, BlendFromRadius, InitialAngle, ZOffset, CounterClockwise, CanLoop FROM `spell_areatrigger_circular` ORDER BY `SpellMiscId`");
+            if (!circularMovementInfos.IsEmpty())
+            {
+                do
+                {
+                    uint spellMiscId = circularMovementInfos.Read<uint>(0);
+
+                    var atSpellMisc = _areaTriggerTemplateSpellMisc.LookupByKey(spellMiscId);
+                    if (atSpellMisc == null)
+                    {
+                        Log.outError(LogFilter.Sql, $"Table `spell_areatrigger_circular` reference invalid SpellMiscId {spellMiscId}");
+                        continue;
+                    }
+
+                    AreaTriggerCircularMovementInfo circularMovementInfo = new AreaTriggerCircularMovementInfo();
+
+                    circularMovementInfo.StartDelay = circularMovementInfos.Read<uint>(1);
+                    circularMovementInfo.Radius = circularMovementInfos.Read<float>(2);
+                    if (!float.IsInfinity(circularMovementInfo.Radius))
+                    {
+                        Log.outError(LogFilter.Sql, $"Table `spell_areatrigger_circular` has listed areatrigger (MiscId: {spellMiscId}) with invalid Radius ({circularMovementInfo.Radius}), set to 0!");
+                        circularMovementInfo.Radius = 0.0f;
+                    }
+
+                    circularMovementInfo.BlendFromRadius = circularMovementInfos.Read<float>(3);
+                    if (!float.IsInfinity(circularMovementInfo.BlendFromRadius))
+                    {
+                        Log.outError(LogFilter.Sql, $"Table `spell_areatrigger_circular` has listed areatrigger (MiscId: {spellMiscId}) with invalid BlendFromRadius ({circularMovementInfo.BlendFromRadius}), set to 0!");
+                        circularMovementInfo.BlendFromRadius = 0.0f;
+                    }
+
+                    circularMovementInfo.InitialAngle = circularMovementInfos.Read<float>(4);
+                    if (!float.IsInfinity(circularMovementInfo.InitialAngle))
+                    {
+                        Log.outError(LogFilter.Sql, $"Table `spell_areatrigger_circular` has listed areatrigger (MiscId: {spellMiscId}) with invalid InitialAngle ({circularMovementInfo.InitialAngle}), set to 0!");
+                        circularMovementInfo.InitialAngle = 0.0f;
+                    }
+
+                    circularMovementInfo.ZOffset = circularMovementInfos.Read<float>(5);
+                    if (!float.IsInfinity(circularMovementInfo.ZOffset))
+                    {
+                        Log.outError(LogFilter.Sql, $"Table `spell_areatrigger_circular` has listed areatrigger (MiscId: {spellMiscId}) with invalid ZOffset ({circularMovementInfo.ZOffset}), set to 0!");
+                        circularMovementInfo.ZOffset = 0.0f;
+                    }
+
+                    circularMovementInfo.CounterClockwise = circularMovementInfos.Read<bool>(6);
+                    circularMovementInfo.CanLoop = circularMovementInfos.Read<bool>(7);
+
+                    atSpellMisc.CircularMovementInfo = circularMovementInfo;
+                }
+                while (circularMovementInfos.NextRow());
+            }
+            else
+            {
+                Log.outInfo(LogFilter.ServerLoading, "Loaded 0 AreaTrigger templates circular movement infos. DB table `spell_areatrigger_circular` is empty.");
             }
 
             Log.outInfo(LogFilter.ServerLoading, "Loaded {0} spell areatrigger templates in {1} ms.", _areaTriggerTemplateStore.Count, Time.GetMSTimeDiffToNow(oldMSTime));

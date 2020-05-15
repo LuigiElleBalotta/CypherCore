@@ -1,5 +1,5 @@
 ﻿/*
-* Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+* Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
 * 
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -206,7 +206,7 @@ namespace Scripts.World
             List<ItemPosCount> dest = new List<ItemPosCount>();
             InventoryResult msg = player.CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, 39883, 1); // Cracked Egg
             if (msg == InventoryResult.Ok)
-                player.StoreNewItem(dest, 39883, true, ItemEnchantment.GenerateItemRandomPropertyId(39883));
+                player.StoreNewItem(dest, 39883, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(39883));
 
             return true;
         }
@@ -222,7 +222,7 @@ namespace Scripts.World
             List<ItemPosCount> dest = new List<ItemPosCount>();
             InventoryResult msg = player.CanStoreNewItem(ItemConst.NullBag, ItemConst.NullSlot, dest, 44718, 1); // Ripe Disgusting Jar
             if (msg == InventoryResult.Ok)
-                player.StoreNewItem(dest, 44718, true, ItemEnchantment.GenerateItemRandomPropertyId(44718));
+                player.StoreNewItem(dest, 44718, true, ItemEnchantmentManager.GenerateItemRandomBonusListId(44718));
 
             return true;
         }
@@ -251,13 +251,13 @@ namespace Scripts.World
 
             float x, y, z;
             go.GetClosePoint(out x, out y, out z, go.GetObjectSize() / 3, 7.0f);
-            go.SummonGameObject(ItemScriptConst.GoHighQualityFur, go, Quaternion.WAxis, 1);
+            go.SummonGameObject(ItemScriptConst.GoHighQualityFur, go, Quaternion.fromEulerAnglesZYX(go.GetOrientation(), 0.0f, 0.0f), 1);
             TempSummon summon = player.SummonCreature(ItemScriptConst.NpcNesingwaryTrapper, x, y, z, go.GetOrientation(), TempSummonType.DeadDespawn, 1000);
             if (summon)
             {
                 summon.SetVisible(false);
                 summon.SetReactState(ReactStates.Passive);
-                summon.SetFlag(UnitFields.Flags, UnitFlags.ImmuneToPc);
+                summon.AddUnitFlag(UnitFlags.ImmuneToPc);
             }
             return false;
         }
@@ -357,6 +357,29 @@ namespace Scripts.World
             }
             else
                 player.SendEquipError(InventoryResult.ClientLockedOut, item, null);
+            return true;
+        }
+    }
+
+    // Only used currently for
+    [Script]// 19169: Nightfall
+    class item_generic_limit_chance_above_60 : ItemScript
+    {
+        public item_generic_limit_chance_above_60() : base("item_generic_limit_chance_above_60") { }
+
+        public override bool OnCastItemCombatSpell(Player player, Unit victim, SpellInfo spellInfo, Item item)
+        {
+            // spell proc chance gets severely reduced on victims > 60 (formula unknown)
+            if (victim.GetLevel() > 60)
+            {
+                // gives ~0.1% proc chance at lvl 70
+                float lvlPenaltyFactor = 9.93f;
+                float failureChance = (victim.GetLevelForTarget(player) - 60) * lvlPenaltyFactor;
+
+                // base ppm chance was already rolled, only roll success chance
+                return !RandomHelper.randChance(failureChance);
+            }
+
             return true;
         }
     }

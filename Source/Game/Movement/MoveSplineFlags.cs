@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,12 +26,12 @@ namespace Game.Movement
         public MoveSplineFlag(SplineFlag f) { Flags = f; }
         public MoveSplineFlag(MoveSplineFlag f) { Flags = f.Flags; }
 
-        public bool isSmooth() { return Flags.HasAnyFlag(SplineFlag.Catmullrom); }
-        public bool isLinear() { return !isSmooth(); }
+        public bool IsSmooth() { return Flags.HasAnyFlag(SplineFlag.Catmullrom); }
+        public bool IsLinear() { return !IsSmooth(); }
 
-        public byte getAnimationId() { return animId; }
-        public bool hasAllFlags(SplineFlag f) { return (Flags & f) == f; }
-        public bool hasFlag(SplineFlag f) { return (Flags & f) != 0; }
+        public byte GetAnimTier() { return animTier; }
+        public bool HasAllFlags(SplineFlag f) { return (Flags & f) == f; }
+        public bool HasFlag(SplineFlag f) { return (Flags & f) != 0; }
 
         public void SetUnsetFlag(SplineFlag f, bool Set = true)
         {
@@ -50,6 +50,6 @@ namespace Game.Movement
         public void EnableTransportExit() { Flags = (Flags & ~SplineFlag.TransportEnter) | SplineFlag.TransportExit; }
 
         public SplineFlag Flags;
-        public byte animId;
+        public byte animTier;
     }
 }

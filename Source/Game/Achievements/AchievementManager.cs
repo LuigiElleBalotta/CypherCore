@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,14 +65,14 @@ namespace Game.Achievements
             if (HasAchieved(achievement.Id))
             {
                 Log.outTrace(LogFilter.Achievement, "CanUpdateCriteriaTree: (Id: {0} Type {1} Achievement {2}) Achievement already earned",
-                    criteria.ID, criteria.Entry.Type, achievement.Id);
+                    criteria.Id, criteria.Entry.Type, achievement.Id);
                 return false;
             }
 
             if (achievement.InstanceID != -1 && referencePlayer.GetMapId() != achievement.InstanceID)
             {
                 Log.outTrace(LogFilter.Achievement, "CanUpdateCriteriaTree: (Id: {0} Type {1} Achievement {2}) Wrong map",
-                    criteria.ID, criteria.Entry.Type, achievement.Id);
+                    criteria.Id, criteria.Entry.Type, achievement.Id);
                 return false;
             }
 
@@ -80,7 +80,7 @@ namespace Game.Achievements
                 (achievement.Faction == AchievementFaction.Alliance && referencePlayer.GetTeam() != Team.Alliance))
             {
                 Log.outTrace(LogFilter.Achievement, "CanUpdateCriteriaTree: (Id: {0} Type {1} Achievement {2}) Wrong faction",
-            criteria.ID, criteria.Entry.Type, achievement.Id);
+            criteria.Id, criteria.Entry.Type, achievement.Id);
                 return false;
             }
 
@@ -162,7 +162,7 @@ namespace Game.Achievements
                 {
                     if (criteriaTree.Criteria != null)
                     {
-                        CriteriaProgress criteriaProgress = this.GetCriteriaProgress(criteriaTree.Criteria);
+                        CriteriaProgress criteriaProgress = GetCriteriaProgress(criteriaTree.Criteria);
                         if (criteriaProgress != null)
                             progress += (long)criteriaProgress.Counter;
                     }
@@ -180,13 +180,13 @@ namespace Game.Achievements
 
         public virtual void CompletedAchievement(AchievementRecord entry, Player referencePlayer) { }
 
-        public Func<KeyValuePair<uint, CompletedAchievementData>, AchievementRecord> VisibleAchievementCheck = new Func<KeyValuePair<uint, CompletedAchievementData>, AchievementRecord>(value =>
+        public Func<KeyValuePair<uint, CompletedAchievementData>, AchievementRecord> VisibleAchievementCheck = value =>
         {
             AchievementRecord achievement = CliDB.AchievementStorage.LookupByKey(value.Key);
             if (achievement != null && !achievement.Flags.HasAnyFlag(AchievementFlags.Hidden))
                 return achievement;
             return null;
-        });
+        };
 
         protected Dictionary<uint, CompletedAchievementData> _completedAchievements = new Dictionary<uint, CompletedAchievementData>();
         protected uint _achievementPoints;
@@ -369,7 +369,7 @@ namespace Game.Achievements
                 if (achievementCriteria.Entry.FailEvent != miscValue1 || (achievementCriteria.Entry.FailAsset != 0 && achievementCriteria.Entry.FailAsset != miscValue2))
                     continue;
 
-                var trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(achievementCriteria.ID);
+                var trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(achievementCriteria.Id);
                 bool allComplete = true;
                 foreach (CriteriaTree tree in trees)
                 {
@@ -425,7 +425,7 @@ namespace Game.Achievements
             SendPacket(achievementData);
         }
 
-        public void SendAchievementInfo(Player receiver, uint achievementId = 0)
+        public void SendAchievementInfo(Player receiver)
         {
             RespondInspectAchievements inspectedAchievements = new RespondInspectAchievements();
             inspectedAchievements.Player = _owner.GetGUID();
@@ -514,7 +514,7 @@ namespace Game.Achievements
             //! Since no common attributes were found, (not even in titleRewardFlags field)
             //! we explicitly check by ID. Maybe in the future we could move the achievement_reward
             //! condition fields to the condition system.
-            uint titleId = reward.TitleId[achievement.Id == 1793 ? _owner.GetByteValue(PlayerFields.Bytes3, PlayerFieldOffsets.Bytes3OffsetGender) : (_owner.GetTeam() == Team.Alliance ? 0 : 1)];
+            uint titleId = reward.TitleId[achievement.Id == 1793 ? _owner.m_playerData.NativeSex : (_owner.GetTeam() == Team.Alliance ? 0 : 1)];
             if (titleId != 0)
             {
                 CharTitlesRecord titleEntry = CliDB.CharTitlesStorage.LookupByKey(titleId);
@@ -549,7 +549,7 @@ namespace Game.Achievements
 
                 SQLTransaction trans = new SQLTransaction();
 
-                Item item = reward.ItemId != 0 ? Item.CreateItem(reward.ItemId, 1, _owner) : null;
+                Item item = reward.ItemId != 0 ? Item.CreateItem(reward.ItemId, 1, ItemContext.None, _owner) : null;
                 if (item)
                 {
                     // save new item before send
@@ -566,14 +566,18 @@ namespace Game.Achievements
 
         public bool ModifierTreeSatisfied(uint modifierTreeId)
         {
-            return AdditionalRequirementsSatisfied(Global.CriteriaMgr.GetModifierTree(modifierTreeId), 0, 0, null, _owner);
+            ModifierTreeNode modifierTree = Global.CriteriaMgr.GetModifierTree(modifierTreeId);
+            if (modifierTree != null)
+                return ModifierTreeSatisfied(modifierTree, 0, 0, null, _owner);
+
+            return false;
         }
 
         public override void SendCriteriaUpdate(Criteria criteria, CriteriaProgress progress, uint timeElapsed, bool timedCompleted)
         {
             CriteriaUpdate criteriaUpdate = new CriteriaUpdate();
 
-            criteriaUpdate.CriteriaID = criteria.ID;
+            criteriaUpdate.CriteriaID = criteria.Id;
             criteriaUpdate.Quantity = progress.Counter;
             criteriaUpdate.PlayerGUID = _owner.GetGUID();
             criteriaUpdate.Flags = 0;
@@ -615,7 +619,7 @@ namespace Game.Achievements
                 if (achievement.Flags.HasAnyFlag(AchievementFlags.RealmFirstReach | AchievementFlags.RealmFirstKill))
                 {
                     // broadcast realm first reached
-                    ServerFirstAchievement serverFirstAchievement = new ServerFirstAchievement();
+                    BroadcastAchievement serverFirstAchievement = new BroadcastAchievement();
                     serverFirstAchievement.Name = _owner.GetName();
                     serverFirstAchievement.PlayerGUID = _owner.GetGUID();
                     serverFirstAchievement.AchievementID = achievement.Id;
@@ -656,7 +660,7 @@ namespace Game.Achievements
 
         public override string GetOwnerInfo()
         {
-            return string.Format("{0} {1}", _owner.GetGUID().ToString(), _owner.GetName());
+            return $"{_owner.GetGUID().ToString()} {_owner.GetName()}";
         }
 
         Player _owner;
@@ -719,10 +723,13 @@ namespace Game.Achievements
                     CompletedAchievementData ca = _completedAchievements[achievementid];
                     ca.Date = achievementResult.Read<uint>(1);
                     var guids = new StringArray(achievementResult.Read<string>(2), ' ');
-                    for (int i = 0; i < guids.Length; ++i)
+                    if (!guids.IsEmpty())
                     {
-                        if (ulong.TryParse(guids[i], out ulong guid))
-                            ca.CompletingPlayers.Add(ObjectGuid.Create(HighGuid.Player, guid));
+                        for (int i = 0; i < guids.Length; ++i)
+                        {
+                            if (ulong.TryParse(guids[i], out ulong guid))
+                                ca.CompletingPlayers.Add(ObjectGuid.Create(HighGuid.Player, guid));
+                        }
                     }
 
                     ca.Changed = false;
@@ -847,11 +854,11 @@ namespace Game.Achievements
             {
                 if (node.Criteria != null)
                 {
-                    var progress = _criteriaProgress.LookupByKey(node.Criteria.ID);
+                    var progress = _criteriaProgress.LookupByKey(node.Criteria.Id);
                     if (progress != null)
                     {
                         GuildCriteriaProgress guildCriteriaProgress = new GuildCriteriaProgress();
-                        guildCriteriaProgress.CriteriaID = node.Criteria.ID;
+                        guildCriteriaProgress.CriteriaID = node.Criteria.Id;
                         guildCriteriaProgress.DateCreated = 0;
                         guildCriteriaProgress.DateStarted = 0;
                         guildCriteriaProgress.DateUpdated = progress.Date;
@@ -937,7 +944,7 @@ namespace Game.Achievements
                 Group group = referencePlayer.GetGroup();
                 if (group)
                 {
-                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                    for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                     {
                         Player groupMember = refe.GetSource();
                         if (groupMember)
@@ -964,7 +971,7 @@ namespace Game.Achievements
             GuildCriteriaUpdate guildCriteriaUpdate = new GuildCriteriaUpdate();
 
             GuildCriteriaProgress guildCriteriaProgress = new GuildCriteriaProgress();
-            guildCriteriaProgress.CriteriaID = entry.ID;
+            guildCriteriaProgress.CriteriaID = entry.Id;
             guildCriteriaProgress.DateCreated = 0;
             guildCriteriaProgress.DateStarted = 0;
             guildCriteriaProgress.DateUpdated = progress.Date;
@@ -974,7 +981,7 @@ namespace Game.Achievements
 
             guildCriteriaUpdate.Progress.Add(guildCriteriaProgress);
 
-            _owner.BroadcastPacketIfTrackingAchievement(guildCriteriaUpdate, entry.ID);
+            _owner.BroadcastPacketIfTrackingAchievement(guildCriteriaUpdate, entry.Id);
         }
 
         public override void SendCriteriaProgressRemoved(uint criteriaId)
@@ -990,7 +997,7 @@ namespace Game.Achievements
             if (achievement.Flags.HasAnyFlag(AchievementFlags.RealmFirstReach | AchievementFlags.RealmFirstKill))
             {
                 // broadcast realm first reached
-                ServerFirstAchievement serverFirstAchievement = new ServerFirstAchievement();
+                BroadcastAchievement serverFirstAchievement = new BroadcastAchievement();
                 serverFirstAchievement.Name = _owner.GetName();
                 serverFirstAchievement.PlayerGUID = _owner.GetGUID();
                 serverFirstAchievement.AchievementID = achievement.Id;
@@ -1017,7 +1024,7 @@ namespace Game.Achievements
 
         public override string GetOwnerInfo()
         {
-            return string.Format("Guild ID {0} {1}", _owner.GetId(), _owner.GetName());
+            return $"Guild ID {_owner.GetId()} {_owner.GetName()}";
         }
 
         Guild _owner;
@@ -1045,7 +1052,7 @@ namespace Game.Achievements
         public bool IsRealmCompleted(AchievementRecord achievement)
         {
             var time = _allCompletedAchievements.LookupByKey(achievement.Id);
-            if (time == null)
+            if (time == default)
                 return false;
 
             if (time == DateTime.MinValue)
@@ -1144,22 +1151,21 @@ namespace Game.Achievements
 
             _achievementRewards.Clear();                           // need for reload case
 
-            //                                         0      1        2        3     4       5        6     7
-            SQLResult result = DB.World.Query("SELECT entry, title_A, title_H, item, sender, subject, text, mailTemplate FROM achievement_reward");
+            //                                         0   1       2       3       4       5        6     7
+            SQLResult result = DB.World.Query("SELECT ID, TitleA, TitleH, ItemID, Sender, Subject, Body, MailTemplateID FROM achievement_reward");
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, ">> Loaded 0 achievement rewards. DB table `achievement_reward` is empty.");
                 return;
             }
 
-            uint count = 0;
             do
             {
-                uint entry = result.Read<uint>(0);
-                AchievementRecord achievement = CliDB.AchievementStorage.LookupByKey(entry);
+                uint id = result.Read<uint>(0);
+                AchievementRecord achievement = CliDB.AchievementStorage.LookupByKey(id);
                 if (achievement == null)
                 {
-                    Log.outError(LogFilter.Sql, "Table `achievement_reward` contains a wrong achievement entry (Entry: {0}), ignored.", entry);
+                    Log.outError(LogFilter.Sql, $"Table `achievement_reward` contains a wrong achievement ID ({id}), ignored.");
                     continue;
                 }
 
@@ -1175,19 +1181,19 @@ namespace Game.Achievements
                 // must be title or mail at least
                 if (reward.TitleId[0] == 0 && reward.TitleId[1] == 0 && reward.SenderCreatureId == 0)
                 {
-                    Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) does not contain title or item reward data. Ignored.", entry);
+                    Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) does not contain title or item reward data. Ignored.");
                     continue;
                 }
 
                 if (achievement.Faction == AchievementFaction.Any && (reward.TitleId[0] == 0 ^ reward.TitleId[1] == 0))
-                    Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) contains the title (A: {1} H: {2}) for only one team.", entry, reward.TitleId[0], reward.TitleId[1]);
+                    Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) contains the title (A: {reward.TitleId[0]} H: {reward.TitleId[1]}) for only one team.");
 
                 if (reward.TitleId[0] != 0)
                 {
                     CharTitlesRecord titleEntry = CliDB.CharTitlesStorage.LookupByKey(reward.TitleId[0]);
                     if (titleEntry == null)
                     {
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) contains an invalid title id ({1}) in `title_A`, set to 0", entry, reward.TitleId[0]);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) contains an invalid title ID ({reward.TitleId[0]}) in `title_A`, set to 0");
                         reward.TitleId[0] = 0;
                     }
                 }
@@ -1197,7 +1203,7 @@ namespace Game.Achievements
                     CharTitlesRecord titleEntry = CliDB.CharTitlesStorage.LookupByKey(reward.TitleId[1]);
                     if (titleEntry == null)
                     {
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) contains an invalid title id ({1}) in `title_H`, set to 0", entry, reward.TitleId[1]);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) contains an invalid title ID ({reward.TitleId[1]}) in `title_H`, set to 0");
                         reward.TitleId[1] = 0;
                     }
                 }
@@ -1207,51 +1213,50 @@ namespace Game.Achievements
                 {
                     if (Global.ObjectMgr.GetCreatureTemplate(reward.SenderCreatureId) == null)
                     {
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) contains an invalid creature entry {1} as sender, mail reward skipped.", entry, reward.SenderCreatureId);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) contains an invalid creature ID {reward.SenderCreatureId} as sender, mail reward skipped.");
                         reward.SenderCreatureId = 0;
                     }
                 }
                 else
                 {
                     if (reward.ItemId != 0)
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) does not have sender data, but contains an item reward. Item will not be rewarded.", entry);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) does not have sender data, but contains an item reward. Item will not be rewarded.");
 
                     if (!reward.Subject.IsEmpty())
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) does not have sender data, but contains a mail subject.", entry);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) does not have sender data, but contains a mail subject.");
 
                     if (!reward.Body.IsEmpty())
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) does not have sender data, but contains mail text.", entry);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) does not have sender data, but contains mail text.");
 
                     if (reward.MailTemplateId != 0)
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) does not have sender data, but has a MailTemplateId.", entry);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) does not have sender data, but has a MailTemplateId.");
                 }
 
                 if (reward.MailTemplateId != 0)
                 {
                     if (!CliDB.MailTemplateStorage.ContainsKey(reward.MailTemplateId))
                     {
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) is using an invalid MailTemplateId ({1}).", entry, reward.MailTemplateId);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) is using an invalid MailTemplateId ({reward.MailTemplateId}).");
                         reward.MailTemplateId = 0;
                     }
                     else if (!reward.Subject.IsEmpty() || !reward.Body.IsEmpty())
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) is using MailTemplateId ({1}) and mail subject/text.", entry, reward.MailTemplateId);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) is using MailTemplateId ({reward.MailTemplateId}) and mail subject/text.");
                 }
 
                 if (reward.ItemId != 0)
                 {
                     if (Global.ObjectMgr.GetItemTemplate(reward.ItemId) == null)
                     {
-                        Log.outError(LogFilter.Sql, "Table `achievement_reward` (Entry: {0}) contains an invalid item id {1}, reward mail will not contain the rewarded item.", entry, reward.ItemId);
+                        Log.outError(LogFilter.Sql, $"Table `achievement_reward` (ID: {id}) contains an invalid item id {reward.ItemId}, reward mail will not contain the rewarded item.");
                         reward.ItemId = 0;
                     }
                 }
 
-                _achievementRewards[entry] = reward;
-                ++count;
+                _achievementRewards[id] = reward;
             }
             while (result.NextRow());
 
-            Log.outInfo(LogFilter.ServerLoading, "Loaded {0} achievement rewards in {1} ms.", count, Time.GetMSTimeDiffToNow(oldMSTime));
+            Log.outInfo(LogFilter.ServerLoading, "Loaded {0} achievement rewards in {1} ms.", _achievementRewards.Count, Time.GetMSTimeDiffToNow(oldMSTime));
         }
 
         public void LoadRewardLocales()
@@ -1260,34 +1265,34 @@ namespace Game.Achievements
 
             _achievementRewardLocales.Clear();                       // need for reload case
 
-            SQLResult result = DB.World.Query("SELECT entry, subject_loc1, text_loc1, subject_loc2, text_loc2, subject_loc3, text_loc3, subject_loc4, text_loc4, " +
-                "subject_loc5, text_loc5, subject_loc6, text_loc6, subject_loc7, text_loc7, subject_loc8, text_loc8 FROM locales_achievement_reward");
+            //                                         0   1       2        3
+            SQLResult result = DB.World.Query("SELECT ID, Locale, Subject, Body FROM achievement_reward_locale");
             if (result.IsEmpty())
             {
-                Log.outInfo(LogFilter.ServerLoading, "Loaded 0 achievement reward locale strings.  DB table `locales_achievement_reward` is empty.");
+                Log.outInfo(LogFilter.ServerLoading, "Loaded 0 achievement reward locale strings.  DB table `achievement_reward_locale` is empty.");
                 return;
             }
 
             do
             {
-                uint entry = result.Read<uint>(0);
+                uint id = result.Read<uint>(0);
+                string localeName = result.Read<string>(1);
 
-                if (!_achievementRewards.ContainsKey(entry))
+                if (!_achievementRewards.ContainsKey(id))
                 {
-                    Log.outError(LogFilter.Sql, "Table `locales_achievement_reward` (Entry: {0}) contains locale strings for a non-existing achievement reward.", entry);
+                    Log.outError(LogFilter.Sql, "Table `achievement_reward_locale` (ID: {id}) contains locale strings for a non-existing achievement reward.");
                     continue;
                 }
 
                 AchievementRewardLocale data = new AchievementRewardLocale();
+                LocaleConstant locale = localeName.ToEnum<LocaleConstant>();
+                if (locale == LocaleConstant.enUS)
+                    continue;
 
-                for (int i = (int)LocaleConstant.OldTotal - 1; i > 0; --i)
-                {
-                    LocaleConstant locale = (LocaleConstant)i;
-                    ObjectManager.AddLocaleString(result.Read<string>(1 + 2 * (i - 1)), locale, data.Subject);
-                    ObjectManager.AddLocaleString(result.Read<string>(1 + 2 * (i - 1) + 1), locale, data.Body);
-                }
+                ObjectManager.AddLocaleString(result.Read<string>(2), locale, data.Subject);
+                ObjectManager.AddLocaleString(result.Read<string>(3), locale, data.Body);
 
-                _achievementRewardLocales[entry] = data;
+                _achievementRewardLocales[id] = data;
             }
             while (result.NextRow());
 

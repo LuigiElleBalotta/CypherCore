@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * Copyright (C) 2003-2004  Eran Kampf	eran@ekampf.com	http://www.ekampf.com
  * 
  * This program is free software: you can redistribute it and/or modify
@@ -633,8 +633,7 @@ namespace Framework.GameMath
         /// <returns>A string representation of this object.</returns>
         public override string ToString()
         {
-            return string.Format("3x3[{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}]",
-                _m11, _m12, _m13, _m21, _m22, _m23, _m31, _m32, _m33);
+            return $"3x3[{_m11}, {_m12}, {_m13}, {_m21}, {_m22}, {_m23}, {_m31}, {_m32}, {_m33}]";
         }
         #endregion
 
@@ -693,7 +692,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix3"/> instance containing the sum.</returns>
         public static Matrix3 operator +(Matrix3 left, Matrix3 right)
         {
-            return Matrix3.Add(left, right); ;
+            return Matrix3.Add(left, right);
         }
         /// <summary>
         /// Adds a matrix and a scalar.
@@ -723,7 +722,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix3"/> instance containing the difference.</returns>
         public static Matrix3 operator -(Matrix3 left, Matrix3 right)
         {
-            return Matrix3.Subtract(left, right); ;
+            return Matrix3.Subtract(left, right);
         }
         /// <summary>
         /// Subtracts a scalar from a matrix.
@@ -743,7 +742,7 @@ namespace Framework.GameMath
         /// <returns>A new <see cref="Matrix3"/> instance containing the result.</returns>
         public static Matrix3 operator *(Matrix3 left, Matrix3 right)
         {
-            return Matrix3.Multiply(left, right); ;
+            return Matrix3.Multiply(left, right);
         }
         /// <summary>
         /// Transforms a given vector by a matrix.

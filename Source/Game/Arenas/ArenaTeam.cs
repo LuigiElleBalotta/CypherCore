@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using Game.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Game.Cache;
 
 namespace Game.Arenas
 {
@@ -87,24 +88,24 @@ namespace Game.Arenas
             if (GetMembersSize() >= GetArenaType() * 2)
                 return false;
 
-            // Get player name and class either from db or ObjectMgr
-            CharacterInfo characterInfo;
+            // Get player name and class either from db or character cache
+            CharacterCacheEntry characterInfo;
             Player player = Global.ObjAccessor.FindPlayer(playerGuid);
             if (player)
             {
                 playerClass = player.GetClass();
                 playerName = player.GetName();
             }
-            else if ((characterInfo = Global.WorldMgr.GetCharacterInfo(playerGuid)) != null)
+            else if ((characterInfo = Global.CharacterCacheStorage.GetCharacterCacheByGuid(playerGuid)) != null)
             {
                 playerName = characterInfo.Name;
-                playerClass = characterInfo.ClassID;
+                playerClass = characterInfo.ClassId;
             }
             else
                 return false;
 
             // Check if player is already in a similar arena team
-            if ((player && player.GetArenaTeamId(GetSlot()) != 0) || Player.GetArenaTeamIdFromDB(playerGuid, GetArenaType()) != 0)
+            if ((player && player.GetArenaTeamId(GetSlot()) != 0) || Global.CharacterCacheStorage.GetCharacterArenaTeamIdByGuid(playerGuid, GetArenaType()) != 0)
             {
                 Log.outDebug(LogFilter.Arena, "Arena: {0} {1} already has an arena team of type {2}", playerGuid.ToString(), playerName, GetArenaType());
                 return false;
@@ -143,10 +144,11 @@ namespace Game.Arenas
             newMember.WeekGames = 0;
             newMember.SeasonWins = 0;
             newMember.WeekWins = 0;
-            newMember.PersonalRating = (ushort)(uint)0;
+            newMember.PersonalRating = 0;
             newMember.MatchMakerRating = (ushort)matchMakerRating;
 
             Members.Add(newMember);
+            Global.CharacterCacheStorage.UpdateCharacterArenaTeamId(playerGuid, GetSlot(), GetId());
 
             // Save player's arena team membership to db
             stmt = DB.Characters.GetPreparedStatement(CharStatements.INS_ARENA_TEAM_MEMBER);
@@ -234,6 +236,7 @@ namespace Game.Arenas
 
                 // Put the player in the team
                 Members.Add(newMember);
+                Global.CharacterCacheStorage.UpdateCharacterArenaTeamId(newMember.Guid, GetSlot(), GetId());
             }
             while (result.NextRow());
 
@@ -294,11 +297,14 @@ namespace Game.Arenas
         {
             // Remove member from team
             foreach (var member in Members)
+            {
                 if (member.Guid == guid)
                 {
                     Members.Remove(member);
+                    Global.CharacterCacheStorage.UpdateCharacterArenaTeamId(guid, GetSlot(), 0);
                     break;
                 }
+            }
 
             // Remove arena team info from player data
             Player player = Global.ObjAccessor.FindPlayer(guid);
@@ -347,7 +353,7 @@ namespace Game.Arenas
 
             DB.Characters.CommitTransaction(trans);
 
-            // Remove arena team from ObjectMgr
+            // Remove arena team from ArenaTeamMgr
             Global.ArenaTeamMgr.RemoveArenaTeam(teamId);
         }
 
@@ -370,7 +376,7 @@ namespace Game.Arenas
 
             DB.Characters.CommitTransaction(trans);
 
-            // Remove arena team from ObjectMgr
+            // Remove arena team from ArenaTeamMgr
             Global.ArenaTeamMgr.RemoveArenaTeam(teamId);
         }
 
@@ -397,24 +403,6 @@ namespace Game.Arenas
                 if (player)
                     SendStats(player.GetSession());
             }
-        }
-
-        public void Inspect(WorldSession session, ObjectGuid guid)
-        {
-            ArenaTeamMember member = GetMember(guid);
-            if (member == null)
-                return;
-
-            WorldPacket data = new WorldPacket(ServerOpcodes.InspectPvp);
-            data.WritePackedGuid(guid);                                   // player guid
-            data.WriteUInt8(GetSlot());                               // slot (0...2)
-            data.WriteUInt32(GetId());                                // arena team id
-            data.WriteUInt32(stats.Rating);                           // rating
-            data.WriteUInt32(stats.SeasonGames);                      // season played
-            data.WriteUInt32(stats.SeasonWins);                       // season wins
-            data.WriteUInt32(member.SeasonGames);                    // played (count of all games, that the inspected member participated...)
-            data.WriteUInt32(member.PersonalRating);                 // personal rating
-            //session.SendPacket(data);
         }
 
         void BroadcastPacket(ServerPacket packet)
@@ -498,7 +486,7 @@ namespace Game.Arenas
         {
             // Returns the chance to win against a team with the given rating, used in the rating adjustment calculation
             // ELO system
-            return (float)(1.0f / (1.0f + Math.Exp(Math.Log(10.0f) * ((float)opponentRating - (float)ownRating) / 650.0f)));
+            return (float)(1.0f / (1.0f + Math.Exp(Math.Log(10.0f) * ((float)opponentRating - ownRating) / 650.0f)));
         }
 
         int GetMatchmakerRatingMod(uint ownRating, uint opponentRating, bool won)

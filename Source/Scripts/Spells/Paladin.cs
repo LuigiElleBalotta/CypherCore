@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -496,7 +496,7 @@ namespace Scripts.Spells.Paladin
                     if (!caster.IsValidAttackTarget(target))
                         return SpellCastResult.BadTargets;
 
-                    if (!caster.isInFront(target))
+                    if (!caster.IsInFront(target))
                         return SpellCastResult.NotInfront;
                 }
             }
@@ -715,7 +715,7 @@ namespace Scripts.Spells.Paladin
             Unit target = GetExplTargetUnit();
             if (target)
             {
-                if (!target.IsFriendlyTo(caster) || target.getAttackers().Empty())
+                if (!target.IsFriendlyTo(caster) || target.GetAttackers().Empty())
                     return SpellCastResult.BadTargets;
             }
             else

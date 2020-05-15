@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,9 @@ namespace Game.Entities
     {
         public static ObjectGuid Empty = new ObjectGuid();
         public static ObjectGuid TradeItem = Create(HighGuid.Uniq, 10ul);
+
+        ulong _low;
+        ulong _high;
 
         public ObjectGuid(ulong high, ulong low)
         {
@@ -64,21 +67,22 @@ namespace Game.Entities
         }
         public static ObjectGuid Create(HighGuid type, uint mapId, uint entry, ulong counter)
         {
-            if (type == HighGuid.Transport)
-                return ObjectGuid.Empty;
-
             return MapSpecificCreate(type, 0, (ushort)mapId, 0, entry, counter);
         }
-
-        public static ObjectGuid Create(HighGuid type, SpellCastSource subType, uint mapId, uint entry, ulong counter) { return MapSpecificCreate(type, (byte)subType, (ushort)mapId, 0, entry, counter); }
-
+        public static ObjectGuid Create(HighGuid type, SpellCastSource subType, uint mapId, uint entry, ulong counter)
+        {
+            return MapSpecificCreate(type, (byte)subType, (ushort)mapId, 0, entry, counter);
+        }
         static ObjectGuid GlobalCreate(HighGuid type, ulong counter)
         {
-            return new ObjectGuid(((ulong)type << 58), counter);
+            return new ObjectGuid((ulong)type << 58, counter);
         }
         static ObjectGuid RealmSpecificCreate(HighGuid type, ulong counter)
         {
-            return new ObjectGuid(((ulong)type << 58 | (ulong)Global.WorldMgr.GetRealm().Id.Realm << 42), counter);
+            if (type == HighGuid.Transport)
+                return new ObjectGuid((ulong)type << 58 | (counter << 38), 0);
+            else
+                return new ObjectGuid((ulong)type << 58 | (ulong)Global.WorldMgr.GetRealm().Id.Realm << 42, counter);
         }
         static ObjectGuid MapSpecificCreate(HighGuid type, byte subType, ushort mapId, uint serverId, uint entry, ulong counter)
         {
@@ -122,7 +126,20 @@ namespace Game.Entities
         uint GetServerId() { return (uint)((_low >> 40) & 0x1FFF); }
         uint GetMapId() { return (uint)((_high >> 29) & 0x1FFF); }
         public uint GetEntry() { return (uint)((_high >> 6) & 0x7FFFFF); }
-        public ulong GetCounter() { return _low & 0xFFFFFFFFFF; }
+        public ulong GetCounter()
+        {
+            if (GetHigh() == HighGuid.Transport)
+                return (_high >> 38) & 0xFFFFF;
+            else
+                return _low & 0xFFFFFFFFFF;
+        }
+        public static ulong GetMaxCounter(HighGuid highGuid)
+        {
+            if (highGuid == HighGuid.Transport)
+                return 0xFFFFF;
+            else
+                return 0xFFFFFFFFFF;
+        }
 
         public bool IsEmpty() { return _low == 0 && _high == 0; }
         public bool IsCreature() { return GetHigh() == HighGuid.Creature; }
@@ -170,7 +187,7 @@ namespace Game.Entities
 
         public override string ToString()
         {
-            string str = string.Format("GUID Full: 0x{0}, Type: {1}", _high + _low, GetHigh());
+            string str = $"GUID Full: 0x{_high + _low}, Type: {GetHigh()}";
             if (HasEntry())
                 str += (IsPet() ? " Pet number: " : " Entry: ") + GetEntry() + " ";
 
@@ -180,12 +197,6 @@ namespace Game.Entities
 
         public static bool operator ==(ObjectGuid first, ObjectGuid other)
         {
-            if (ReferenceEquals(first, other))
-                return true;
-
-            if ((object)first == null || (object)other == null)
-                return false;
-
             return first.Equals(other);
         }
 
@@ -284,6 +295,7 @@ namespace Game.Entities
             {
                 case HighGuid.Player:
                 case HighGuid.Item:
+                case HighGuid.ChatChannel:
                 case HighGuid.Transport:
                 case HighGuid.Guild:
                     return true;
@@ -313,13 +325,13 @@ namespace Game.Entities
                     return false;
             }
         }
-
-        ulong _low;
-        ulong _high;
     }
 
     public class ObjectGuidGenerator
     {
+        ulong _nextGuid;
+        HighGuid _highGuid;
+
         public ObjectGuidGenerator(HighGuid highGuid, ulong start = 1)
         {
             _highGuid = highGuid;
@@ -330,7 +342,7 @@ namespace Game.Entities
 
         public ulong Generate()
         {
-            if (_nextGuid >= ulong.MaxValue - 1)
+            if (_nextGuid >= ObjectGuid.GetMaxCounter(_highGuid) - 1)
                 HandleCounterOverflow();
             return _nextGuid++;
         }
@@ -342,8 +354,5 @@ namespace Game.Entities
             Log.outFatal(LogFilter.Server, "{0} guid overflow!! Can't continue, shutting down server. ", _highGuid);
             Global.WorldMgr.StopNow();
         }
-
-        ulong _nextGuid;
-        HighGuid _highGuid;
     }
 }

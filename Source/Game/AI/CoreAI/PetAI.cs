@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (C) 2012-2018 CypherCore <http://github.com/CypherCore>
+ * Copyright (C) 2012-2020 CypherCore <http://github.com/CypherCore>
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,6 +39,12 @@ namespace Game.AI
             if (me.IsCharmed() && me.GetVictim() == me.GetCharmer())
                 return true;
 
+            // dont allow pets to follow targets far away from owner
+            Unit owner = me.GetCharmerOrOwner();
+            if (owner)
+                if (owner.GetExactDist(me) >= (owner.GetVisibilityRange() - 10.0f))
+                    return true;
+
             return !me.IsValidAttackTarget(me.GetVictim());
         }
 
@@ -50,14 +56,13 @@ namespace Game.AI
                 me.GetMotionMaster().Clear();
                 me.GetMotionMaster().MoveIdle();
                 me.CombatStop();
-                me.getHostileRefManager().deleteReferences();
+                me.GetHostileRefManager().DeleteReferences();
 
                 return;
             }
 
             me.AttackStop();
             me.InterruptNonMeleeSpells(false);
-            me.SendMeleeAttackStop(); // Should stop pet's attack button from flashing
             me.GetCharmInfo().SetIsCommandAttack(false);
             ClearCharmInfoFlags();
             HandleReturnMovement();
@@ -158,9 +163,9 @@ namespace Game.AI
 
                         // Some spells can target enemy or friendly (DK Ghoul's Leap)
                         // Check for enemy first (pet then owner)
-                        Unit target = me.getAttackerForHelper();
+                        Unit target = me.GetAttackerForHelper();
                         if (!target && owner)
-                            target = owner.getAttackerForHelper();
+                            target = owner.GetAttackerForHelper();
 
                         if (target)
                         {
@@ -225,7 +230,7 @@ namespace Game.AI
                     SpellCastTargets targets = new SpellCastTargets();
                     targets.SetUnitTarget(target);
 
-                    spell.prepare(targets);
+                    spell.Prepare(targets);
                 }
 
                 // deleted cached Spell objects
@@ -257,23 +262,23 @@ namespace Game.AI
                 return;
 
             //owner is in group; group members filled in already (no raid . subgroupcount = whole count)
-            if (group && !group.isRaidGroup() && m_AllySet.Count == (group.GetMembersCount() + 2))
+            if (group && !group.IsRaidGroup() && m_AllySet.Count == (group.GetMembersCount() + 2))
                 return;
 
             m_AllySet.Clear();
             m_AllySet.Add(me.GetGUID());
             if (group)                                              //add group
             {
-                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.next())
+                for (GroupReference refe = group.GetFirstMember(); refe != null; refe = refe.Next())
                 {
-                    Player Target = refe.GetSource();
-                    if (!Target || !group.SameSubGroup(owner.ToPlayer(), Target))
+                    Player target = refe.GetSource();
+                    if (!target || !target.IsInMap(owner) || !group.SameSubGroup(owner.ToPlayer(), target))
                         continue;
 
-                    if (Target.GetGUID() == owner.GetGUID())
+                    if (target.GetGUID() == owner.GetGUID())
                         continue;
 
-                    m_AllySet.Add(Target.GetGUID());
+                    m_AllySet.Add(target.GetGUID());
                 }
             }
             else                                                    //remove group
@@ -293,7 +298,6 @@ namespace Game.AI
             // next target selection
             me.AttackStop();
             me.InterruptNonMeleeSpells(false);
-            me.SendMeleeAttackStop();  // Stops the pet's 'Attack' button from flashing
 
             // Before returning to owner, see if there are more things to attack
             Unit nextTarget = SelectNextTarget(false);
@@ -368,7 +372,7 @@ namespace Game.AI
                 return null;
 
             // Check pet attackers first so we don't drag a bunch of targets to the owner
-            Unit myAttacker = me.getAttackerForHelper();
+            Unit myAttacker = me.GetAttackerForHelper();
             if (myAttacker)
                 if (!myAttacker.HasBreakableByDamageCrowdControlAura())
                     return myAttacker;
@@ -378,7 +382,7 @@ namespace Game.AI
                 return null;
 
             // Check owner attackers
-            Unit ownerAttacker = me.GetCharmerOrOwner().getAttackerForHelper();
+            Unit ownerAttacker = me.GetCharmerOrOwner().GetAttackerForHelper();
             if (ownerAttacker)
                 if (!ownerAttacker.HasBreakableByDamageCrowdControlAura())
                     return ownerAttacker;
@@ -439,6 +443,8 @@ namespace Game.AI
                     me.GetMotionMaster().MoveFollow(me.GetCharmerOrOwner(), SharedConst.PetFollowDist, me.GetFollowAngle());
                 }
             }
+
+            me.ClearInPetCombat();
         }
 
         void DoAttack(Unit target, bool chase)
@@ -448,9 +454,12 @@ namespace Game.AI
 
             if (me.Attack(target, true))
             {
+                // properly fix fake combat after pet is sent to attack
                 Unit owner = me.GetOwner();
-                if (owner)
-                    owner.SetInCombatWith(target);
+                if (owner != null)
+                    owner.AddUnitFlag(UnitFlags.PetInCombat);
+
+                me.AddUnitFlag(UnitFlags.PetInCombat);
 
                 // Play sound to let the player know the pet is attacking something it picked on its own
                 if (me.HasReactState(ReactStates.Aggressive) && !me.GetCharmInfo().IsCommandAttack())
@@ -519,10 +528,10 @@ namespace Game.AI
 
             if (!victim.IsAlive())
             {
+                // if target is invalid, pet should evade automaticly
                 // Clear target to prevent getting stuck on dead targets
-                me.AttackStop();
-                me.InterruptNonMeleeSpells(false);
-                me.SendMeleeAttackStop();
+                //me.AttackStop();
+                //me.InterruptNonMeleeSpells(false);
                 return false;
             }
 
@@ -546,7 +555,7 @@ namespace Game.AI
             if (me.GetVictim() && me.GetVictim() != victim)
             {
                 // Check if our owner selected this target and clicked "attack"
-                Unit ownerTarget = null;
+                Unit ownerTarget;
                 Player owner = me.GetCharmerOrOwner().ToPlayer();
                 if (owner)
                     ownerTarget = owner.GetSelectedUnit();
