@@ -31,17 +31,17 @@ jobs:
           command: |
             ls /home/circleci/publish/bnetserver
       - run: 
-          name: "Kill ABExport"
+          name: "Kill BNetServer"
           command: |
-            sshpass -p $USER_PASS ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no 'trap "screen -XS bnetserver quit" QUIT TERM INT EXIT'
+            sshpass -p $SSH_PASSWORD ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no 'trap "screen -XS bnetserver quit" QUIT TERM INT EXIT'
       - run: 
           name: "Empty server folder'"
           command: |
-            sshpass -p $USER_PASS ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no "cd /home/ubuntu/emu/wow/ && find ./bnetserver -mindepth 1 ! -regex '^./bnetserver/BNetServer.conf' -delete"
+            sshpass -p $SSH_PASSWORD ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no "cd /home/ubuntu/emu/wow/ && find ./bnetserver -mindepth 1 ! -regex '^./bnetserver/BNetServer.conf' -delete"
       - run: 
           name: "Copy files to server"
           command: |
-            sshpass -p $USER_PASS scp -o stricthostkeychecking=no -r /home/circleci/publish/bnetserver/* $SSH_USER@$SSH_HOST:/home/ubuntu/emu/wow/bnetserver
+            sshpass -p $SSH_PASSWORD scp -o stricthostkeychecking=no -r /home/circleci/publish/bnetserver/* $SSH_USER@$SSH_HOST:/home/ubuntu/emu/wow/bnetserver
 workflows:
     version: 2
     deploy_dev:
