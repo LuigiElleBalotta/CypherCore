@@ -86,8 +86,7 @@ namespace Game.Chat
         {
             // Reload dynamic data tables from the database
             Log.outInfo(LogFilter.Server, "Re-Loading Auctions...");
-            Global.AuctionMgr.LoadAuctionItems();
-            Global.AuctionMgr.LoadAuctions();
+            Global.AuctionHouseMgr.LoadAuctions();
             handler.SendGlobalGMSysMessage("Auctions reloaded.");
             return true;
         }
@@ -212,7 +211,7 @@ namespace Game.Chat
             if (args.Empty())
                 return false;
 
-            uint entry = 0;
+            uint entry;
             while ((entry = args.NextUInt32()) != 0)
             {
                 PreparedStatement stmt = DB.World.GetPreparedStatement(WorldStatements.SEL_CREATURE_TEMPLATE);

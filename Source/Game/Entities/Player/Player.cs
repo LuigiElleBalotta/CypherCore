@@ -83,7 +83,10 @@ namespace Game.Entities
             _specializationInfo = new SpecializationInfo();
 
             for (byte i = 0; i < (byte)BaseModGroup.End; ++i)
-                m_auraBaseMod[i] = new float[] { 0.0f, 1.0f };
+            {
+                m_auraBaseFlatMod[i] = 0.0f;
+                m_auraBasePctMod[i] = 1.0f;
+            }
 
             for (var i = 0; i < (int)SpellModOp.Max; ++i)
             {
@@ -452,7 +455,7 @@ namespace Game.Entities
 
             // Update cinematic location, if 500ms have passed and we're doing a cinematic now.
             _cinematicMgr.m_cinematicDiff += diff;
-            if (_cinematicMgr.m_activeCinematicCameraId != 0 && Time.GetMSTimeDiffToNow(_cinematicMgr.m_lastCinematicCheck) > 500)
+            if (_cinematicMgr.m_activeCinematicCameraIndex != 0 && Time.GetMSTimeDiffToNow(_cinematicMgr.m_lastCinematicCheck) > 500)
             {
                 _cinematicMgr.m_lastCinematicCheck = GameTime.GetGameTimeMS();
                 _cinematicMgr.UpdateCinematicLocation(diff);
@@ -771,9 +774,9 @@ namespace Game.Entities
                 UpdateCriteria(CriteriaTypes.DeathAtMap, 1);
                 UpdateCriteria(CriteriaTypes.Death, 1);
                 UpdateCriteria(CriteriaTypes.DeathInDungeon, 1);
-                ResetCriteria(CriteriaTypes.BgObjectiveCapture, (uint)CriteriaCondition.NoDeath);
-                ResetCriteria(CriteriaTypes.HonorableKill, (uint)CriteriaCondition.NoDeath);
-                ResetCriteria(CriteriaTypes.GetKillingBlows, (uint)CriteriaCondition.NoDeath);
+
+                // reset all death criterias
+                ResetCriteria(CriteriaCondition.NoDeath, 0);
             }
 
             base.SetDeathState(s);
@@ -1241,7 +1244,7 @@ namespace Game.Entities
             {
                 if (currency.Flags.HasAnyFlag((uint)CurrencyFlags.HighPrecision))
                     count /= 100;
-                GetReputationMgr().ModifyReputation(factionEntry, count, true);
+                GetReputationMgr().ModifyReputation(factionEntry, count, false, true);
                 return;
             }
 
@@ -1642,8 +1645,8 @@ namespace Game.Entities
 
                 FactionRecord factionEntry1 = CliDB.FactionStorage.LookupByKey(ChampioningFaction != 0 ? ChampioningFaction : Rep.RepFaction1);
                 ReputationRank current_reputation_rank1 = GetReputationMgr().GetRank(factionEntry1);
-                if (factionEntry1 != null && (uint)current_reputation_rank1 <= Rep.ReputationMaxCap1)
-                    GetReputationMgr().ModifyReputation(factionEntry1, donerep1);
+                if (factionEntry1 != null)
+                    GetReputationMgr().ModifyReputation(factionEntry1, donerep1, (uint)current_reputation_rank1 > Rep.ReputationMaxCap1);
             }
 
             if (Rep.RepFaction2 != 0 && (!Rep.TeamDependent || team == Team.Horde))
@@ -1653,8 +1656,8 @@ namespace Game.Entities
 
                 FactionRecord factionEntry2 = CliDB.FactionStorage.LookupByKey(ChampioningFaction != 0 ? ChampioningFaction : Rep.RepFaction2);
                 ReputationRank current_reputation_rank2 = GetReputationMgr().GetRank(factionEntry2);
-                if (factionEntry2 != null && (uint)current_reputation_rank2 <= Rep.ReputationMaxCap2)
-                    GetReputationMgr().ModifyReputation(factionEntry2, donerep2);
+                if (factionEntry2 != null)
+                    GetReputationMgr().ModifyReputation(factionEntry2, donerep2, (uint)current_reputation_rank2 > Rep.ReputationMaxCap2);
             }
         }
         // Calculate how many reputation points player gain with the quest
@@ -1706,7 +1709,7 @@ namespace Game.Entities
                     rep = CalculateReputationGain(ReputationSource.Quest, (uint)GetQuestLevel(quest), rep, (int)quest.RewardFactionId[i], noQuestBonus);
 
                 bool noSpillover = Convert.ToBoolean(quest.RewardReputationMask & (1 << i));
-                GetReputationMgr().ModifyReputation(factionEntry, rep, noSpillover);
+                GetReputationMgr().ModifyReputation(factionEntry, rep, false, noSpillover);
             }
         }
 
@@ -3791,7 +3794,7 @@ namespace Game.Entities
             if (powerType == null)
                 return;
 
-            float addvalue = 0.0f;
+            float addvalue;
 
             if (!IsInCombat())
             {
@@ -4695,7 +4698,7 @@ namespace Game.Entities
                 SpawnCorpseBones();
             }
 
-            WorldSafeLocsEntry ClosestGrave = null;
+            WorldSafeLocsEntry ClosestGrave;
 
             // Special handle for Battlegroundmaps
             Battleground bg = GetBattleground();
@@ -5333,8 +5336,7 @@ namespace Game.Entities
 
             PlayerLevelInfo info = Global.ObjectMgr.GetPlayerLevelInfo(GetRace(), GetClass(), level);
 
-            uint basemana = 0;
-            Global.ObjectMgr.GetPlayerClassLevelInfo(GetClass(), level, out basemana);
+            Global.ObjectMgr.GetPlayerClassLevelInfo(GetClass(), level, out uint basemana);
 
             LevelUpInfo packet = new LevelUpInfo();
             packet.Level = level;
@@ -5490,7 +5492,7 @@ namespace Game.Entities
                     return;
             }
 
-            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.StateAnimID), (uint)CliDB.AnimationDataStorage.Count);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.StateAnimID), Global.DB2Mgr.GetEmptyAnimStateID());
         }
 
         //Creature
@@ -6513,7 +6515,7 @@ namespace Game.Entities
 
             CinematicSequencesRecord sequence = CliDB.CinematicSequencesStorage.LookupByKey(CinematicSequenceId);
             if (sequence != null)
-                _cinematicMgr.SetActiveCinematicCamera(sequence.Camera[0]);
+                _cinematicMgr.BeginCinematic(sequence);
         }
         public void SendMovieStart(uint movieId)
         {
@@ -6526,8 +6528,8 @@ namespace Game.Entities
         public override void SetObjectScale(float scale)
         {
             base.SetObjectScale(scale);
-            SetBoundingRadius(scale * SharedConst.DefaultWorldObjectSize);
-            SetCombatReach(scale * SharedConst.DefaultCombatReach);
+            SetBoundingRadius(scale * SharedConst.DefaultPlayerBoundingRadius);
+            SetCombatReach(scale * SharedConst.DefaultPlayerCombatReach);
             if (IsInWorld)
                 SendMovementSetCollisionHeight(scale * GetCollisionHeight(IsMounted()));
         }
@@ -6567,7 +6569,7 @@ namespace Game.Entities
             if (level >= WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
                 return;
 
-            uint bonus_xp = 0;
+            uint bonus_xp;
             bool recruitAFriend = GetsRecruitAFriendBonus(true);
 
             // RaF does NOT stack with rested experience
@@ -6603,36 +6605,104 @@ namespace Game.Entities
             SetXP(newXP);
         }
 
-        public void HandleBaseModValue(BaseModGroup modGroup, BaseModType modType, float amount, bool apply)
+        public void HandleBaseModFlatValue(BaseModGroup modGroup, float amount, bool apply)
         {
-            if (modGroup >= BaseModGroup.End || modType >= BaseModType.End)
+            if (modGroup >= BaseModGroup.End)
             {
-                Log.outError(LogFilter.Spells, "ERROR in HandleBaseModValue(): non existed BaseModGroup of wrong BaseModType!");
+                Log.outError(LogFilter.Spells, $"Player.HandleBaseModFlatValue: Invalid BaseModGroup ({modGroup}) for player '{GetName()}' ({GetGUID()})");
+                return;
+            }
+            m_auraBaseFlatMod[(int)modGroup] += apply ? amount : -amount;
+            UpdateBaseModGroup(modGroup);
+        }
+
+        public void ApplyBaseModPctValue(BaseModGroup modGroup, float pct)
+        {
+            if (modGroup >= BaseModGroup.End)
+            {
+                Log.outError(LogFilter.Spells, $"Player.ApplyBaseModPctValue: Invalid BaseModGroup/BaseModType ({modGroup}/{BaseModType.FlatMod}) for player '{GetName()}' ({GetGUID()})");
                 return;
             }
 
-            switch (modType)
+            MathFunctions.AddPct(ref m_auraBasePctMod[(int)modGroup], pct);
+            UpdateBaseModGroup(modGroup);
+        }
+
+        public void SetBaseModFlatValue(BaseModGroup modGroup, float val)
+        {
+            if (m_auraBaseFlatMod[(int)modGroup] == val)
+                return;
+
+            m_auraBaseFlatMod[(int)modGroup] = val;
+            UpdateBaseModGroup(modGroup);
+        }
+
+        public void SetBaseModPctValue(BaseModGroup modGroup, float val)
+        {
+            if (m_auraBasePctMod[(int)modGroup] == val)
+                return;
+
+            m_auraBasePctMod[(int)modGroup] = val;
+            UpdateBaseModGroup(modGroup);
+        }
+
+        public override void UpdateDamageDoneMods(WeaponAttackType attackType)
+        {
+            base.UpdateDamageDoneMods(attackType);
+
+            UnitMods unitMod = attackType switch
             {
-                case BaseModType.FlatMod:
-                    m_auraBaseMod[(int)modGroup][(int)modType] += apply ? amount : -amount;
-                    break;
-                case BaseModType.PCTmod:
-                    MathFunctions.ApplyPercentModFloatVar(ref m_auraBaseMod[(int)modGroup][(int)modType], amount, apply);
-                    break;
+                WeaponAttackType.BaseAttack => UnitMods.DamageMainHand,
+                WeaponAttackType.OffAttack => UnitMods.DamageOffHand,
+                WeaponAttackType.RangedAttack => UnitMods.DamageRanged,
+                _ => throw new NotImplementedException(),
+            };
+
+            float amount = 0.0f;
+            Item item = GetWeaponForAttack(attackType, true);
+            if (item == null)
+                return;
+
+            for (var slot = EnchantmentSlot.Perm; slot < EnchantmentSlot.Max; ++slot)
+            {
+                SpellItemEnchantmentRecord enchantmentEntry = CliDB.SpellItemEnchantmentStorage.LookupByKey(item.GetEnchantmentId(slot));
+                if (enchantmentEntry == null)
+                    continue;
+
+                for (byte i = 0; i < ItemConst.MaxItemEnchantmentEffects; ++i)
+                {
+                    switch (enchantmentEntry.Effect[i])
+                    {
+                        case ItemEnchantmentType.Damage:
+                            amount += enchantmentEntry.EffectScalingPoints[i];
+                            break;
+                        case ItemEnchantmentType.Totem:
+                            if (GetClass() == Class.Shaman)
+                                amount += enchantmentEntry.EffectScalingPoints[i] * item.GetTemplate().GetDelay() / 1000.0f;
+                            break;
+                        default:
+                            break;
+                    }
+                }
             }
 
+            HandleStatFlatModifier(unitMod, UnitModifierFlatType.Total, amount, true);
+        }
+
+        void UpdateBaseModGroup(BaseModGroup modGroup)
+        {
             if (!CanModifyStats())
                 return;
 
             switch (modGroup)
             {
-                case BaseModGroup.CritPercentage:
-                    UpdateCritPercentage(WeaponAttackType.BaseAttack);
+                case BaseModGroup.CritPercentage: 
+                    UpdateCritPercentage(WeaponAttackType.BaseAttack); 
                     break;
-                case BaseModGroup.RangedCritPercentage:
-                    UpdateCritPercentage(WeaponAttackType.RangedAttack);
+                case BaseModGroup.RangedCritPercentage: 
+                    UpdateCritPercentage(WeaponAttackType.RangedAttack); 
                     break;
-                case BaseModGroup.OffhandCritPercentage:
+                case BaseModGroup.OffhandCritPercentage: 
                     UpdateCritPercentage(WeaponAttackType.OffAttack);
                     break;
                 default:
@@ -6640,6 +6710,28 @@ namespace Game.Entities
             }
         }
 
+        float GetBaseModValue(BaseModGroup modGroup, BaseModType modType)
+        {
+            if (modGroup >= BaseModGroup.End || modType >= BaseModType.End)
+            {
+                Log.outError(LogFilter.Spells, $"Player.GetBaseModValue: Invalid BaseModGroup/BaseModType ({modGroup}/{modType}) for player '{GetName()}' ({GetGUID()})");
+                return 0.0f;
+            }
+
+            return (modType == BaseModType.FlatMod ? m_auraBaseFlatMod[(int)modGroup] : m_auraBasePctMod[(int)modGroup]);
+        }
+
+        float GetTotalBaseModValue(BaseModGroup modGroup)
+        {
+            if (modGroup >= BaseModGroup.End)
+            {
+                Log.outError(LogFilter.Spells, $"Player.GetTotalBaseModValue: Invalid BaseModGroup ({modGroup}) for player '{GetName()}' ({GetGUID()})");
+                return 0.0f;
+            }
+
+            return m_auraBaseFlatMod[(int)modGroup] * m_auraBasePctMod[(int)modGroup];
+        }
+        
         public void AddComboPoints(sbyte count, Spell spell = null)
         {
             if (count == 0)
@@ -6898,7 +6990,7 @@ namespace Game.Entities
 
             if (WorldConfig.GetBoolValue(WorldCfg.InstantTaxi))
             {
-                var lastPathNode = CliDB.TaxiNodesStorage.LookupByKey(nodes[nodes.Count - 1]);
+                var lastPathNode = CliDB.TaxiNodesStorage.LookupByKey(nodes[^1]);
                 m_taxi.ClearTaxiDestinations();
                 ModifyMoney(-totalcost);
                 UpdateCriteria(CriteriaTypes.GoldSpentForTravelling, totalcost);
@@ -6956,7 +7048,7 @@ namespace Game.Entities
 
             var nodeList = CliDB.TaxiPathNodesByPath[path];
 
-            float distPrev = MapConst.MapSize * MapConst.MapSize;
+            float distPrev;
             float distNext = GetExactDistSq(nodeList[0].Loc.X, nodeList[0].Loc.Y, nodeList[0].Loc.Z);
 
             for (int i = 1; i < nodeList.Length; ++i)
@@ -7277,7 +7369,7 @@ namespace Game.Entities
                     return null;
             }
 
-            Item item = null;
+            Item item;
             if (useable)
                 item = GetUseableItemByPos(InventorySlots.Bag0, slot);
             else
@@ -7558,15 +7650,56 @@ namespace Game.Entities
 
             UpdateMask mask = new UpdateMask(191);
             m_unitData.AppendAllowedFieldsMaskForFlag(mask, flags);
-            m_unitData.WriteUpdate(buffer, mask, flags, this, target);
+            m_unitData.WriteUpdate(buffer, mask, true, this, target);
 
             UpdateMask mask2 = new UpdateMask(161);
             m_playerData.AppendAllowedFieldsMaskForFlag(mask2, flags);
-            m_playerData.WriteUpdate(buffer, mask2, flags, this, target);
+            m_playerData.WriteUpdate(buffer, mask2, true, this, target);
 
             data.WriteUInt32(buffer.GetSize());
             data.WriteUInt32(valuesMask.GetBlock(0));
             data.WriteBytes(buffer);
+        }
+
+        void BuildValuesUpdateForPlayerWithMask(UpdateData data, UpdateMask requestedObjectMask, UpdateMask requestedUnitMask, UpdateMask requestedPlayerMask, UpdateMask requestedActivePlayerMask, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            UpdateMask valuesMask = new UpdateMask((int)TypeId.Max);
+            if (requestedObjectMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Object);
+
+            m_unitData.FilterDisallowedFieldsMaskForFlag(requestedUnitMask, flags);
+            if (requestedUnitMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Unit);
+
+            if (requestedPlayerMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Player);
+
+            if (target == this && requestedActivePlayerMask.IsAnySet())
+                valuesMask.Set((int)TypeId.ActivePlayer);
+
+            WorldPacket buffer = new WorldPacket();
+            buffer.WriteUInt32(valuesMask.GetBlock(0));
+
+            if (valuesMask[(int)TypeId.Object])
+                m_objectData.WriteUpdate(buffer, requestedObjectMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.Unit])
+                m_unitData.WriteUpdate(buffer, requestedUnitMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.Player])
+                m_playerData.WriteUpdate(buffer, requestedPlayerMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.ActivePlayer])
+                m_activePlayerData.WriteUpdate(buffer, requestedActivePlayerMask, true, this, target);
+
+            WorldPacket buffer1 = new WorldPacket();
+            buffer1.WriteUInt8((byte)UpdateType.Values);
+            buffer1.WritePackedGuid(GetGUID());
+            buffer1.WriteUInt32(buffer.GetSize());
+            buffer1.WriteBytes(buffer.GetData());
+
+            data.AddUpdateBlock(buffer1);
         }
 
         public override void ClearUpdateMask(bool remove)

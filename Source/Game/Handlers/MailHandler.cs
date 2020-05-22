@@ -144,7 +144,7 @@ namespace Game
             byte mailsCount = 0;                                  //do not allow to send to one player more than 100 mails
             byte receiverLevel = 0;
             uint receiverAccountId = 0;
-            uint receiverBnetAccountId = 0;
+            uint receiverBnetAccountId;
 
             if (receiver)
             {
@@ -580,8 +580,8 @@ namespace Game
                 if (m.state == MailState.Deleted || curTime < m.deliver_time)
                     continue;
 
-                // max. 50 mails can be sent
-                if (response.Mails.Count < 50)
+                // max. 100 mails can be sent
+                if (response.Mails.Count < 100)
                     response.Mails.Add(new MailListEntry(m, player));
             }
 

@@ -360,31 +360,32 @@ namespace Game.Entities
             }
         }
 
-        public bool AddSameEffectStackRuleSpellGroups(SpellInfo spellInfo, int amount, Dictionary<SpellGroup, int> groups)
+        public bool AddSameEffectStackRuleSpellGroups(SpellInfo spellInfo, AuraType auraType, int amount, Dictionary<SpellGroup, int> groups)
         {
             uint spellId = spellInfo.GetFirstRankSpell().Id;
-            var spellGroup = GetSpellSpellGroupMapBounds(spellId);
+            var spellGroupList = GetSpellSpellGroupMapBounds(spellId);
             // Find group with SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT if it belongs to one
-            foreach (var group in spellGroup)
+            foreach (var group in spellGroupList)
             {
-                var found = mSpellGroupStack.FirstOrDefault(p => p.Key == group);
-                if (found.Key != SpellGroup.None)
+                var found = mSpellSameEffectStack.LookupByKey(group);
+                if (found != null)
                 {
-                    if (found.Value == SpellGroupStackRule.ExclusiveSameEffect)
+                    // check auraTypes
+                    if (!found.Any(p => p == auraType))
+                        continue;
+
+                    // Put the highest amount in the map
+                    if (!groups.ContainsKey(group))
+                        groups.Add(group, amount);
+                    else
                     {
-                        // Put the highest amount in the map
-                        if (groups.FirstOrDefault(p => p.Key == group).Key == SpellGroup.None)
-                            groups.Add(group, amount);
-                        else
-                        {
-                            int curr_amount = groups[group];
-                            // Take absolute value because this also counts for the highest negative aura
-                            if (Math.Abs(curr_amount) < Math.Abs(amount))
-                                groups[group] = amount;
-                        }
-                        // return because a spell should be in only one SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT group
-                        return true;
+                        int curr_amount = groups[group];
+                        // Take absolute value because this also counts for the highest negative aura
+                        if (Math.Abs(curr_amount) < Math.Abs(amount))
+                            groups[group] = amount;
                     }
+                    // return because a spell should be in only one SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT group per auraType
+                    return true;
                 }
             }
             // Not in a SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT group, so return false
@@ -395,8 +396,7 @@ namespace Game.Entities
         {
             uint spellid_1 = spellInfo1.GetFirstRankSpell().Id;
             uint spellid_2 = spellInfo2.GetFirstRankSpell().Id;
-            if (spellid_1 == spellid_2)
-                return SpellGroupStackRule.Default;
+
             // find SpellGroups which are common for both spells
             var spellGroup1 = GetSpellSpellGroupMapBounds(spellid_1);
             List<SpellGroup> groups = new List<SpellGroup>();
@@ -1114,8 +1114,11 @@ namespace Game.Entities
             uint oldMSTime = Time.GetMSTime();
 
             mSpellGroupStack.Clear();                                  // need for reload case
+            mSpellSameEffectStack.Clear();
 
-            //                                                       0         1
+            List<SpellGroup> sameEffectGroups = new List<SpellGroup>();
+
+            //                                         0         1
             SQLResult result = DB.World.Query("SELECT group_id, stack_rule FROM spell_group_stack_rules");
             if (result.IsEmpty())
             {
@@ -1126,28 +1129,128 @@ namespace Game.Entities
             uint count = 0;
             do
             {
-                uint group_id = result.Read<uint>(0);
-                byte stack_rule = result.Read<byte>(1);
-                if (stack_rule >= (byte)SpellGroupStackRule.Max)
+                SpellGroup group_id = (SpellGroup)result.Read<uint>(0);
+                SpellGroupStackRule stack_rule = (SpellGroupStackRule)result.Read<byte>(1);
+                if (stack_rule >= SpellGroupStackRule.Max)
                 {
                     Log.outError(LogFilter.Sql, "SpellGroupStackRule {0} listed in `spell_group_stack_rules` does not exist", stack_rule);
                     continue;
                 }
 
-                var spellGroup = GetSpellGroupSpellMapBounds((SpellGroup)group_id);
-
+                var spellGroup = GetSpellGroupSpellMapBounds(group_id);
                 if (spellGroup == null)
                 {
                     Log.outError(LogFilter.Sql, "SpellGroup id {0} listed in `spell_group_stack_rules` does not exist", group_id);
                     continue;
                 }
 
-                mSpellGroupStack[(SpellGroup)group_id] = (SpellGroupStackRule)stack_rule;
+                mSpellGroupStack.Add(group_id, stack_rule);
+
+                // different container for same effect stack rules, need to check effect types
+                if (stack_rule == SpellGroupStackRule.ExclusiveSameEffect)
+                    sameEffectGroups.Add(group_id);
 
                 ++count;
             } while (result.NextRow());
 
             Log.outInfo(LogFilter.ServerLoading, "Loaded {0} spell group stack rules in {1} ms", count, Time.GetMSTimeDiffToNow(oldMSTime));
+
+            count = 0;
+            oldMSTime = Time.GetMSTime();
+            Log.outInfo(LogFilter.ServerLoading, "Parsing SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT stack rules...");
+
+            foreach (SpellGroup group_id in sameEffectGroups)
+            {
+                GetSetOfSpellsInSpellGroup(group_id, out var spellIds);
+
+                List<AuraType> auraTypes = new List<AuraType>();
+
+                // we have to 'guess' what effect this group corresponds to
+                {
+                    List<AuraType> frequencyContainer = new List<AuraType>();
+
+                    // only waylay for the moment (shared group)
+                    AuraType[] SubGroups =
+                    {
+                        AuraType.ModMeleeHaste,
+                        AuraType.ModMeleeRangedHaste,
+                        AuraType.ModRangedHaste
+                    };
+
+                    foreach (uint spellId in spellIds)
+                    {
+                        SpellInfo spellInfo = GetSpellInfo(spellId);
+                        foreach (SpellEffectInfo effectInfo in spellInfo.GetEffectsForDifficulty(Difficulty.None))
+                        {
+                            if (!effectInfo.IsAura())
+                                continue;
+
+                            AuraType auraName = effectInfo.ApplyAuraName;
+                            if (SubGroups.Contains(auraName))
+                            {
+                                // count as first aura
+                                auraName = SubGroups[0];
+                            }
+
+                            frequencyContainer.Add(auraName);
+                        }
+                    }
+
+                    AuraType auraType = 0;
+                    int auraTypeCount = 0;
+                    foreach (AuraType auraName in frequencyContainer)
+                    {
+                        int currentCount = frequencyContainer.Count(p => p == auraName);
+                        if (currentCount > auraTypeCount)
+                        {
+                            auraType = auraName;
+                            auraTypeCount = currentCount;
+                        }
+                    }
+
+                    if (auraType == SubGroups[0])
+                    {
+                        auraTypes.AddRange(SubGroups);
+                        break;
+                    }                    
+
+                    if (auraTypes.Empty())
+                        auraTypes.Add(auraType);
+                }
+
+                // re-check spells against guessed group
+                foreach (uint spellId in spellIds)
+                {
+                    SpellInfo spellInfo = GetSpellInfo(spellId);
+
+                    bool found = false;
+                    while (spellInfo != null)
+                    {
+                        foreach (AuraType auraType in auraTypes)
+                        {
+                            if (spellInfo.HasAura(Difficulty.None, auraType))
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (found)
+                            break;
+
+                        spellInfo = spellInfo.GetNextRankSpell();
+                    }
+
+                    // not found either, log error
+                    if (!found)
+                        Log.outError(LogFilter.Sql, $"SpellId {spellId} listed in `spell_group` with stack rule 3 does not share aura assigned for group {group_id}");
+                }
+
+                mSpellSameEffectStack[group_id] = auraTypes;
+                ++count;
+            }
+
+            Log.outInfo(LogFilter.ServerLoading, $"Parsed {count} SPELL_GROUP_STACK_RULE_EXCLUSIVE_SAME_EFFECT stack rules in {Time.GetMSTimeDiffToNow(oldMSTime)} ms");
         }
 
         public void LoadSpellProcs()
@@ -1971,6 +2074,11 @@ namespace Game.Entities
             mSpellInfoMap.Clear();
             Dictionary<uint, SpellInfoLoadHelper> loadData = new Dictionary<uint, SpellInfoLoadHelper>();
 
+            Dictionary<uint, BattlePetSpeciesRecord> battlePetSpeciesByCreature = new Dictionary<uint, BattlePetSpeciesRecord>();
+            foreach (var battlePetSpecies in CliDB.BattlePetSpeciesStorage.Values)
+                if (battlePetSpecies.CreatureID != 0)
+                    battlePetSpeciesByCreature[battlePetSpecies.CreatureID] = battlePetSpecies;
+
             Dictionary<uint, Dictionary<uint, SpellEffectRecord[]>> effectsBySpell = new Dictionary<uint, Dictionary<uint, SpellEffectRecord[]>>();
             Dictionary<uint, MultiMap<uint, SpellXSpellVisualRecord>> visualsBySpell = new Dictionary<uint, MultiMap<uint, SpellXSpellVisualRecord>>();
             foreach (var effect in CliDB.SpellEffectStorage.Values)
@@ -1988,6 +2096,20 @@ namespace Game.Entities
                     effectsBySpell[effect.SpellID][effect.DifficultyID] = new SpellEffectRecord[SpellConst.MaxEffects];
 
                 effectsBySpell[effect.SpellID][effect.DifficultyID][effect.EffectIndex] = effect;
+
+                if (effect.Effect == (int)SpellEffectName.Summon)
+                {
+                    var summonProperties = CliDB.SummonPropertiesStorage.LookupByKey(effect.EffectMiscValue[1]);
+                    if (summonProperties != null)
+                    {
+                        if (summonProperties.Slot == (int)SummonSlot.MiniPet && summonProperties.Flags.HasAnyFlag(SummonPropFlags.Companion))
+                        {
+                            var battlePetSpecies = battlePetSpeciesByCreature.LookupByKey(effect.EffectMiscValue[0]);
+                            if (battlePetSpecies != null)
+                                mBattlePets[effect.SpellID] = battlePetSpecies;
+                        }
+                    }
+                }
             }
 
             SpellInfoLoadHelper GetSpellInfoLoadHelper(uint spellId)
@@ -2450,6 +2572,10 @@ namespace Game.Entities
                             spellInfo.ConeAngle = 90.0f;
                 }
 
+                // due to the way spell system works, unit would change orientation in Spell::_cast
+                if (spellInfo.HasAura(Difficulty.None, AuraType.ControlVehicle))
+                    spellInfo.AttributesEx5 |= SpellAttr5.DontTurnDuringCast;
+
                 if (spellInfo.ActiveIconFileDataId == 135754)  // flight
                     spellInfo.Attributes |= SpellAttr0.Passive;
 
@@ -2864,6 +2990,9 @@ namespace Game.Entities
                         spellInfo.GetEffect(0).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards200); // 200yd
                         spellInfo.GetEffect(1).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards200); // 200yd
                         break;
+                    case 69030: // Val'kyr Target Search
+                        spellInfo.Attributes |= SpellAttr0.UnaffectedByInvulnerability;
+                        break;
                     case 69198: // Raging Spirit Visual
                         spellInfo.RangeEntry = CliDB.SpellRangeStorage.LookupByKey(13); // 50000yd
                         break;
@@ -2886,11 +3015,13 @@ namespace Game.Entities
                         spellInfo.MaxAffectedTargets = 3;
                         break;
                     case 71809: // Jump
-                        spellInfo.RangeEntry = CliDB.SpellRangeStorage.LookupByKey(3); // 20yd
-                        spellInfo.GetEffect(0).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards25); // 25yd
+                        spellInfo.RangeEntry = CliDB.SpellRangeStorage.LookupByKey(5); // 40yd
+                        spellInfo.GetEffect(0).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards10); // 10yd
+                        spellInfo.GetEffect(0).MiscValue = 190;
                         break;
                     case 72405: // Broken Frostmourne
-                        spellInfo.GetEffect(1).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards200); // 200yd
+                        spellInfo.GetEffect(1).RadiusEntry = CliDB.SpellRadiusStorage.LookupByKey(EffectRadiusIndex.Yards20); // 20yd
+                        spellInfo.AttributesEx |= SpellAttr1.NoThreat;
                         break;
                     // ENDOF ICECROWN CITADEL SPELLS
                     //
@@ -2986,6 +3117,15 @@ namespace Game.Entities
                         spellInfo.AuraInterruptFlags[0] |= (uint)SpellAuraInterruptFlags.ChangeMap;
                         break;
                     // ENDOF FIRELANDS SPELLS
+
+                    // ANTORUS THE BURNING THRONE SPELLS
+                    // Decimation
+                    case 244449:
+                        // For some reason there is a instakill effect that serves absolutely no purpose.
+                        // Until we figure out what it's actually used for we disable it.
+                        spellInfo.GetEffect(2).Effect = 0;
+                        break;
+                    // ENDOF ANTORUS THE BURNING THRONE SPELLS
                     case 102445: // Summon Master Li Fei
                         spellInfo.GetEffect(0).TargetA = new SpellImplicitTargetInfo(Targets.DestDb);
                         break;
@@ -3025,10 +3165,10 @@ namespace Game.Entities
 
             SummonPropertiesRecord properties = CliDB.SummonPropertiesStorage.LookupByKey(121);
             if (properties != null)
-                properties.Title = SummonType.Totem;
+                properties.Title = SummonTitle.Totem;
             properties = CliDB.SummonPropertiesStorage.LookupByKey(647); // 52893
             if (properties != null)
-                properties.Title = SummonType.Totem;
+                properties.Title = SummonTitle.Totem;
             properties = CliDB.SummonPropertiesStorage.LookupByKey(628);
             if (properties != null) // Hungry Plaguehound
                 properties.Control = SummonCategory.Pet;
@@ -3359,8 +3499,12 @@ namespace Game.Entities
             return mSpellTotemModel.LookupByKey(Tuple.Create(spellId, (byte)race));
         }
 
+        public BattlePetSpeciesRecord GetBattlePetSpecies(uint spellId)
+        {
+            return mBattlePets.LookupByKey(spellId);
+        }
+        
         #region Fields
-        //private:
         Dictionary<uint, SpellChainNode> mSpellChains = new Dictionary<uint, SpellChainNode>();
         MultiMap<uint, uint> mSpellsReqSpell = new MultiMap<uint, uint>();
         MultiMap<uint, uint> mSpellReq = new MultiMap<uint, uint>();
@@ -3370,6 +3514,7 @@ namespace Game.Entities
         MultiMap<uint, SpellGroup> mSpellSpellGroup = new MultiMap<uint, SpellGroup>();
         MultiMap<SpellGroup, int> mSpellGroupSpell = new MultiMap<SpellGroup, int>();
         Dictionary<SpellGroup, SpellGroupStackRule> mSpellGroupStack = new Dictionary<SpellGroup, SpellGroupStackRule>();
+        MultiMap<SpellGroup, AuraType> mSpellSameEffectStack = new MultiMap<SpellGroup, AuraType>();
         Dictionary<uint, SpellProcEntry> mSpellProcMap = new Dictionary<uint, SpellProcEntry>();
         Dictionary<uint, SpellThreatEntry> mSpellThreatMap = new Dictionary<uint, SpellThreatEntry>();
         Dictionary<uint, PetAura> mSpellPetAuraMap = new Dictionary<uint, PetAura>();
@@ -3387,6 +3532,7 @@ namespace Game.Entities
         Dictionary<uint, PetDefaultSpellsEntry> mPetDefaultSpellsMap = new Dictionary<uint, PetDefaultSpellsEntry>();           // only spells not listed in related mPetLevelupSpellMap entry
         Dictionary<uint, SpellInfo> mSpellInfoMap = new Dictionary<uint, SpellInfo>();
         Dictionary<Tuple<uint, byte>, uint> mSpellTotemModel = new Dictionary<Tuple<uint, byte>, uint>();
+        Dictionary<uint, BattlePetSpeciesRecord> mBattlePets = new Dictionary<uint, BattlePetSpeciesRecord>();
 
         public delegate void AuraEffectHandler(AuraEffect effect, AuraApplication aurApp, AuraEffectHandleModes mode, bool apply);
         Dictionary<AuraType, AuraEffectHandler> AuraEffectHandlers = new Dictionary<AuraType, AuraEffectHandler>();

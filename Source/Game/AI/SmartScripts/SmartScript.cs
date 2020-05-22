@@ -1054,7 +1054,7 @@ namespace Game.AI
                             if (IsCreature(obj))
                             {
                                 me.SetInCombatWithZone();
-                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction: SMART_ACTION_SET_IN_COMBAT_WITH_ZONE: Creature: {me.GetGUID().ToString()}, Target: {obj.GetGUID().ToString()}");
+                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction: SMART_ACTION_SET_IN_COMBAT_WITH_ZONE: Creature: {me.GetGUID()}, Target: {obj.GetGUID()}");
                             }
                         }
 
@@ -1076,7 +1076,7 @@ namespace Game.AI
                                     var builder = new BroadcastTextBuilder(me, ChatMsg.Emote, (uint)BroadcastTextIds.CallForHelp, me.GetGender());
                                     Global.CreatureTextMgr.SendChatPacket(me, builder, ChatMsg.MonsterEmote);
                                 }
-                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction: SMART_ACTION_CALL_FOR_HELP: Creature: {me.GetGUID().ToString()}, Target: {obj.GetGUID().ToString()}");
+                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction: SMART_ACTION_CALL_FOR_HELP: Creature: {me.GetGUID()}, Target: {obj.GetGUID()}");
                             }
                         }
                         break;
@@ -2131,13 +2131,8 @@ namespace Game.AI
                         {
                             Creature creature = obj.ToCreature();
                             if (creature != null)
-                            {
-                                creature.GetMotionMaster().Clear();
-                                // @todo add optional jump orientation support?
                                 creature.GetMotionMaster().MoveJump(e.Target.x, e.Target.y, e.Target.z, 0.0f, e.Action.jump.speedxy, e.Action.jump.speedz);
-                            }
                         }
-                        //todo Resume path when reached jump location
                         break;
                     }
                 case SmartActions.GoSetLootState:
@@ -2652,7 +2647,7 @@ namespace Game.AI
                             {
                                 obj.ToUnit().SendPlaySpellVisualKit(e.Action.spellVisualKit.spellVisualKitId, e.Action.spellVisualKit.kitType, e.Action.spellVisualKit.duration);
 
-                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction:: SMART_ACTION_PLAY_SPELL_VISUAL_KIT: target: {obj.GetName()} ({obj.GetGUID().ToString()}), SpellVisualKit: {e.Action.spellVisualKit.spellVisualKitId}");
+                                Log.outDebug(LogFilter.ScriptsAi, $"SmartScript.ProcessAction:: SMART_ACTION_PLAY_SPELL_VISUAL_KIT: target: {obj.GetName()} ({obj.GetGUID()}), SpellVisualKit: {e.Action.spellVisualKit.spellVisualKitId}");
                             }
                         }
                         break;

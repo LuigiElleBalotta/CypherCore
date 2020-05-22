@@ -138,6 +138,10 @@ namespace Framework.Database
             PrepareStatement(CharStatements.SEL_CHARACTER_RANDOMBG, "SELECT guid FROM character_battleground_random WHERE guid = ?");
             PrepareStatement(CharStatements.SEL_CHARACTER_BANNED, "SELECT guid FROM character_banned WHERE guid = ? AND active = 1");
             PrepareStatement(CharStatements.SEL_CHARACTER_QUESTSTATUSREW, "SELECT quest FROM character_queststatus_rewarded WHERE guid = ? AND active = 1");
+            PrepareStatement(CharStatements.SEL_CHARACTER_FAVORITE_AUCTIONS, "SELECT `order`, itemId, itemLevel, battlePetSpeciesId, suffixItemNameDescriptionId FROM character_favorite_auctions WHERE guid = ? ORDER BY `order`");
+            PrepareStatement(CharStatements.INS_CHARACTER_FAVORITE_AUCTION, "INSERT INTO character_favorite_auctions (guid, `order`, itemId, itemLevel, battlePetSpeciesId, suffixItemNameDescriptionId) VALUE (?, ?, ?, ?, ?, ?)");
+            PrepareStatement(CharStatements.DEL_CHARACTER_FAVORITE_AUCTION, "DELETE FROM character_favorite_auctions WHERE guid = ? AND `order` = ?");
+            PrepareStatement(CharStatements.DEL_CHARACTER_FAVORITE_AUCTIONS_BY_CHAR, "DELETE FROM character_favorite_auctions WHERE guid = ?");
             PrepareStatement(CharStatements.SEL_ACCOUNT_INSTANCELOCKTIMES, "SELECT instanceId, releaseTime FROM account_instance_times WHERE accountId = ?");
 
             PrepareStatement(CharStatements.SEL_CHARACTER_ACTIONS_SPEC, "SELECT button, action, type FROM character_action WHERE guid = ? AND spec = ? ORDER BY button");
@@ -152,11 +156,17 @@ namespace Framework.Database
             PrepareStatement(CharStatements.SEL_MAILITEMS_AZERITE_MILESTONE_POWER, "SELECT iamp.itemGuid, iamp.azeriteItemMilestonePowerId FROM item_instance_azerite_milestone_power iamp INNER JOIN mail_items mi ON iamp.itemGuid = mi.item_guid INNER JOIN mail m ON mi.mail_id = m.id WHERE m.receiver = ?");
             PrepareStatement(CharStatements.SEL_MAILITEMS_AZERITE_UNLOCKED_ESSENCE, "SELECT iaue.itemGuid, iaue.azeriteEssenceId, iaue.`rank` FROM item_instance_azerite_unlocked_essence iaue INNER JOIN mail_items mi ON iaue.itemGuid = mi.item_guid INNER JOIN mail m ON mi.mail_id = m.id WHERE m.receiver = ?");
             PrepareStatement(CharStatements.SEL_MAILITEMS_AZERITE_EMPOWERED, "SELECT iae.itemGuid, iae.azeritePowerId1, iae.azeritePowerId2, iae.azeritePowerId3, iae.azeritePowerId4, iae.azeritePowerId5 FROM item_instance_azerite_empowered iae INNER JOIN mail_items mi ON iae.itemGuid = mi.item_guid INNER JOIN mail m ON mi.mail_id = m.id WHERE m.receiver = ?");
-            PrepareStatement(CharStatements.SEL_AUCTION_ITEMS, "SELECT " + SelectItemInstanceContent + " FROM auctionhouse ah JOIN item_instance ii ON ah.itemguid = ii.guid LEFT JOIN item_instance_gems ig ON ii.guid = ig.itemGuid LEFT JOIN item_instance_transmog iit ON ii.guid = iit.itemGuid LEFT JOIN item_instance_modifiers im ON ii.guid = im.itemGuid");
-            PrepareStatement(CharStatements.SEL_AUCTIONS, "SELECT id, auctioneerguid, itemguid, itemEntry, count, itemowner, buyoutprice, time, buyguid, lastbid, startbid, deposit FROM auctionhouse ah INNER JOIN item_instance ii ON ii.guid = ah.itemguid");
-            PrepareStatement(CharStatements.INS_AUCTION, "INSERT INTO auctionhouse (id, auctioneerguid, itemguid, itemowner, buyoutprice, time, buyguid, lastbid, startbid, deposit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            PrepareStatement(CharStatements.DEL_AUCTION, "DELETE FROM auctionhouse WHERE id = ?");
-            PrepareStatement(CharStatements.UPD_AUCTION_BID, "UPDATE auctionhouse SET buyguid = ?, lastbid = ? WHERE id = ?");
+            PrepareStatement(CharStatements.SEL_AUCTION_ITEMS, "SELECT " + SelectItemInstanceContent + ", ii.owner_guid, ai.auctionId FROM auction_items ai INNER JOIN item_instance ii ON ai.itemGuid = ii.guid LEFT JOIN item_instance_gems ig ON ii.guid = ig.itemGuid LEFT JOIN item_instance_transmog iit ON ii.guid = iit.itemGuid LEFT JOIN item_instance_modifiers im ON ii.guid = im.itemGuid");
+            PrepareStatement(CharStatements.SEL_AUCTIONS, "SELECT id, auctionHouseId, owner, bidder, minBid, buyoutOrUnitPrice, deposit, bidAmount, startTime, endTime FROM auctionhouse");
+            PrepareStatement(CharStatements.INS_AUCTION_ITEMS, "INSERT INTO auction_items (auctionId, itemGuid) VALUES (?, ?)");
+            PrepareStatement(CharStatements.DEL_AUCTION_ITEMS_BY_ITEM, "DELETE FROM auction_items WHERE itemGuid = ?");
+            PrepareStatement(CharStatements.SEL_AUCTION_BIDDERS, "SELECT auctionId, playerGuid FROM auction_bidders");
+            PrepareStatement(CharStatements.INS_AUCTION_BIDDER, "INSERT INTO auction_bidders (auctionId, playerGuid) VALUES (?, ?)");
+            PrepareStatement(CharStatements.DEL_AUCTION_BIDDER_BY_PLAYER, "DELETE FROM auction_bidders WHERE playerGuid = ?");
+            PrepareStatement(CharStatements.INS_AUCTION, "INSERT INTO auctionhouse (id, auctionHouseId, owner, bidder, minBid, buyoutOrUnitPrice, deposit, bidAmount, startTime, endTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            PrepareStatement(CharStatements.DEL_AUCTION, "DELETE a, ab, ai FROM auctionhouse a LEFT JOIN auction_items ai ON a.id = ai.auctionId LEFT JOIN auction_bidders ab ON a.id = ab.auctionId WHERE a.id = ?");
+            PrepareStatement(CharStatements.UPD_AUCTION_BID, "UPDATE auctionhouse SET bidder = ?, bidAmount = ? WHERE id = ?");
+            PrepareStatement(CharStatements.UPD_AUCTION_EXPIRATION, "UPDATE auctionhouse SET endTime = ? WHERE id = ?");
             PrepareStatement(CharStatements.INS_MAIL, "INSERT INTO mail(id, messageType, stationery, mailTemplateId, sender, receiver, subject, body, has_items, expire_time, deliver_time, money, cod, checked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             PrepareStatement(CharStatements.DEL_MAIL_BY_ID, "DELETE FROM mail WHERE id = ?");
             PrepareStatement(CharStatements.INS_MAIL_ITEM, "INSERT INTO mail_items(mail_id, item_guid, receiver) VALUES (?, ?, ?)");
@@ -415,7 +425,6 @@ namespace Framework.Database
             PrepareStatement(CharStatements.REP_CREATURE_RESPAWN, "REPLACE INTO creature_respawn (guid, respawnTime, mapId, instanceId) VALUES (?, ?, ?, ?)");
             PrepareStatement(CharStatements.DEL_CREATURE_RESPAWN, "DELETE FROM creature_respawn WHERE guid = ? AND mapId = ? AND instanceId = ?");
             PrepareStatement(CharStatements.DEL_CREATURE_RESPAWN_BY_INSTANCE, "DELETE FROM creature_respawn WHERE mapId = ? AND instanceId = ?");
-            PrepareStatement(CharStatements.SEL_MAX_CREATURE_RESPAWNS, "SELECT MAX(respawnTime), instanceId FROM creature_respawn WHERE instanceId > 0 GROUP BY instanceId");
 
             // Gameobject respawn
             PrepareStatement(CharStatements.SEL_GO_RESPAWNS, "SELECT guid, respawnTime FROM gameobject_respawn WHERE mapId = ? AND instanceId = ?");
@@ -494,6 +503,8 @@ namespace Framework.Database
             PrepareStatement(CharStatements.DEL_GROUP_INSTANCE_BY_GUID, "DELETE FROM group_instance WHERE guid = ? AND instance = ?");
             PrepareStatement(CharStatements.REP_GROUP_INSTANCE, "REPLACE INTO group_instance (guid, instance, permanent) VALUES (?, ?, ?)");
             PrepareStatement(CharStatements.UPD_INSTANCE_RESETTIME, "UPDATE instance SET resettime = ? WHERE id = ?");
+            PrepareStatement(CharStatements.INS_GLOBAL_INSTANCE_RESETTIME, "INSERT INTO instance_reset (mapid, difficulty, resettime) VALUES (?, ?, ?)");
+            PrepareStatement(CharStatements.DEL_GLOBAL_INSTANCE_RESETTIME, "DELETE FROM instance_reset WHERE mapid = ? AND difficulty = ?");
             PrepareStatement(CharStatements.UPD_GLOBAL_INSTANCE_RESETTIME, "UPDATE instance_reset SET resettime = ? WHERE mapid = ? AND difficulty = ?");
             PrepareStatement(CharStatements.UPD_CHAR_ONLINE, "UPDATE characters SET online = 1 WHERE guid = ?");
             PrepareStatement(CharStatements.UPD_CHAR_NAME_AT_LOGIN, "UPDATE characters SET name = ?, at_login = ? WHERE guid = ?");
@@ -535,7 +546,7 @@ namespace Framework.Database
             PrepareStatement(CharStatements.DEL_CHAR_AURA_FROZEN, "DELETE FROM character_aura WHERE spell = 9454 AND guid = ?");
             PrepareStatement(CharStatements.SEL_CHAR_INVENTORY_COUNT_ITEM, "SELECT COUNT(itemEntry) FROM character_inventory ci INNER JOIN item_instance ii ON ii.guid = ci.item WHERE itemEntry = ?");
             PrepareStatement(CharStatements.SEL_MAIL_COUNT_ITEM, "SELECT COUNT(itemEntry) FROM mail_items mi INNER JOIN item_instance ii ON ii.guid = mi.item_guid WHERE itemEntry = ?");
-            PrepareStatement(CharStatements.SEL_AUCTIONHOUSE_COUNT_ITEM, "SELECT COUNT(itemEntry) FROM auctionhouse ah INNER JOIN item_instance ii ON ii.guid = ah.itemguid WHERE itemEntry = ?");
+            PrepareStatement(CharStatements.SEL_AUCTIONHOUSE_COUNT_ITEM, "SELECT COUNT(*) FROM auction_items ai INNER JOIN item_instance ii ON ii.guid = ai.itemGuid WHERE ii.itemEntry = ?");
             PrepareStatement(CharStatements.SEL_GUILD_BANK_COUNT_ITEM, "SELECT COUNT(itemEntry) FROM guild_bank_item gbi INNER JOIN item_instance ii ON ii.guid = gbi.item_guid WHERE itemEntry = ?");
             PrepareStatement(CharStatements.SEL_CHAR_INVENTORY_ITEM_BY_ENTRY, "SELECT ci.item, cb.slot AS bag, ci.slot, ci.guid, c.account, c.name FROM characters c " +
                 "INNER JOIN character_inventory ci ON ci.guid = c.guid " +
@@ -544,7 +555,7 @@ namespace Framework.Database
             PrepareStatement(CharStatements.SEL_MAIL_ITEMS_BY_ENTRY, "SELECT mi.item_guid, m.sender, m.receiver, cs.account, cs.name, cr.account, cr.name " +
                 "FROM mail m INNER JOIN mail_items mi ON mi.mail_id = m.id INNER JOIN item_instance ii ON ii.guid = mi.item_guid " +
                 "INNER JOIN characters cs ON cs.guid = m.sender INNER JOIN characters cr ON cr.guid = m.receiver WHERE ii.itemEntry = ? LIMIT ?");
-            PrepareStatement(CharStatements.SEL_AUCTIONHOUSE_ITEM_BY_ENTRY, "SELECT ah.itemguid, ah.itemowner, c.account, c.name FROM auctionhouse ah INNER JOIN characters c ON c.guid = ah.itemowner INNER JOIN item_instance ii ON ii.guid = ah.itemguid WHERE ii.itemEntry = ? LIMIT ?");
+            PrepareStatement(CharStatements.SEL_AUCTIONHOUSE_ITEM_BY_ENTRY, "SELECT ai.itemGuid, c.guid, c.account, c.name FROM auctionhouse ah INNER JOIN auction_items ai ON ah.id = ai.auctionId INNER JOIN characters c ON c.guid = ah.owner INNER JOIN item_instance ii ON ii.guid = ai.itemGuid WHERE ii.itemEntry = ? LIMIT ?");
             PrepareStatement(CharStatements.SEL_GUILD_BANK_ITEM_BY_ENTRY, "SELECT gi.item_guid, gi.guildid, g.name FROM guild_bank_item gi INNER JOIN guild g ON g.guildid = gi.guildid INNER JOIN item_instance ii ON ii.guid = gi.item_guid WHERE ii.itemEntry = ? LIMIT ?");
             PrepareStatement(CharStatements.DEL_CHAR_ACHIEVEMENT, "DELETE FROM character_achievement WHERE guid = ?");
             PrepareStatement(CharStatements.DEL_CHAR_ACHIEVEMENT_PROGRESS, "DELETE FROM character_achievement_progress WHERE guid = ?");
@@ -672,11 +683,11 @@ namespace Framework.Database
             PrepareStatement(CharStatements.DEL_GUILD_FINDER_GUILD_SETTINGS, "DELETE FROM guild_finder_guild_settings WHERE guildId = ?");
 
             // Items that hold loot or money
-            PrepareStatement(CharStatements.SEL_ITEMCONTAINER_ITEMS, "SELECT item_id, item_count, follow_rules, ffa, blocked, counted, under_threshold, needs_quest, rnd_bonus, context, bonus_list_ids FROM item_loot_items WHERE container_id = ?");
+            PrepareStatement(CharStatements.SEL_ITEMCONTAINER_ITEMS, "SELECT container_id, item_id, item_count, follow_rules, ffa, blocked, counted, under_threshold, needs_quest, rnd_bonus, context, bonus_list_ids FROM item_loot_items");
             PrepareStatement(CharStatements.DEL_ITEMCONTAINER_ITEMS, "DELETE FROM item_loot_items WHERE container_id = ?");
-            PrepareStatement(CharStatements.DEL_ITEMCONTAINER_ITEM, "DELETE FROM item_loot_items WHERE container_id = ? AND item_id = ?");
+            PrepareStatement(CharStatements.DEL_ITEMCONTAINER_ITEM, "DELETE FROM item_loot_items WHERE container_id = ? AND item_id = ? AND item_count = ?");
             PrepareStatement(CharStatements.INS_ITEMCONTAINER_ITEMS, "INSERT INTO item_loot_items (container_id, item_id, item_count, follow_rules, ffa, blocked, counted, under_threshold, needs_quest, rnd_bonus, context, bonus_list_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            PrepareStatement(CharStatements.SEL_ITEMCONTAINER_MONEY, "SELECT money FROM item_loot_money WHERE container_id = ?");
+            PrepareStatement(CharStatements.SEL_ITEMCONTAINER_MONEY, "SELECT container_id, money FROM item_loot_money");
             PrepareStatement(CharStatements.DEL_ITEMCONTAINER_MONEY, "DELETE FROM item_loot_money WHERE container_id = ?");
             PrepareStatement(CharStatements.INS_ITEMCONTAINER_MONEY, "INSERT INTO item_loot_money (container_id, money) VALUES (?, ?)");
 
@@ -863,6 +874,10 @@ namespace Framework.Database
         SEL_CHARACTER_RANDOMBG,
         SEL_CHARACTER_BANNED,
         SEL_CHARACTER_QUESTSTATUSREW,
+        SEL_CHARACTER_FAVORITE_AUCTIONS,
+        INS_CHARACTER_FAVORITE_AUCTION,
+        DEL_CHARACTER_FAVORITE_AUCTION,
+        DEL_CHARACTER_FAVORITE_AUCTIONS_BY_CHAR,
         SEL_ACCOUNT_INSTANCELOCKTIMES,
         SEL_MAILITEMS,
         SEL_MAILITEMS_ARTIFACT,
@@ -874,7 +889,13 @@ namespace Framework.Database
         INS_AUCTION,
         DEL_AUCTION,
         UPD_AUCTION_BID,
+        UPD_AUCTION_EXPIRATION,
         SEL_AUCTIONS,
+        INS_AUCTION_ITEMS,
+        DEL_AUCTION_ITEMS_BY_ITEM,
+        SEL_AUCTION_BIDDERS,
+        INS_AUCTION_BIDDER,
+        DEL_AUCTION_BIDDER_BY_PLAYER,
         INS_MAIL,
         DEL_MAIL_BY_ID,
         INS_MAIL_ITEM,
@@ -1079,7 +1100,6 @@ namespace Framework.Database
         REP_CREATURE_RESPAWN,
         DEL_CREATURE_RESPAWN,
         DEL_CREATURE_RESPAWN_BY_INSTANCE,
-        SEL_MAX_CREATURE_RESPAWNS,
 
         SEL_GO_RESPAWNS,
         REP_GO_RESPAWN,
@@ -1139,6 +1159,8 @@ namespace Framework.Database
         DEL_GROUP_INSTANCE_BY_GUID,
         REP_GROUP_INSTANCE,
         UPD_INSTANCE_RESETTIME,
+        INS_GLOBAL_INSTANCE_RESETTIME,
+        DEL_GLOBAL_INSTANCE_RESETTIME,
         UPD_GLOBAL_INSTANCE_RESETTIME,
         UPD_CHAR_ONLINE,
         UPD_CHAR_NAME_AT_LOGIN,

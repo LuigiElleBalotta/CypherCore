@@ -300,7 +300,7 @@ namespace Game.Entities
 
             SetDynamicFlags((UnitDynFlags)dynamicFlags);
 
-            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.StateAnimID), (uint)CliDB.AnimationDataStorage.Count);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.StateAnimID), Global.DB2Mgr.GetEmptyAnimStateID());
 
             SetBaseAttackTime(WeaponAttackType.BaseAttack, cInfo.BaseAttackTime);
             SetBaseAttackTime(WeaponAttackType.OffAttack, cInfo.BaseAttackTime);
@@ -312,12 +312,12 @@ namespace Game.Entities
                 UpdateLevelDependantStats(); // We still re-initialize level dependant stats on entry update
 
             SetMeleeDamageSchool((SpellSchools)cInfo.DmgSchool);
-            SetModifierValue(UnitMods.ResistanceHoly, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Holy]);
-            SetModifierValue(UnitMods.ResistanceFire, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Fire]);
-            SetModifierValue(UnitMods.ResistanceNature, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Nature]);
-            SetModifierValue(UnitMods.ResistanceFrost, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Frost]);
-            SetModifierValue(UnitMods.ResistanceShadow, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Shadow]);
-            SetModifierValue(UnitMods.ResistanceArcane, UnitModifierType.BaseValue, cInfo.Resistance[(int)SpellSchools.Arcane]);
+            SetStatFlatModifier(UnitMods.ResistanceHoly, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Holy]);
+            SetStatFlatModifier(UnitMods.ResistanceFire, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Fire]);
+            SetStatFlatModifier(UnitMods.ResistanceNature, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Nature]);
+            SetStatFlatModifier(UnitMods.ResistanceFrost, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Frost]);
+            SetStatFlatModifier(UnitMods.ResistanceShadow, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Shadow]);
+            SetStatFlatModifier(UnitMods.ResistanceArcane, UnitModifierFlatType.Base, cInfo.Resistance[(int)SpellSchools.Arcane]);
 
             SetCanModifyStats(true);
             UpdateAllStats();
@@ -396,7 +396,18 @@ namespace Game.Entities
                                 if (targetGuid == dbtableHighGuid) // if linking self, never respawn (check delayed to next day)
                                     SetRespawnTime(Time.Day);
                                 else
-                                    m_respawnTime = (now > linkedRespawntime ? now : linkedRespawntime) + RandomHelper.IRand(5, Time.Minute); // else copy time from master and add a little
+                                {
+                                    // else copy time from master and add a little
+                                    long baseRespawnTime = Math.Max(linkedRespawntime, now);
+                                    long offset = RandomHelper.URand(5, Time.Minute);
+
+                                    // linked guid can be a boss, uses std::numeric_limits<time_t>::max to never respawn in that instance
+                                    // we shall inherit it instead of adding and causing an overflow
+                                    if (baseRespawnTime <= long.MaxValue - offset)
+                                        m_respawnTime = baseRespawnTime + offset;
+                                    else
+                                        m_respawnTime = long.MaxValue;
+                                }
                                 SaveRespawnTime(); // also save to DB immediately
                             }
                         }
@@ -563,7 +574,7 @@ namespace Game.Entities
             if (curValue >= maxValue)
                 return;
 
-            float addvalue = 0.0f;
+            float addvalue;
 
             switch (power)
             {
@@ -614,7 +625,7 @@ namespace Game.Entities
             if (curValue >= maxValue)
                 return;
 
-            long addvalue = 0;
+            long addvalue;
 
             // Not only pet, but any controlled creature (and not polymorphed)
             if (!GetCharmerOrOwnerGUID().IsEmpty() && !IsPolymorphed())
@@ -813,8 +824,7 @@ namespace Game.Entities
 
             LastUsedScriptID = GetScriptId();
 
-            // TODO: Replace with spell, handle from DB
-            if (IsSpiritHealer() || IsSpiritGuide())
+            if (IsSpiritHealer() || IsSpiritGuide() || GetCreatureTemplate().FlagsExtra.HasAnyFlag(CreatureFlagsExtra.GhostVisibility))
             {
                 m_serverSideVisibility.SetValue(ServerSideVisibilityType.Ghost, GhostVisibilityType.Ghost);
                 m_serverSideVisibilityDetect.SetValue(ServerSideVisibilityType.Ghost, GhostVisibilityType.Ghost);
@@ -1084,7 +1094,7 @@ namespace Game.Entities
             stmt.AddValue(index++, m_spawnId);
             stmt.AddValue(index++, GetEntry());
             stmt.AddValue(index++, mapid);
-            stmt.AddValue(index++, string.Join(",", data.spawnDifficulties));
+            stmt.AddValue(index++, data.spawnDifficulties.Empty() ? "" : string.Join(',', data.spawnDifficulties));
             stmt.AddValue(index++, data.phaseId);
             stmt.AddValue(index++, data.phaseGroup);
             stmt.AddValue(index++, displayId);
@@ -1166,7 +1176,7 @@ namespace Game.Entities
                     break;
             }
 
-            SetModifierValue(UnitMods.Health, UnitModifierType.BaseValue, health);
+            SetStatFlatModifier(UnitMods.Health, UnitModifierFlatType.Base, health);
 
             //Damage
             float basedamage = stats.GenerateBaseDamage(cInfo);
@@ -1182,11 +1192,11 @@ namespace Game.Entities
             SetBaseWeaponDamage(WeaponAttackType.RangedAttack, WeaponDamageRange.MinDamage, weaponBaseMinDamage);
             SetBaseWeaponDamage(WeaponAttackType.RangedAttack, WeaponDamageRange.MaxDamage, weaponBaseMaxDamage);
 
-            SetModifierValue(UnitMods.AttackPower, UnitModifierType.BaseValue, stats.AttackPower);
-            SetModifierValue(UnitMods.AttackPowerRanged, UnitModifierType.BaseValue, stats.RangedAttackPower);
+            SetStatFlatModifier(UnitMods.AttackPower, UnitModifierFlatType.Base, stats.AttackPower);
+            SetStatFlatModifier(UnitMods.AttackPowerRanged, UnitModifierFlatType.Base, stats.RangedAttackPower);
 
             float armor = stats.GenerateArmor(cInfo); // @todo Why is this treated as uint32 when it's a float?
-            SetModifierValue(UnitMods.Armor, UnitModifierType.BaseValue, armor);
+            SetStatFlatModifier(UnitMods.Armor, UnitModifierFlatType.Base, armor);
         }
 
         float _GetHealthMod(CreatureEliteType Rank)
@@ -1570,7 +1580,7 @@ namespace Game.Entities
                 SetCannotReachTarget(false);
                 UpdateMovementFlags();
 
-                ClearUnitState(UnitState.AllState & ~UnitState.IgnorePathfinding);
+                ClearUnitState(UnitState.AllErasable);
 
                 if (!IsPet())
                 {
@@ -1698,7 +1708,7 @@ namespace Game.Entities
                 ForcedDespawn(msTimeToDespawn, forceRespawnTimer);
         }
 
-        void LoadMechanicTemplateImmunity()
+        public void LoadMechanicTemplateImmunity()
         {
             // uint32 max used for "spell id", the immunity system will not perform SpellInfo checks against invalid spells
             // used so we know which immunities were loaded from template
@@ -2026,7 +2036,6 @@ namespace Game.Entities
                     return false;
             }
 
-            Unit myVictim = GetAttackerForHelper();
             Unit targetVictim = target.GetAttackerForHelper();
 
             // if I'm already fighting target, or I'm hostile towards the target, the target is acceptable
@@ -2095,7 +2104,7 @@ namespace Game.Entities
             else
             {
                 // include sizes for huge npcs
-                dist += GetObjectSize() + victim.GetObjectSize();
+                dist += GetCombatReach() + victim.GetCombatReach();
 
                 // to prevent creatures in air ignore attacks because distance is already too high...
                 if (GetCreatureTemplate().InhabitType.HasAnyFlag(InhabitType.Air))
@@ -2263,13 +2272,11 @@ namespace Game.Entities
 
         public void GetRespawnPosition(out float x, out float y, out float z)
         {
-            float notUsed;
-            GetRespawnPosition(out x, out y, out z, out notUsed, out notUsed);
+            GetRespawnPosition(out x, out y, out z, out _, out _);
         }
         public void GetRespawnPosition(out float x, out float y, out float z, out float ori)
         {
-            float notUsed;
-            GetRespawnPosition(out x, out y, out z, out ori, out notUsed);
+            GetRespawnPosition(out x, out y, out z, out ori, out _);
         }
         public void GetRespawnPosition(out float x, out float y, out float z, out float ori, out float dist)
         {
@@ -2422,7 +2429,11 @@ namespace Game.Entities
         {
             CreatureData creatureData = GetCreatureData();
             if (creatureData != null)
-                return creatureData.ScriptId;
+            {
+                uint scriptId = creatureData.ScriptId;
+                if (scriptId != 0)
+                    return scriptId;
+            }
 
             return Global.ObjectMgr.GetCreatureTemplate(GetEntry()) != null ? Global.ObjectMgr.GetCreatureTemplate(GetEntry()).ScriptID : 0;
         }
@@ -2506,19 +2517,19 @@ namespace Game.Entities
             return vCount.count;
         }
 
-        public override string GetName(LocaleConstant locale_idx = LocaleConstant.enUS)
+        public override string GetName(LocaleConstant locale = LocaleConstant.enUS)
         {
-            if (locale_idx != LocaleConstant.enUS)
+            if (locale != LocaleConstant.enUS)
             {
                 CreatureLocale cl = Global.ObjectMgr.GetCreatureLocale(GetEntry());
                 if (cl != null)
                 {
-                    if (cl.Name.Length > (byte)locale_idx && !string.IsNullOrEmpty(cl.Name[(byte)locale_idx]))
-                        return cl.Name[(byte)locale_idx];
+                    if (cl.Name.Length > (int)locale && !cl.Name[(int)locale].IsEmpty())
+                        return cl.Name[(int)locale];
                 }
             }
 
-            return base.GetName(locale_idx);
+            return base.GetName(locale);
         }
 
         public virtual byte GetPetAutoSpellSize() { return 4; }
@@ -2678,7 +2689,7 @@ namespace Game.Entities
             if (minfo != null)
             {
                 SetBoundingRadius((IsPet() ? 1.0f : minfo.BoundingRadius) * scale);
-                SetCombatReach((IsPet() ? SharedConst.DefaultCombatReach : minfo.CombatReach) * scale);
+                SetCombatReach((IsPet() ? SharedConst.DefaultPlayerCombatReach : minfo.CombatReach) * scale);
             }
         }
 
@@ -2690,7 +2701,7 @@ namespace Game.Entities
             if (minfo != null)
             {
                 SetBoundingRadius((IsPet() ? 1.0f : minfo.BoundingRadius) * GetObjectScale());
-                SetCombatReach((IsPet() ? SharedConst.DefaultCombatReach : minfo.CombatReach) * GetObjectScale());
+                SetCombatReach((IsPet() ? SharedConst.DefaultPlayerCombatReach : minfo.CombatReach) * GetObjectScale());
             }
         }
 
@@ -2769,7 +2780,7 @@ namespace Game.Entities
                 AddUnitState(UnitState.CannotTurn);
         }
 
-        public bool IsFocusing(Spell focusSpell = null, bool withDelay = false)
+        public override bool IsFocusing(Spell focusSpell = null, bool withDelay = false)
         {
             if (!IsAlive()) // dead creatures cannot focus
             {

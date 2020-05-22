@@ -65,7 +65,7 @@ namespace Game.Network
             stmt.AddValue(0, ip_address);
             stmt.AddValue(1, BitConverter.ToUInt32(GetRemoteIpAddress().GetAddressBytes(), 0));
 
-            _queryProcessor.AddQuery(DB.Login.AsyncQuery(stmt).WithCallback(CheckIpCallback));
+            _queryProcessor.AddCallback(DB.Login.AsyncQuery(stmt).WithCallback(CheckIpCallback));
         }
 
         void CheckIpCallback(SQLResult result)
@@ -156,14 +156,14 @@ namespace Game.Network
 
                 if (!_worldCrypt.Decrypt(ref data, header.Tag))
                 {
-                    Log.outError(LogFilter.Network, $"WorldSocket.ReadHandler(): client {GetRemoteIpAddress().ToString()} failed to decrypt packet (size: {header.Size})");
+                    Log.outError(LogFilter.Network, $"WorldSocket.ReadHandler(): client {GetRemoteIpAddress()} failed to decrypt packet (size: {header.Size})");
                     return;
                 }
 
                 WorldPacket worldPacket = new WorldPacket(data);
                 if (worldPacket.GetOpcode() >= (int)ClientOpcodes.Max)
                 {
-                    Log.outError(LogFilter.Network, $"WorldSocket.ReadHandler(): client {GetRemoteIpAddress().ToString()} sent wrong opcode (opcode: {worldPacket.GetOpcode()})");
+                    Log.outError(LogFilter.Network, $"WorldSocket.ReadHandler(): client {GetRemoteIpAddress()} sent wrong opcode (opcode: {worldPacket.GetOpcode()})");
                     return;
                 }
 
@@ -356,7 +356,7 @@ namespace Game.Network
             if (!base.Update())
                 return false;
 
-            _queryProcessor.ProcessReadyQueries();
+            _queryProcessor.ProcessReadyCallbacks();
 
             return true;
         }
@@ -378,7 +378,7 @@ namespace Game.Network
             stmt.AddValue(0, Global.WorldMgr.GetRealm().Id.Realm);
             stmt.AddValue(1, authSession.RealmJoinTicket);
 
-            _queryProcessor.AddQuery(DB.Login.AsyncQuery(stmt).WithCallback(HandleAuthSessionCallback, authSession));
+            _queryProcessor.AddCallback(DB.Login.AsyncQuery(stmt).WithCallback(HandleAuthSessionCallback, authSession));
         }
 
         void HandleAuthSessionCallback(AuthSession authSession, SQLResult result)
@@ -395,7 +395,7 @@ namespace Game.Network
             if (buildInfo == null)
             {
                 SendAuthResponseError(BattlenetRpcErrorCode.BadVersion);
-                Log.outError(LogFilter.Network, $"WorldSocket.HandleAuthSessionCallback: Missing auth seed for realm build {Global.WorldMgr.GetRealm().Build} ({GetRemoteIpAddress().ToString()}).");
+                Log.outError(LogFilter.Network, $"WorldSocket.HandleAuthSessionCallback: Missing auth seed for realm build {Global.WorldMgr.GetRealm().Build} ({GetRemoteIpAddress()}).");
                 CloseSocket();
                 return;
             }
@@ -430,7 +430,6 @@ namespace Game.Network
                 CloseSocket();
                 return;
             }
-
 
             Sha256 keyData = new Sha256();
             keyData.Finish(account.game.SessionKey);
@@ -560,7 +559,7 @@ namespace Game.Network
             //if (wardenActive)
             //_worldSession.InitWarden(_sessionKey);
 
-            _queryProcessor.AddQuery(_worldSession.LoadPermissionsAsync().WithCallback(LoadSessionPermissionsCallback));
+            _queryProcessor.AddCallback(_worldSession.LoadPermissionsAsync().WithCallback(LoadSessionPermissionsCallback));
         }
 
         void LoadSessionPermissionsCallback(SQLResult result)
@@ -588,7 +587,7 @@ namespace Game.Network
             PreparedStatement stmt = DB.Login.GetPreparedStatement(LoginStatements.SEL_ACCOUNT_INFO_CONTINUED_SESSION);
             stmt.AddValue(0, accountId);
 
-            _queryProcessor.AddQuery(DB.Login.AsyncQuery(stmt).WithCallback(HandleAuthContinuedSessionCallback, authSession));
+            _queryProcessor.AddCallback(DB.Login.AsyncQuery(stmt).WithCallback(HandleAuthContinuedSessionCallback, authSession));
         }
 
         void HandleAuthContinuedSessionCallback(AuthContinuedSession authSession, SQLResult result)
@@ -746,7 +745,7 @@ namespace Game.Network
 
         ZLib.z_stream _compressionStream;
 
-        QueryCallbackProcessor _queryProcessor = new QueryCallbackProcessor();
+        AsyncCallbackProcessor<QueryCallback> _queryProcessor = new AsyncCallbackProcessor<QueryCallback>();
         string _ipCountry;
     }
 

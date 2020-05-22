@@ -47,6 +47,7 @@ namespace Framework.Constants
         /// <summary>
         /// BattlePets Const
         /// </summary>
+        public const int MaxBattlePetSpeciesId = 2873;
         public const int MaxPetBattleSlots = 3;
         public const int MaxBattlePetsPerSpecies = 3;
         public const int BattlePetCageItemId = 82800;
@@ -217,9 +218,9 @@ namespace Framework.Constants
         /// <summary>
         /// Object Const
         /// </summary>
-        public const float DefaultWorldObjectSize = 0.388999998569489f;      // player size, also currently used (correctly?) for any non Unit world objects
+        public const float DefaultPlayerBoundingRadius = 0.388999998569489f;      // player size, also currently used (correctly?) for any non Unit world objects
         public const float AttackDistance = 5.0f;
-        public const float DefaultCombatReach = 1.5f;
+        public const float DefaultPlayerCombatReach = 1.5f;
         public const float MinMeleeReach = 2.0f;
         public const float NominalMeleeRange = 5.0f;
         public const float MeleeRange = NominalMeleeRange - MinMeleeReach * 2; //center to center for players
@@ -1046,9 +1047,10 @@ namespace Framework.Constants
         ArenaWinRatingModifier2,
         ArenaLoseRatingModifier,
         ArenaMatchmakerRatingModifier,
-        AuctionGetallDelay,
         AuctionLevelReq,
+        AuctionReplicateDelay,
         AuctionSearchDelay,
+        AuctionTaintedSearchDelay,
         AutoBroadcast,
         AutoBroadcastCenter,
         AutoBroadcastInterval,

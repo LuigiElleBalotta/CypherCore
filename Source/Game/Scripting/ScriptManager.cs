@@ -377,14 +377,14 @@ namespace Game.Scripting
                         spellSummaryStorage[i].Targets |= 1 << ((int)SelectTargetType.SingleFriend - 1);
 
                     // Spell targets AoE friends.
-                    if (effect.TargetA.GetTarget() == Targets.UnitCasterAreaParty || effect.TargetA.GetTarget() == Targets.UnitLastareaParty ||
+                    if (effect.TargetA.GetTarget() == Targets.UnitCasterAreaParty || effect.TargetA.GetTarget() == Targets.UnitLastAreaParty ||
                         effect.TargetA.GetTarget() == Targets.SrcCaster)
                         spellSummaryStorage[i].Targets |= 1 << ((int)SelectTargetType.AoeFriend - 1);
 
                     // Spell targets any friend (or self).
                     if (effect.TargetA.GetTarget() == Targets.UnitCaster || effect.TargetA.GetTarget() == Targets.UnitAlly ||
                         effect.TargetA.GetTarget() == Targets.UnitParty || effect.TargetA.GetTarget() == Targets.UnitCasterAreaParty ||
-                        effect.TargetA.GetTarget() == Targets.UnitLastareaParty || effect.TargetA.GetTarget() == Targets.SrcCaster)
+                        effect.TargetA.GetTarget() == Targets.UnitLastAreaParty || effect.TargetA.GetTarget() == Targets.SrcCaster)
                         spellSummaryStorage[i].Targets |= 1 << ((int)SelectTargetType.AnyFriend - 1);
 
                     // Make sure that this spell includes a damage effect.
@@ -975,29 +975,29 @@ namespace Game.Scripting
         }
 
         // AuctionHouseScript
-        public void OnAuctionAdd(AuctionHouseObject ah, AuctionEntry entry)
+        public void OnAuctionAdd(AuctionHouseObject ah, AuctionPosting auction)
         {
             Cypher.Assert(ah != null);
-            Cypher.Assert(entry != null);
-            ForEach<AuctionHouseScript>(p => p.OnAuctionAdd(ah, entry));
+            Cypher.Assert(auction != null);
+            ForEach<AuctionHouseScript>(p => p.OnAuctionAdd(ah, auction));
         }
-        public void OnAuctionRemove(AuctionHouseObject ah, AuctionEntry entry)
+        public void OnAuctionRemove(AuctionHouseObject ah, AuctionPosting auction)
         {
             Cypher.Assert(ah != null);
-            Cypher.Assert(entry != null);
-            ForEach<AuctionHouseScript>(p => p.OnAuctionRemove(ah, entry));
+            Cypher.Assert(auction != null);
+            ForEach<AuctionHouseScript>(p => p.OnAuctionRemove(ah, auction));
         }
-        public void OnAuctionSuccessful(AuctionHouseObject ah, AuctionEntry entry)
+        public void OnAuctionSuccessful(AuctionHouseObject ah, AuctionPosting auction)
         {
             Cypher.Assert(ah != null);
-            Cypher.Assert(entry != null);
-            ForEach<AuctionHouseScript>(p => p.OnAuctionSuccessful(ah, entry));
+            Cypher.Assert(auction != null);
+            ForEach<AuctionHouseScript>(p => p.OnAuctionSuccessful(ah, auction));
         }
-        public void OnAuctionExpire(AuctionHouseObject ah, AuctionEntry entry)
+        public void OnAuctionExpire(AuctionHouseObject ah, AuctionPosting auction)
         {
             Cypher.Assert(ah != null);
-            Cypher.Assert(entry != null);
-            ForEach<AuctionHouseScript>(p => p.OnAuctionExpire(ah, entry));
+            Cypher.Assert(auction != null);
+            ForEach<AuctionHouseScript>(p => p.OnAuctionExpire(ah, auction));
         }
 
         // ConditionScript

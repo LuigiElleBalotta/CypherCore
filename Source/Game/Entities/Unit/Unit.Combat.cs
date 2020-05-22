@@ -546,7 +546,7 @@ namespace Game.Entities
             return attackerList;
         }
 
-        public float GetCombatReach() { return m_unitData.CombatReach; }
+        public override float GetCombatReach() { return m_unitData.CombatReach; }
         public void SetCombatReach(float combatReach) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.CombatReach), combatReach); }
         public float GetBoundingRadius() { return m_unitData.BoundingRadius; }
         public void SetBoundingRadius(float boundingRadius) { SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.BoundingRadius), boundingRadius); }
@@ -841,26 +841,22 @@ namespace Game.Entities
                 !IsTypeId(TypeId.Player) && !ToCreature().IsControlledByPlayer() && !victim.HasInArc(MathFunctions.PI, this)
                 && (victim.IsTypeId(TypeId.Player) || !victim.ToCreature().IsWorldBoss()) && !victim.IsVehicle())
             {
-                // -probability is between 0% and 40%
                 // 20% base chance
-                float Probability = 20.0f;
+                float chance = 20.0f;
 
                 // there is a newbie protection, at level 10 just 7% base chance; assuming linear function
                 if (victim.GetLevel() < 30)
-                    Probability = 0.65f * victim.GetLevelForTarget(this) + 0.5f;
+                    chance = 0.65f * victim.GetLevelForTarget(this) + 0.5f;
 
-                uint VictimDefense = victim.GetMaxSkillValueForLevel(this);
-                uint AttackerMeleeSkill = GetMaxSkillValueForLevel();
+                uint victimDefense = victim.GetMaxSkillValueForLevel(this);
+                uint attackerMeleeSkill = GetMaxSkillValueForLevel();
 
-                Probability *= (AttackerMeleeSkill / (float)VictimDefense * 0.16f);
+                chance *= attackerMeleeSkill / (float)victimDefense * 0.16f;
 
-                if (Probability < 0)
-                    Probability = 0;
+                // -probability is between 0% and 40%
+                MathFunctions.RoundToInterval(ref chance, 0.0f, 40.0f);
 
-                if (Probability > 40.0f)
-                    Probability = 40.0f;
-
-                if (RandomHelper.randChance(Probability))
+                if (RandomHelper.randChance(chance))
                     CastSpell(victim, 1604, true);
             }
 
@@ -1351,7 +1347,7 @@ namespace Game.Entities
                 return;
 
             if (PvP)
-            { 
+            {
                 combatTimer = 5000;
                 Player me = ToPlayer();
                 if (me)
@@ -1613,7 +1609,7 @@ namespace Game.Entities
                         {
                             // the reset time is set but not added to the scheduler
                             // until the players leave the instance
-                            long resettime = creature.GetRespawnTimeEx() + 2 * Time.Hour;
+                            long resettime = GameTime.GetGameTime() + 2 * Time.Hour;
                             InstanceSave save = Global.InstanceSaveMgr.GetInstanceSave(creature.GetInstanceId());
                             if (save != null)
                                 if (save.GetResetTime() < resettime)
@@ -2146,17 +2142,16 @@ namespace Game.Entities
             return MeleeHitOutcome.Normal;
         }
         public uint CalculateDamage(WeaponAttackType attType, bool normalized, bool addTotalPct)
-        {
-            float minDamage, maxDamage = 0.0f;
+        { 
+            float minDamage;
+            float maxDamage;
 
             if (normalized || !addTotalPct)
             {
                 CalculateMinMaxDamage(attType, normalized, addTotalPct, out minDamage, out maxDamage);
                 if (IsInFeralForm() && attType == WeaponAttackType.BaseAttack)
                 {
-                    float minOffhandDamage = 0.0f;
-                    float maxOffhandDamage = 0.0f;
-                    CalculateMinMaxDamage(WeaponAttackType.OffAttack, normalized, addTotalPct, out minOffhandDamage, out maxOffhandDamage);
+                    CalculateMinMaxDamage(WeaponAttackType.OffAttack, normalized, addTotalPct, out float minOffhandDamage, out float maxOffhandDamage);
                     minDamage += minOffhandDamage;
                     maxDamage += maxOffhandDamage;
                 }
@@ -2266,19 +2261,6 @@ namespace Game.Entities
                 return ap * (1.0f + m_unitData.AttackPowerMultiplier);
             }
         }
-        public float GetModifierValue(UnitMods unitMod, UnitModifierType modifierType)
-        {
-            if (unitMod >= UnitMods.End || modifierType >= UnitModifierType.End)
-            {
-                Log.outError(LogFilter.Unit, "attempt to access non-existing modifier value from UnitMods!");
-                return 0.0f;
-            }
-
-            if (modifierType == UnitModifierType.TotalPCT && m_auraModifiersGroup[(int)unitMod][(int)modifierType] <= 0.0f)
-                return 0.0f;
-
-            return m_auraModifiersGroup[(int)unitMod][(int)modifierType];
-        }
         public bool IsWithinMeleeRange(Unit obj)
         {
             if (!obj || !IsInMap(obj) || !IsInPhase(obj))
@@ -2370,31 +2352,30 @@ namespace Game.Entities
                     return 0;
             }
 
-            float averageResist = GetEffectiveResistChance(this, schoolMask, victim, spellInfo);
+            float averageResist = CalculateAverageResistReduction(schoolMask, victim, spellInfo);
 
             float[] discreteResistProbability = new float[11];
-            for (uint i = 0; i < 11; ++i)
-            {
-                discreteResistProbability[i] = 0.5f - 2.5f * Math.Abs(0.1f * i - averageResist);
-                if (discreteResistProbability[i] < 0.0f)
-                    discreteResistProbability[i] = 0.0f;
-            }
-
             if (averageResist <= 0.1f)
             {
                 discreteResistProbability[0] = 1.0f - 7.5f * averageResist;
                 discreteResistProbability[1] = 5.0f * averageResist;
                 discreteResistProbability[2] = 2.5f * averageResist;
             }
+            else
+            {
+                for (uint i = 0; i < 11; ++i)
+                    discreteResistProbability[i] = Math.Max(0.5f - 2.5f * Math.Abs(0.1f * i - averageResist), 0.0f);
+            }
+
+            float roll = (float)RandomHelper.NextDouble();
+            float probabilitySum = 0.0f;
 
             uint resistance = 0;
-            float r = (float)RandomHelper.NextDouble();
-            float probabilitySum = discreteResistProbability[0];
+            for (; resistance < 11; ++resistance)
+                if (roll < (probabilitySum += discreteResistProbability[resistance]))
+                    break;
 
-            while (r >= probabilitySum && resistance < 10)
-                probabilitySum += discreteResistProbability[++resistance];
-
-            float damageResisted = damage * resistance / 10;
+            float damageResisted = damage * resistance / 10f;
             if (damageResisted > 0.0f) // if any damage was resisted
             {
                 int ignoredResistance = 0;
@@ -2408,31 +2389,31 @@ namespace Game.Entities
                 if (spellInfo != null && spellInfo.HasAttribute(SpellCustomAttributes.SchoolmaskNormalWithMagic))
                 {
                     uint damageAfterArmor = CalcArmorReducedDamage(attacker, victim, damage, spellInfo, WeaponAttackType.BaseAttack);
-                    uint armorReduction = damage - damageAfterArmor;
-                    if (armorReduction < damageResisted) // pick the lower one, the weakest resistance counts
-                        damageResisted = armorReduction;
+                    float armorReduction = damage - damageAfterArmor;
+
+                    // pick the lower one, the weakest resistance counts
+                    damageResisted = Math.Min(damageResisted, armorReduction);
                 }
             }
 
+            damageResisted = Math.Max(damageResisted, 0.0f);
             return (uint)damageResisted;
         }
 
-        float GetEffectiveResistChance(Unit owner, SpellSchoolMask schoolMask, Unit victim, SpellInfo spellInfo)
+        float CalculateAverageResistReduction(SpellSchoolMask schoolMask, Unit victim, SpellInfo spellInfo)
         {
             float victimResistance = (float)victim.GetResistance(schoolMask);
-            if (owner)
+
+            // pets inherit 100% of masters penetration
+            // excluding traps
+            Player player = GetSpellModOwner();
+            if (player != null && GetEntry() != SharedConst.WorldTrigger)
             {
-                // pets inherit 100% of masters penetration
-                // excluding traps
-                Player player = owner.GetSpellModOwner();
-                if (player != null && owner.GetEntry() != SharedConst.WorldTrigger)
-                {
-                    victimResistance += (float)player.GetTotalAuraModifierByMiscMask(AuraType.ModTargetResistance, (int)schoolMask);
-                    victimResistance -= (float)player.GetSpellPenetrationItemMod();
-                }
-                else
-                    victimResistance += (float)owner.GetTotalAuraModifierByMiscMask(AuraType.ModTargetResistance, (int)schoolMask);
+                victimResistance += (float)player.GetTotalAuraModifierByMiscMask(AuraType.ModTargetResistance, (int)schoolMask);
+                victimResistance -= (float)player.GetSpellPenetrationItemMod();
             }
+            else
+                victimResistance += (float)GetTotalAuraModifierByMiscMask(AuraType.ModTargetResistance, (int)schoolMask);
 
             // holy resistance exists in pve and comes from level difference, ignore template values
             if (schoolMask.HasAnyFlag(SpellSchoolMask.Holy))
@@ -2443,13 +2424,15 @@ namespace Game.Entities
                 victimResistance = 0.0f;
 
             victimResistance = Math.Max(victimResistance, 0.0f);
-            if (owner)
-                victimResistance += Math.Max(((float)victim.GetLevelForTarget(owner) - (float)owner.GetLevelForTarget(victim)) * 5.0f, 0.0f);
+
+            // level-based resistance does not apply to binary spells, and cannot be overcome by spell penetration
+            if (spellInfo == null || !spellInfo.HasAttribute(SpellCustomAttributes.BinarySpell))
+                victimResistance += Math.Max((victim.GetLevelForTarget(this) - GetLevelForTarget(victim)) * 5.0f, 0.0f);
 
             uint bossLevel = 83;
             float bossResistanceConstant = 510.0f;
             uint level = victim.GetLevelForTarget(this);
-            float resistanceConstant = 0.0f;
+            float resistanceConstant;
 
             if (level == bossLevel)
                 resistanceConstant = bossResistanceConstant;
@@ -2492,7 +2475,7 @@ namespace Game.Entities
             vSchoolAbsorbCopy.Sort(new AbsorbAuraOrderPred());
 
             // absorb without mana cost
-            for (var i = 0; i < vSchoolAbsorbCopy.Count; ++i )
+            for (var i = 0; i < vSchoolAbsorbCopy.Count; ++i)
             {
                 var absorbAurEff = vSchoolAbsorbCopy[i];
                 if (damageInfo.GetDamage() == 0)
@@ -2758,7 +2741,7 @@ namespace Game.Entities
                 // no more than 100%
                 MathFunctions.RoundToInterval(ref arpPct, 0.0f, 100.0f);
 
-                float maxArmorPen = 0.0f;
+                float maxArmorPen;
                 if (victim.GetLevelForTarget(attacker) < 60)
                     maxArmorPen = 400 + 85 * victim.GetLevelForTarget(attacker);
                 else
@@ -3014,10 +2997,15 @@ namespace Game.Entities
             return (CastingTime / 3500.0f) * DotFactor;
         }
 
+        void ApplyPercentModFloatVar(ref float var, float val, bool apply)
+        {
+            var *= (apply ? (100.0f + val) / 100.0f : 100.0f / (100.0f + val));
+        }
+
         public void ApplyAttackTimePercentMod(WeaponAttackType att, float val, bool apply)
         {
             float remainingTimePct = m_attackTimer[(int)att] / (m_baseAttackSpeed[(int)att] * m_modAttackSpeedPct[(int)att]);
-            if (val > 0)
+            if (val > 0.0f)
             {
                 MathFunctions.ApplyPercentModFloatVar(ref m_modAttackSpeedPct[(int)att], val, !apply);
 
@@ -3265,5 +3253,65 @@ namespace Game.Entities
             }
             return true;
         }
+
+        public virtual bool CheckAttackFitToAuraRequirement(WeaponAttackType attackType, AuraEffect aurEff) { return true; }
+
+        public virtual void UpdateDamageDoneMods(WeaponAttackType attackType)
+        {
+            UnitMods unitMod = attackType switch
+            {
+                WeaponAttackType.BaseAttack => UnitMods.DamageMainHand,
+                WeaponAttackType.OffAttack => UnitMods.DamageOffHand,
+                WeaponAttackType.RangedAttack => UnitMods.DamageRanged,
+                _ => throw new NotImplementedException(),
+            };
+
+            float amount = GetTotalAuraModifier(AuraType.ModDamageDone, aurEff =>
+            {
+                if ((aurEff.GetMiscValue() & (int)SpellSchoolMask.Normal) == 0)
+                    return false;
+
+                return CheckAttackFitToAuraRequirement(attackType, aurEff);
+            });
+
+            SetStatFlatModifier(unitMod, UnitModifierFlatType.Total, amount);
+        }
+
+        public void UpdateAllDamageDoneMods()
+        {
+            for (var attackType = WeaponAttackType.BaseAttack; attackType < WeaponAttackType.Max; ++attackType)
+                UpdateDamageDoneMods(attackType);
+        }
+
+        public void UpdateDamagePctDoneMods(WeaponAttackType attackType)
+        {
+            (UnitMods unitMod, float factor) = attackType switch
+            {
+                WeaponAttackType.BaseAttack => (UnitMods.DamageMainHand, 1.0f),
+                WeaponAttackType.OffAttack => (UnitMods.DamageOffHand, 0.5f),
+                WeaponAttackType.RangedAttack => (UnitMods.DamageRanged, 1.0f),
+                _ => throw new NotImplementedException(),
+            };
+
+            factor *= GetTotalAuraMultiplier(AuraType.ModDamagePercentDone, aurEff =>
+            {
+                if (!aurEff.GetMiscValue().HasAnyFlag((int)SpellSchoolMask.Normal))
+                    return false;
+
+                return CheckAttackFitToAuraRequirement(attackType, aurEff);
+            });
+
+            if (attackType == WeaponAttackType.OffAttack)
+                factor *= GetTotalAuraMultiplier(AuraType.ModOffhandDamagePct, auraEffect => CheckAttackFitToAuraRequirement(attackType, auraEffect));
+
+            SetStatPctModifier(unitMod, UnitModifierPctType.Total, factor);
+        }
+
+        public void UpdateAllDamagePctDoneMods()
+        {
+            for (var attackType = WeaponAttackType.BaseAttack; attackType < WeaponAttackType.Max; ++attackType)
+                UpdateDamagePctDoneMods(attackType);
+        }
+
     }
 }

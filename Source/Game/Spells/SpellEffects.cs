@@ -1388,8 +1388,8 @@ namespace Game.Spells
 
             Player player = m_caster.ToPlayer();
 
-            uint lockId = 0;
-            ObjectGuid guid = ObjectGuid.Empty;
+            uint lockId;
+            ObjectGuid guid;
 
             // Get lockId
             if (gameObjTarget != null)
@@ -1693,19 +1693,19 @@ namespace Game.Spells
                     }
                     switch (properties.Title)
                     {
-                        case SummonType.Pet:
-                        case SummonType.Guardian:
-                        case SummonType.Guardian2:
-                        case SummonType.Minion:
+                        case SummonTitle.Pet:
+                        case SummonTitle.Guardian:
+                        case SummonTitle.Runeblade:
+                        case SummonTitle.Minion:
                             SummonGuardian(effIndex, entry, properties, numSummons);
                             break;
                         // Summons a vehicle, but doesn't force anyone to enter it (see SUMMON_CATEGORY_VEHICLE)
-                        case SummonType.Vehicle:
-                        case SummonType.Vehicle2:
+                        case SummonTitle.Vehicle:
+                        case SummonTitle.Mount:
                             summon = m_caster.GetMap().SummonCreature(entry, destTarget, properties, (uint)duration, m_originalCaster, m_spellInfo.Id);
                             break;
-                        case SummonType.LightWell:
-                        case SummonType.Totem:
+                        case SummonTitle.LightWell:
+                        case SummonTitle.Totem:
                             {
                                 summon = m_caster.GetMap().SummonCreature(entry, destTarget, properties, (uint)duration, m_originalCaster, m_spellInfo.Id, 0, personalSpawn);
                                 if (summon == null || !summon.IsTotem())
@@ -1718,7 +1718,7 @@ namespace Game.Spells
                                 }
                                 break;
                             }
-                        case SummonType.Minipet:
+                        case SummonTitle.Companion:
                             {
                                 summon = m_caster.GetMap().SummonCreature(entry, destTarget, properties, (uint)duration, m_originalCaster, m_spellInfo.Id, 0, personalSpawn);
                                 if (summon == null || !summon.HasUnitTypeMask(UnitTypeMask.Minion))
@@ -1741,7 +1741,7 @@ namespace Game.Spells
 
                                 for (uint count = 0; count < numSummons; ++count)
                                 {
-                                    Position pos = new Position();
+                                    Position pos;
                                     if (count == 0)
                                         pos = destTarget;
                                     else
@@ -2034,7 +2034,7 @@ namespace Game.Spells
             float dis = effectInfo.CalcRadius(m_caster);
 
             float fx, fy, fz;
-            m_caster.GetClosePoint(out fx, out fy, out fz, unitTarget.GetObjectSize(), dis);
+            m_caster.GetClosePoint(out fx, out fy, out fz, unitTarget.GetCombatReach(), dis);
 
             unitTarget.NearTeleportTo(fx, fy, fz, -m_caster.GetOrientation(), unitTarget == m_caster);
         }
@@ -2385,7 +2385,7 @@ namespace Game.Spells
                     Cypher.Assert(OldSummon.GetMap() == owner.GetMap());
 
                     float px, py, pz;
-                    owner.GetClosePoint(out px, out py, out pz, OldSummon.GetObjectSize());
+                    owner.GetClosePoint(out px, out py, out pz, OldSummon.GetCombatReach());
 
                     OldSummon.NearTeleportTo(px, py, pz, OldSummon.GetOrientation());
 
@@ -2402,7 +2402,7 @@ namespace Game.Spells
             }
 
             float x, y, z;
-            owner.GetClosePoint(out x, out y, out z, owner.GetObjectSize());
+            owner.GetClosePoint(out x, out y, out z, owner.GetCombatReach());
             Pet pet = owner.SummonPet(petentry, x, y, z, owner.Orientation, PetType.Summon, 0);
             if (!pet)
                 return;
@@ -2657,7 +2657,7 @@ namespace Game.Spells
                         break;
                 }
 
-                float weapon_total_pct = m_caster.GetModifierValue(unitMod, UnitModifierType.TotalPCT);
+                float weapon_total_pct = m_caster.GetPctModifierValue(unitMod, UnitModifierPctType.Total);
                 if (fixed_bonus != 0)
                     fixed_bonus = (int)(fixed_bonus * weapon_total_pct);
                 if (spell_bonus != 0)
@@ -2725,7 +2725,7 @@ namespace Game.Spells
             if (unitTarget == null || !unitTarget.IsAlive())
                 return;
 
-            int addhealth = 0;
+            int addhealth;
 
             // damage == 0 - heal for caster max health
             if (damage == 0)
@@ -2791,7 +2791,7 @@ namespace Game.Spells
             if (m_targets.HasDst())
                 destTarget.GetPosition(out x, out y, out z);
             else
-                m_caster.GetClosePoint(out x, out y, out z, SharedConst.DefaultWorldObjectSize);
+                m_caster.GetClosePoint(out x, out y, out z, SharedConst.DefaultPlayerBoundingRadius);
 
             Map map = target.GetMap();
 
@@ -2951,7 +2951,7 @@ namespace Game.Spells
 
                                     byte bag = 19;
                                     byte slot = 0;
-                                    Item item = null;
+                                    Item item;
 
                                     while (bag != 0) // 256 = 0 due to var type
                                     {
@@ -3020,7 +3020,7 @@ namespace Game.Spells
                                     if (unitTarget == null || !unitTarget.IsTypeId(TypeId.Unit))
                                         return;
 
-                                    uint iTmpSpellId = 0;
+                                    uint iTmpSpellId;
                                     switch (unitTarget.GetDisplayId())
                                     {
                                         case 25369: iTmpSpellId = 51552; break; // bloodelf female
@@ -3304,7 +3304,7 @@ namespace Game.Spells
                         {
                             if (unitTarget == null || !unitTarget.IsAlive())
                                 return;
-                            uint spellId1 = 0;
+                            uint spellId1;
                             uint spellId2 = 0;
 
                             // Judgement self add switch
@@ -3790,7 +3790,7 @@ namespace Game.Spells
                 destTarget.GetPosition(out x, out y, out z);
             // Summon in random point all other units if location present
             else
-                m_caster.GetClosePoint(out x, out y, out z, SharedConst.DefaultWorldObjectSize);
+                m_caster.GetClosePoint(out x, out y, out z, SharedConst.DefaultPlayerBoundingRadius);
 
             Map map = m_caster.GetMap();
             Position pos = new Position(x, y, z, m_caster.GetOrientation());
@@ -3985,7 +3985,7 @@ namespace Game.Spells
             if (!m_caster.IsInWorld)
                 return;
 
-            uint health = 0;
+            uint health;
             int mana = 0;
 
             // flat case
@@ -4094,7 +4094,7 @@ namespace Game.Spells
                 // Spell is not using explicit target - no generated path
                 if (m_preGeneratedPath.GetPathType() == PathType.Blank)
                 {
-                    Position pos = unitTarget.GetFirstCollisionPosition(unitTarget.GetObjectSize(), unitTarget.GetRelativeAngle(m_caster.GetPosition()));
+                    Position pos = unitTarget.GetFirstCollisionPosition(unitTarget.GetCombatReach(), unitTarget.GetRelativeAngle(m_caster.GetPosition()));
                     if (MathFunctions.fuzzyGt(m_spellInfo.Speed, 0.0f) && m_spellInfo.HasAttribute(SpellAttr9.SpecialDelayCalculation))
                         speed = pos.GetExactDist(m_caster) / speed;
 
@@ -4383,7 +4383,7 @@ namespace Game.Spells
             pet.SetDynamicFlags(UnitDynFlags.HideModel);
             pet.RemoveUnitFlag(UnitFlags.Skinnable);
             pet.SetDeathState(DeathState.Alive);
-            pet.ClearUnitState(UnitState.AllState);
+            pet.ClearUnitState(UnitState.AllErasable);
             pet.SetHealth(pet.CountPctFromMaxHealth(damage));
 
             pet.InitializeAI();
@@ -4530,7 +4530,7 @@ namespace Game.Spells
             else if (effectInfo.HasRadius() && m_spellInfo.Speed == 0)
             {
                 float dis = effectInfo.CalcRadius(m_originalCaster);
-                m_caster.GetClosePoint(out fx, out fy, out fz, SharedConst.DefaultWorldObjectSize, dis);
+                m_caster.GetClosePoint(out fx, out fy, out fz, SharedConst.DefaultPlayerBoundingRadius, dis);
             }
             else
             {
@@ -4539,7 +4539,7 @@ namespace Game.Spells
                 float max_dis = m_spellInfo.GetMaxRange(true);
                 float dis = (float)RandomHelper.NextDouble() * (max_dis - min_dis) + min_dis;
 
-                m_caster.GetClosePoint(out fx, out fy, out fz, SharedConst.DefaultWorldObjectSize, dis);
+                m_caster.GetClosePoint(out fx, out fy, out fz, SharedConst.DefaultPlayerBoundingRadius, dis);
             }
 
             Map cMap = m_caster.GetMap();
@@ -4938,7 +4938,7 @@ namespace Game.Spells
 
             // relocate
             float px, py, pz;
-            unitTarget.GetClosePoint(out px, out py, out pz, pet.GetObjectSize(), SharedConst.PetFollowDist, pet.GetFollowAngle());
+            unitTarget.GetClosePoint(out px, out py, out pz, pet.GetCombatReach(), SharedConst.PetFollowDist, pet.GetFollowAngle());
             pet.Relocate(px, py, pz, unitTarget.GetOrientation());
 
             // add to world
@@ -5065,7 +5065,7 @@ namespace Game.Spells
 
             for (uint count = 0; count < numGuardians; ++count)
             {
-                Position pos = new Position();
+                Position pos;
                 if (count == 0)
                     pos = destTarget;
                 else

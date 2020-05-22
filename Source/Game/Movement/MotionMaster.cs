@@ -74,19 +74,18 @@ namespace Game.Movement
             if (!_owner)
                 return;
 
-            if (_owner.HasUnitState(UnitState.Root | UnitState.Stunned))
-                return;
-
             Cypher.Assert(!Empty());
 
             _cleanFlag |= MMCleanFlag.Update;
-            bool isMoveGenUpdateSuccess = Top().Update(_owner, diff);
-            _cleanFlag &= ~MMCleanFlag.Update;
-
-            if (!isMoveGenUpdateSuccess)
+            if (!Top().Update(_owner, diff))
+            {
+                _cleanFlag &= ~MMCleanFlag.Update;
                 MovementExpired();
+            }
+            else
+                _cleanFlag &= ~MMCleanFlag.Update;
 
-            if (_expireList != null)
+            if (!_expireList.Empty())
                 ClearExpireList();
         }
 
@@ -107,12 +106,9 @@ namespace Game.Movement
         void ClearExpireList()
         {
             for (int i = 0; i < _expireList.Count; ++i)
-            {
-                IMovementGenerator mg = _expireList[i];
-                DirectDelete(mg);
-            }
+                DirectDelete(_expireList[i]);
 
-            _expireList = null;
+            _expireList.Clear();
 
             if (Empty())
                 Initialize();
@@ -149,7 +145,7 @@ namespace Game.Movement
         public MovementGeneratorType GetMotionSlotType(MovementSlot slot)
         {
             if (_slot[(int)slot] == null)
-                return MovementGeneratorType.Null;
+                return MovementGeneratorType.Max;
             else
                 return _slot[(int)slot].GetMovementGeneratorType();
         }
@@ -264,7 +260,7 @@ namespace Game.Movement
             MovePoint(id, pos.posX, pos.posY, pos.posZ, generatePath);
         }
 
-        public void MovePoint(ulong id, float x, float y, float z, bool generatePath = true)
+        public void MovePoint(uint id, float x, float y, float z, bool generatePath = true)
         {
             if (_owner.IsTypeId(TypeId.Player))
                 StartMovement(new PointMovementGenerator<Player>(id, x, y, z, generatePath), MovementSlot.Active);
@@ -359,7 +355,7 @@ namespace Game.Movement
             float dist = 2 * moveTimeHalf * speedXY;
             float max_height = -MoveSpline.ComputeFallElevation(moveTimeHalf, false, -speedZ);
 
-            _owner.GetNearPoint(_owner, out x, out y, out z, _owner.GetObjectSize(), dist, _owner.GetAngle(srcX, srcY) + MathFunctions.PI);
+            _owner.GetNearPoint(_owner, out x, out y, out z, _owner.GetCombatReach(), dist, _owner.GetAngle(srcX, srcY) + MathFunctions.PI);
 
             MoveSplineInit init = new MoveSplineInit(_owner);
             init.MoveTo(x, y, z);
@@ -383,7 +379,7 @@ namespace Game.Movement
 
             float moveTimeHalf = (float)(speedZ / gravity);
             float dist = 2 * moveTimeHalf * speedXY;
-            _owner.GetClosePoint(out x, out y, out z, _owner.GetObjectSize(), dist, angle);
+            _owner.GetClosePoint(out x, out y, out z, _owner.GetCombatReach(), dist, angle);
             MoveJump(x, y, z, 0.0f, speedXY, speedZ);
         }
 
@@ -611,6 +607,12 @@ namespace Game.Movement
             StartMovement(new RotateMovementGenerator(time, direction), MovementSlot.Active);
         }
 
+        public void MoveFormation(uint id, Position destination, uint moveType, bool forceRun = false, bool forceOrientation = false)
+        {
+            if (_owner.GetTypeId() == TypeId.Unit)
+                StartMovement(new FormationMovementGenerator(id, destination, moveType, forceRun, forceOrientation), MovementSlot.Active);
+        }
+
         void Pop()
         {
             if (Empty())
@@ -735,8 +737,7 @@ namespace Game.Movement
         {
             if (IsStatic(curr))
                 return;
-            if (_expireList == null)
-                _expireList = new List<IMovementGenerator>();
+
             _expireList.Add(curr);
         }
 

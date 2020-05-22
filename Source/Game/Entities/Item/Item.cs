@@ -106,6 +106,16 @@ namespace Game.Entities
             return true;
         }
 
+        public override string GetName(LocaleConstant locale = LocaleConstant.enUS)
+        {
+            ItemTemplate itemTemplate = GetTemplate();
+            var suffix = CliDB.ItemNameDescriptionStorage.LookupByKey(_bonusData.Suffix);
+            if (suffix != null)
+                return $"{itemTemplate.GetName(locale)} {suffix.Description[locale]}";
+
+            return itemTemplate.GetName(locale);
+        }
+
         public bool IsNotEmptyBag()
         {
             Bag bag = ToBag();
@@ -356,7 +366,7 @@ namespace Game.Entities
 
                         // Delete the items if this is a container
                         if (!loot.IsLooted())
-                            ItemContainerDeleteLootMoneyAndLootItemsFromDB();
+                            Global.LootItemStorage.RemoveStoredLootForContainer(GetGUID().GetCounter());
 
                         Dispose();
                         return;
@@ -429,7 +439,9 @@ namespace Game.Entities
             SetDurability(durability);
             // update max durability (and durability) if need
             SetUpdateFieldValue(m_values.ModifyValue(m_itemData).ModifyValue(m_itemData.MaxDurability), proto.MaxDurability);
-            if (durability > proto.MaxDurability)
+
+            // do not overwrite durability for wrapped items
+            if (durability > proto.MaxDurability && !HasItemFlag(ItemFieldFlags.Wrapped))
             {
                 SetDurability(proto.MaxDurability);
                 need_save = true;
@@ -504,7 +516,7 @@ namespace Game.Entities
                 }
             }
 
-            m_randomBonusListId = fields.Read<uint>(10);
+            m_randomBonusListId = fields.Read<uint>(9);
 
             // Remove bind flag for items vs NO_BIND set
             if (IsSoulBound() && GetBonding() == ItemBondingType.None)
@@ -650,7 +662,7 @@ namespace Game.Entities
 
             // Delete the items if this is a container
             if (!loot.IsLooted())
-                ItemContainerDeleteLootMoneyAndLootItemsFromDB();
+                Global.LootItemStorage.RemoveStoredLootForContainer(GetGUID().GetCounter());
         }
 
         public static void DeleteFromInventoryDB(SQLTransaction trans, ulong itemGuid)
@@ -1241,10 +1253,39 @@ namespace Game.Entities
 
             buffer.WriteUInt32(valuesMask.GetBlock(0));
             m_itemData.AppendAllowedFieldsMaskForFlag(mask, flags);
-            m_itemData.WriteUpdate(buffer, mask, flags, this, target);
+            m_itemData.WriteUpdate(buffer, mask, true, this, target);
 
             data.WriteUInt32(buffer.GetSize());
             data.WriteBytes(buffer);
+        }
+
+        void BuildValuesUpdateForPlayerWithMask(UpdateData data, UpdateMask requestedObjectMask, UpdateMask requestedItemMask, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            UpdateMask valuesMask = new UpdateMask((int)TypeId.Max);
+            if (requestedObjectMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Object);
+
+            m_itemData.FilterDisallowedFieldsMaskForFlag(requestedItemMask, flags);
+            if (requestedItemMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Item);
+
+            WorldPacket buffer = new WorldPacket();
+            buffer.WriteUInt32(valuesMask.GetBlock(0));
+
+            if (valuesMask[(int)TypeId.Object])
+                m_objectData.WriteUpdate(buffer, requestedObjectMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.Item])
+                m_itemData.WriteUpdate(buffer, requestedItemMask, true, this, target);
+
+            WorldPacket buffer1 = new WorldPacket();
+            buffer1.WriteUInt8((byte)UpdateType.Values);
+            buffer1.WritePackedGuid(GetGUID());
+            buffer1.WriteUInt32(buffer.GetSize());
+            buffer1.WriteBytes(buffer.GetData());
+
+            data.AddUpdateBlock(buffer1);
         }
 
         public override void ClearUpdateMask(bool remove)
@@ -1562,7 +1603,7 @@ namespace Game.Entities
                 return 0;
 
             float qualityFactor = qualityPrice.Data;
-            float baseFactor = 0.0f;
+            float baseFactor;
 
             var inventoryType = proto.GetInventoryType();
 
@@ -1701,188 +1742,6 @@ namespace Game.Entities
             }
             else
                 return proto.GetSellPrice();
-        }
-
-        public void ItemContainerSaveLootToDB()
-        {
-            // Saves the money and item loot associated with an openable item to the DB
-            if (loot.IsLooted()) // no money and no loot
-                return;
-
-            SQLTransaction trans = new SQLTransaction();
-
-            loot.containerID = GetGUID(); // Save this for when a LootItem is removed
-
-            // Save money
-            if (loot.gold > 0)
-            {
-                PreparedStatement stmt_money = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEMCONTAINER_MONEY);
-                stmt_money.AddValue(0, loot.containerID.GetCounter());
-                trans.Append(stmt_money);
-
-                stmt_money = DB.Characters.GetPreparedStatement(CharStatements.INS_ITEMCONTAINER_MONEY);
-                stmt_money.AddValue(0, loot.containerID.GetCounter());
-                stmt_money.AddValue(1, loot.gold);
-                trans.Append(stmt_money);
-            }
-
-            // Save items
-            if (!loot.IsLooted())
-            {
-                PreparedStatement stmt_items = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEMCONTAINER_ITEMS);
-                stmt_items.AddValue(0, loot.containerID.GetCounter());
-                trans.Append(stmt_items);
-
-                // Now insert the items
-                foreach (var _li in loot.items)
-                {
-                    // When an item is looted, it doesn't get removed from the items collection
-                    //  but we don't want to resave it.
-                    if (!_li.canSave)
-                        continue;
-
-                    Player guid = GetOwner();
-                    if (!_li.AllowedForPlayer(guid))
-                        continue;
-
-                    stmt_items = DB.Characters.GetPreparedStatement(CharStatements.INS_ITEMCONTAINER_ITEMS);
-
-                    // container_id, item_id, item_count, follow_rules, ffa, blocked, counted, under_threshold, needs_quest, rnd_prop, context, bonus_list_ids
-                    stmt_items.AddValue(0, loot.containerID.GetCounter());
-                    stmt_items.AddValue(1, _li.itemid);
-                    stmt_items.AddValue(2, _li.count);
-                    stmt_items.AddValue(3, _li.follow_loot_rules);
-                    stmt_items.AddValue(4, _li.freeforall);
-                    stmt_items.AddValue(5, _li.is_blocked);
-                    stmt_items.AddValue(6, _li.is_counted);
-                    stmt_items.AddValue(7, _li.is_underthreshold);
-                    stmt_items.AddValue(8, _li.needs_quest);
-                    stmt_items.AddValue(9, _li.randomBonusListId);
-                    stmt_items.AddValue(10, _li.context);
-
-                    string bonusListIDs = "";
-                    foreach (int bonusListID in _li.BonusListIDs)
-                        bonusListIDs += bonusListID + ' ';
-
-                    stmt_items.AddValue(11, bonusListIDs);
-                    trans.Append(stmt_items);
-                }
-            }
-            DB.Characters.CommitTransaction(trans);
-        }
-
-        public bool ItemContainerLoadLootFromDB()
-        {
-            // Loads the money and item loot associated with an openable item from the DB
-            // Default. If there are no records for this item then it will be rolled for in Player.SendLoot()
-            m_lootGenerated = false;
-
-            // Save this for later use
-            loot.containerID = GetGUID();
-
-            // First, see if there was any money loot. This gets added directly to the container.
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_ITEMCONTAINER_MONEY);
-            stmt.AddValue(0, loot.containerID.GetCounter());
-            SQLResult money_result = DB.Characters.Query(stmt);
-
-            if (!money_result.IsEmpty())
-            {
-                loot.gold = money_result.Read<uint>(0);
-            }
-
-            // Next, load any items that were saved
-            stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_ITEMCONTAINER_ITEMS);
-            stmt.AddValue(0, loot.containerID.GetCounter());
-            SQLResult item_result = DB.Characters.Query(stmt);
-
-            if (!item_result.IsEmpty())
-            {
-                // Get a LootTemplate for the container item. This is where
-                //  the saved loot was originally rolled from, we will copy conditions from it
-                LootTemplate lt = LootStorage.Items.GetLootFor(GetEntry());
-                if (lt != null)
-                {
-                    do
-                    {
-                        // Create an empty LootItem
-                        LootItem loot_item = new LootItem();
-
-                        // item_id, itm_count, follow_rules, ffa, blocked, counted, under_threshold, needs_quest, rnd_prop, context, bonus_list_ids
-                        loot_item.itemid = item_result.Read<uint>(0);
-                        loot_item.count = item_result.Read<byte>(1);
-                        loot_item.follow_loot_rules = item_result.Read<bool>(2);
-                        loot_item.freeforall = item_result.Read<bool>(3);
-                        loot_item.is_blocked = item_result.Read<bool>(4);
-                        loot_item.is_counted = item_result.Read<bool>(5);
-                        loot_item.canSave = true;
-                        loot_item.is_underthreshold = item_result.Read<bool>(6);
-                        loot_item.needs_quest = item_result.Read<bool>(7);
-                        loot_item.randomBonusListId = item_result.Read<uint>(8);
-                        loot_item.context = (ItemContext)item_result.Read<byte>(9);
-
-                        StringArray bonusLists = new StringArray(item_result.Read<string>(10), ' ');
-                        if (!bonusLists.IsEmpty())
-                        {
-                            foreach (string line in bonusLists)
-                            {
-                                if (uint.TryParse(line, out uint id))
-                                    loot_item.BonusListIDs.Add(id);
-                            }
-                        }
-
-                        // Copy the extra loot conditions from the item in the loot template
-                        lt.CopyConditions(loot_item);
-
-                        // If container item is in a bag, add that player as an allowed looter
-                        if (GetBagSlot() != 0)
-                            loot_item.AddAllowedLooter(GetOwner());
-
-                        // Finally add the LootItem to the container
-                        loot.items.Add(loot_item);
-
-                        // Increment unlooted count
-                        loot.unlootedCount++;
-                    }
-                    while (item_result.NextRow());
-                }
-            }
-
-            // Mark the item if it has loot so it won't be generated again on open
-            m_lootGenerated = !loot.IsLooted();
-
-            return m_lootGenerated;
-        }
-
-        void ItemContainerDeleteLootItemsFromDB()
-        {
-            // Deletes items associated with an openable item from the DB
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEMCONTAINER_ITEMS);
-            stmt.AddValue(0, GetGUID().GetCounter());
-            DB.Characters.Execute(stmt);
-        }
-
-        void ItemContainerDeleteLootItemFromDB(uint itemID)
-        {
-            // Deletes a single item associated with an openable item from the DB
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEMCONTAINER_ITEM);
-            stmt.AddValue(0, GetGUID().GetCounter());
-            stmt.AddValue(1, itemID);
-            DB.Characters.Execute(stmt);
-        }
-
-        void ItemContainerDeleteLootMoneyFromDB()
-        {
-            // Deletes the money loot associated with an openable item from the DB
-            PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_ITEMCONTAINER_MONEY);
-            stmt.AddValue(0, GetGUID().GetCounter());
-            DB.Characters.Execute(stmt);
-        }
-
-        public void ItemContainerDeleteLootMoneyAndLootItemsFromDB()
-        {
-            // Deletes money and items associated with an openable item from the DB
-            ItemContainerDeleteLootMoneyFromDB();
-            ItemContainerDeleteLootItemsFromDB();
         }
 
         public uint GetItemLevel(Player owner)
@@ -2269,11 +2128,6 @@ namespace Game.Entities
                             break;
                         case ItemEnchantmentType.ArtifactPowerBonusRankByID:
                             {
-                                var indexItr = m_artifactPowerIdToIndex.LookupByKey(enchant.EffectArg[i]);
-                                ushort index;
-                                if (indexItr != 0)
-                                    index = indexItr;
-
                                 ushort artifactPowerIndex = m_artifactPowerIdToIndex.LookupByKey(enchant.EffectArg[i]);
                                 if (artifactPowerIndex != 0)
                                 {
@@ -2599,6 +2453,7 @@ namespace Game.Entities
         public bool IsCurrencyToken() { return GetTemplate().IsCurrencyToken(); }
         public bool IsBroken() { return m_itemData.MaxDurability > 0 && m_itemData.Durability == 0; }
         public void SetDurability(uint durability) { SetUpdateFieldValue(m_values.ModifyValue(m_itemData).ModifyValue(m_itemData.Durability), durability); }
+        public void SetMaxDurability(uint maxDurability) { SetUpdateFieldValue(m_values.ModifyValue(m_itemData).ModifyValue(m_itemData.MaxDurability), maxDurability); }
         public void SetInTrade(bool b = true) { mb_in_trade = b; }
         public bool IsInTrade() { return mb_in_trade; }
 
@@ -2861,6 +2716,7 @@ namespace Game.Entities
             CanDisenchant = !proto.GetFlags().HasAnyFlag(ItemFlags.NoDisenchant);
             CanScrap = proto.GetFlags4().HasAnyFlag(ItemFlags4.Scrapable);
 
+            _state.SuffixPriority = int.MaxValue;
             _state.AppearanceModPriority = int.MaxValue;
             _state.ScalingStatDistributionPriority = int.MaxValue;
             _state.AzeriteTierUnlockSetPriority = int.MaxValue;
@@ -2893,7 +2749,7 @@ namespace Game.Entities
                     break;
                 case ItemBonusType.Stat:
                     {
-                        uint statIndex = 0;
+                        uint statIndex;
                         for (statIndex = 0; statIndex < ItemConst.MaxStats; ++statIndex)
                             if (ItemStatType[statIndex] == values[0] || ItemStatType[statIndex] == -1)
                                 break;
@@ -2913,6 +2769,13 @@ namespace Game.Entities
                     }
                     else if ((uint)Quality < values[0])
                         Quality = (ItemQuality)values[0];
+                    break;
+                case ItemBonusType.Suffix:
+                    if (values[1] < _state.SuffixPriority)
+                    {
+                        Suffix = (uint)values[0];
+                        _state.SuffixPriority = values[1];
+                    }
                     break;
                 case ItemBonusType.Socket:
                     {
@@ -2994,6 +2857,7 @@ namespace Game.Entities
         public int RelicType;
         public int RequiredLevelOverride;
         public uint AzeriteTierUnlockSetId;
+        public uint Suffix;
         public bool CanDisenchant;
         public bool CanScrap;
         public bool HasFixedLevel;
@@ -3001,6 +2865,7 @@ namespace Game.Entities
 
         struct State
         {
+            public int SuffixPriority;
             public int AppearanceModPriority;
             public int ScalingStatDistributionPriority;
             public int AzeriteTierUnlockSetPriority;

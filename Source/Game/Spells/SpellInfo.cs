@@ -602,7 +602,7 @@ namespace Game.Spells
 
         public bool IsMoveAllowedChannel()
         {
-            return IsChanneled() && HasAttribute(SpellAttr5.CanChannelWhenMoving);
+            return IsChanneled() && (HasAttribute(SpellAttr5.CanChannelWhenMoving) || !ChannelInterruptFlags[0].HasAnyFlag((uint)(SpellAuraInterruptFlags.Move | SpellAuraInterruptFlags.Turning)));
         }
 
         public bool NeedsComboPoints()
@@ -3417,6 +3417,7 @@ namespace Game.Spells
                                     case AuraType.ModStalked:
                                     case AuraType.PeriodicDamagePercent:
                                     case AuraType.PreventResurrection:
+                                    case AuraType.Empathy:
                                         return false;
                                     case AuraType.PeriodicDamage:            // used in positive spells also.
                                                                              // part of negative spell if casted at self (prevent cancel)
@@ -3934,14 +3935,16 @@ namespace Game.Spells
                 if (Scaling.ResourceCoefficient != 0)
                     comboDamage = Scaling.ResourceCoefficient * value;
             }
-            else
+            else if(GetScalingExpectedStat() == ExpectedStatType.None)
             {
-                if (GetScalingExpectedStat() == ExpectedStatType.None)
+                if (caster != null && basePointsPerLevel != 0.0f)
                 {
-                    int level = caster ? (int)caster.GetLevel() : 0;
+                    int level = (int)caster.GetLevel();
                     if (level > (int)_spellInfo.MaxLevel && _spellInfo.MaxLevel > 0)
                         level = (int)_spellInfo.MaxLevel;
-                    level -= (int)_spellInfo.BaseLevel;
+
+                    // if base level is greater than spell level, reduce by base level (eg. pilgrims foods)
+                    level -= (int)Math.Max(_spellInfo.BaseLevel, _spellInfo.SpellLevel);
                     if (level < 0)
                         level = 0;
                     value += level * basePointsPerLevel;
@@ -4598,6 +4601,34 @@ namespace Game.Spells
             return GetSelectionCategory() == SpellTargetSelectionCategories.Area || GetSelectionCategory() == SpellTargetSelectionCategories.Cone;
         }
 
+        public bool IsProximityBasedAoe()
+        {
+            switch (_target)
+            {
+                case Targets.UnitSrcAreaEntry:
+                case Targets.UnitSrcAreaEnemy:
+                case Targets.UnitCasterAreaParty:
+                case Targets.UnitSrcAreaAlly:
+                case Targets.UnitSrcAreaParty:
+                case Targets.UnitLastAreaParty:
+                case Targets.GameobjectSrcArea:
+                case Targets.UnitCasterAreaRaid:
+                case Targets.CorpseSrcAreaEnemy:
+                    return true;
+
+                case Targets.UnitDestAreaEntry:
+                case Targets.UnitDestAreaEnemy:
+                case Targets.UnitDestAreaAlly:
+                case Targets.UnitDestAreaParty:
+                case Targets.GameobjectDestArea:
+                case Targets.UnitAreaRaidClass:
+                    return false;
+
+                default:
+                    Log.outWarn(LogFilter.Spells, "SpellImplicitTargetInfo.IsProximityBasedAoe called a non-aoe spell");
+                    return false;
+            }
+        }
         public SpellTargetSelectionCategories GetSelectionCategory()
         {
             return _data[(int)_target].SelectionCategory;

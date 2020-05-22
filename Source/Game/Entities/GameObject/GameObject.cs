@@ -276,7 +276,7 @@ namespace Game.Entities
             SetGoState(goState);
             SetGoArtKit((byte)artKit);
 
-            SetUpdateFieldValue(m_values.ModifyValue(m_gameObjectData).ModifyValue(m_gameObjectData.SpawnTrackingStateAnimID), (uint)CliDB.AnimationDataStorage.Count);
+            SetUpdateFieldValue(m_values.ModifyValue(m_gameObjectData).ModifyValue(m_gameObjectData.SpawnTrackingStateAnimID), Global.DB2Mgr.GetEmptyAnimStateID());
 
             switch (goInfo.type)
             {
@@ -942,7 +942,7 @@ namespace Game.Entities
             stmt.AddValue(index++, m_spawnId);
             stmt.AddValue(index++, GetEntry());
             stmt.AddValue(index++, mapid);
-            stmt.AddValue(index++, string.Join(",", data.spawnDifficulties));
+            stmt.AddValue(index++, data.spawnDifficulties.Empty() ? "" : string.Join(",", data.spawnDifficulties));
             stmt.AddValue(index++, data.phaseId);
             stmt.AddValue(index++, data.phaseGroup);
             stmt.AddValue(index++, GetPositionX());
@@ -1429,7 +1429,7 @@ namespace Game.Entities
                             var guid = ChairListSlots.LookupByKey(nearest_slot);
                             if (!guid.IsEmpty())
                             {
-                                guid = player.GetGUID(); //this slot in now used by player
+                                ChairListSlots[nearest_slot] = player.GetGUID(); //this slot in now used by player
                                 player.TeleportTo(GetMapId(), x_lowest, y_lowest, GetPositionZ(), GetOrientation(), (TeleportToOptions.NotLeaveTransport | TeleportToOptions.NotLeaveCombat | TeleportToOptions.NotUnSummonPet));
                                 player.SetStandState(UnitStandStateType.SitLowChair + (byte)info.Chair.chairheight);
                                 return;
@@ -2076,27 +2076,30 @@ namespace Game.Entities
                     bgMap.GetBG().ProcessEvent(this, eventId, invoker);
         }
 
-        public virtual uint GetScriptId()
+        public uint GetScriptId()
         {
             GameObjectData gameObjectData = GetGoData();
             if (gameObjectData != null)
-                return gameObjectData.ScriptId;
+            {
+                uint scriptId = gameObjectData.ScriptId;
+                if (scriptId != 0)
+                    return scriptId;
+            }
 
             return GetGoInfo().ScriptId;
         }
 
-        public override string GetName(LocaleConstant loc_idx = LocaleConstant.enUS)
+        public override string GetName(LocaleConstant locale = LocaleConstant.enUS)
         {
-            if (loc_idx != LocaleConstant.enUS)
+            if (locale != LocaleConstant.enUS)
             {
-                byte uloc_idx = (byte)loc_idx;
                 GameObjectLocale cl = Global.ObjectMgr.GetGameObjectLocale(GetEntry());
                 if (cl != null)
-                    if (cl.Name.Length > uloc_idx && !string.IsNullOrEmpty(cl.Name[uloc_idx]))
-                        return cl.Name[uloc_idx];
+                    if (cl.Name.Length > (int)locale && !cl.Name[(int)locale].IsEmpty())
+                        return cl.Name[(int)locale];
             }
 
-            return base.GetName(loc_idx);
+            return base.GetName(locale);
         }
 
         public void UpdatePackedRotation()
@@ -2515,6 +2518,33 @@ namespace Game.Entities
             data.WriteBytes(buffer);
         }
 
+        public void BuildValuesUpdateForPlayerWithMask(UpdateData data, UpdateMask requestedObjectMask, UpdateMask requestedGameObjectMask, Player target)
+        {
+            UpdateMask valuesMask = new UpdateMask((int)TypeId.Max);
+            if (requestedObjectMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Object);
+
+            if (requestedGameObjectMask.IsAnySet())
+                valuesMask.Set((int)TypeId.GameObject);
+
+            WorldPacket buffer = new WorldPacket();
+            buffer.WriteUInt32(valuesMask.GetBlock(0));
+
+            if (valuesMask[(int)TypeId.Object])
+                m_objectData.WriteUpdate(buffer, requestedObjectMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.GameObject])
+                m_gameObjectData.WriteUpdate(buffer, requestedGameObjectMask, true, this, target);
+
+            WorldPacket buffer1 = new WorldPacket();
+            buffer1.WriteUInt8((byte)UpdateType.Values);
+            buffer1.WritePackedGuid(GetGUID());
+            buffer1.WriteUInt32(buffer.GetSize());
+            buffer1.WriteBytes(buffer.GetData());
+
+            data.AddUpdateBlock(buffer1);
+        }
+
         public override void ClearUpdateMask(bool remove)
         {
             m_values.ClearChangesMask(m_gameObjectData);
@@ -2730,7 +2760,7 @@ namespace Game.Entities
         public void RelocateStationaryPosition(float x, float y, float z, float o) { StationaryPosition.Relocate(x, y, z, o); }
 
         //! Object distance/size - overridden from Object._IsWithinDist. Needs to take in account proper GO size.
-        public override bool _IsWithinDist(WorldObject obj, float dist2compare, bool is3D)
+        public override bool _IsWithinDist(WorldObject obj, float dist2compare, bool is3D, bool incOwnRadius, bool incTargetRadius)
         {
             //! Following check does check 3d distance
             return IsInRange(obj.GetPositionX(), obj.GetPositionY(), obj.GetPositionZ(), dist2compare);

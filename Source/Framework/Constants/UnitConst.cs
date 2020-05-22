@@ -87,7 +87,7 @@ namespace Framework.Constants
     public enum BaseModType
     {
         FlatMod,
-        PCTmod,
+        PctMod,
         End
     }
 
@@ -178,14 +178,18 @@ namespace Framework.Constants
         PowerStart = Mana,
         PowerEnd = Pain + 1
     }
-    public enum UnitModifierType
+    public enum UnitModifierFlatType
     {
-        BaseValue = 0,
+        Base = 0,
         BasePCTExcludeCreate = 1, // percent modifier affecting all stat values from auras and gear but not player base for level
-        BasePCT = 2,
-        TotalValue = 3,
-        TotalPCT = 4,
-        End = 5
+        Total = 2,
+        End = 3
+    }
+    public enum UnitModifierPctType
+    {
+        Base = 0,
+        Total = 1,
+        End = 2
     }
     public enum VictimState
     {
@@ -452,7 +456,6 @@ namespace Framework.Constants
         Possessed = 0x10000,
         Charging = 0x20000,
         Jumping = 0x40000,
-        //Onvehicle = 0x80000,
         Move = 0x100000,
         Rotating = 0x200000,
         Evade = 0x400000,
@@ -468,17 +471,18 @@ namespace Framework.Constants
                             | Possessed | Charging | Jumping | Move | Rotating
                             | Evade | RoamingMove | ConfusedMove | FleeingMove
                             | ChaseMove | FollowMove | IgnorePathfinding,
+
         Unattackable = InFlight,
-        // For Real Move Using Movegen Check And Stop (Except Unstoppable Flight)
         Moving = RoamingMove | ConfusedMove | FleeingMove | ChaseMove | FollowMove,
         Controlled = (Confused | Stunned | Fleeing),
         LostControl = (Controlled | Jumping | Charging),
         Sightless = (LostControl | Evade),
         CannotAutoattack = (LostControl | Casting),
         CannotTurn = (LostControl | Rotating),
-        // Stay By Different Reasons
         NotMove = Root | Stunned | Died | Distracted,
-        AllState = 0xffffffff                      //(Stopped | Moving | In_Combat | In_Flight)
+
+        AllErasable = AllStateSupported & ~IgnorePathfinding,
+        AllState = 0xffffffff
     }
 
     public enum UnitMoveType

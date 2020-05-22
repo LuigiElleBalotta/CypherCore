@@ -27,6 +27,7 @@ using Game.Network.Packets;
 using Game.Spells;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Game.Entities
 {
@@ -406,8 +407,8 @@ namespace Game.Entities
         {
             if (!Global.DisableMgr.IsDisabledFor(DisableType.Quest, quest.Id, this) && SatisfyQuestClass(quest, false) && SatisfyQuestRace(quest, false) &&
                 SatisfyQuestSkill(quest, false) && SatisfyQuestExclusiveGroup(quest, false) && SatisfyQuestReputation(quest, false) &&
-                SatisfyQuestPreviousQuest(quest, false) && SatisfyQuestNextChain(quest, false) &&
-                SatisfyQuestPrevChain(quest, false) && SatisfyQuestDay(quest, false) && SatisfyQuestWeek(quest, false) &&
+                SatisfyQuestDependentQuests(quest, false) && SatisfyQuestNextChain(quest, false) &&
+                SatisfyQuestDay(quest, false) && SatisfyQuestWeek(quest, false) &&
                 SatisfyQuestMonth(quest, false) && SatisfyQuestSeasonal(quest, false))
             {
                 return GetLevel() + WorldConfig.GetIntValue(WorldCfg.QuestHighLevelHideDiff) >= GetQuestMinLevel(quest);
@@ -422,11 +423,10 @@ namespace Game.Entities
                 && SatisfyQuestStatus(quest, msg) && SatisfyQuestExclusiveGroup(quest, msg)
                 && SatisfyQuestClass(quest, msg) && SatisfyQuestRace(quest, msg) && SatisfyQuestLevel(quest, msg)
                 && SatisfyQuestSkill(quest, msg) && SatisfyQuestReputation(quest, msg)
-                && SatisfyQuestPreviousQuest(quest, msg) && SatisfyQuestTimed(quest, msg)
-                && SatisfyQuestNextChain(quest, msg) && SatisfyQuestPrevChain(quest, msg)
-                && SatisfyQuestDay(quest, msg) && SatisfyQuestWeek(quest, msg)
-                && SatisfyQuestMonth(quest, msg) && SatisfyQuestSeasonal(quest, msg)
-                && SatisfyQuestConditions(quest, msg);
+                && SatisfyQuestDependentQuests(quest, msg) && SatisfyQuestTimed(quest, msg)
+                && SatisfyQuestNextChain(quest, msg) && SatisfyQuestDay(quest, msg)
+                && SatisfyQuestWeek(quest, msg) && SatisfyQuestMonth(quest, msg)
+                && SatisfyQuestSeasonal(quest, msg) && SatisfyQuestConditions(quest, msg);
         }
 
         public bool CanAddQuest(Quest quest, bool msg)
@@ -462,7 +462,7 @@ namespace Game.Entities
                 if (qInfo == null)
                     return false;
 
-                if (!qInfo.IsRepeatable() && m_RewardedQuests.Contains(quest_id))
+                if (!qInfo.IsRepeatable() && GetQuestRewardStatus(quest_id))
                     return false;                                   // not allow re-complete quest
 
                 // auto complete quest
@@ -838,10 +838,10 @@ namespace Game.Entities
 
         public uint GetQuestXPReward(Quest quest)
         {
-            bool rewarded = m_RewardedQuests.Contains(quest.Id);
+            bool rewarded = IsQuestRewarded(quest.Id) && !quest.IsDFQuest();
 
             // Not give XP in case already completed once repeatable quest
-            if (rewarded && !quest.IsDFQuest())
+            if (rewarded)
                 return 0;
 
             uint XP = (uint)(quest.XPValue(this) * WorldConfig.GetFloatValue(WorldCfg.RateXpQuest));
@@ -995,7 +995,7 @@ namespace Game.Entities
                             SendNewItem(item, quest.RewardItemCount[i], true, false);
                         }
                         else if (quest.IsDFQuest())
-                            SendItemRetrievalMail(quest.RewardItemId[i], quest.RewardItemCount[i], ItemContext.QuestReward);
+                            SendItemRetrievalMail(itemId, quest.RewardItemCount[i], ItemContext.QuestReward);
                     }
                 }
             }
@@ -1081,11 +1081,6 @@ namespace Game.Entities
             if (quest.CanIncreaseRewardedQuestCounters())
                 SetRewardedQuest(quest_id);
 
-            // StoreNewItem, mail reward, etc. save data directly to the database
-            // to prevent exploitable data desynchronisation we save the quest status to the database too
-            // (to prevent rewarding this quest another time while rewards were already given out)
-            _SaveQuestStatus(null);
-
             SendQuestReward(quest, questGiver?.ToCreature(), XP, !announce);
 
             // cast spells after mark quest complete (some spells have quest completed state requirements in spell_area data)
@@ -1128,6 +1123,9 @@ namespace Game.Entities
             UpdateCriteria(CriteriaTypes.CompleteQuestCount);
             UpdateCriteria(CriteriaTypes.CompleteQuest, quest.Id);
 
+            // make full db save
+            SaveToDB(false);
+
             uint questBit = Global.DB2Mgr.GetQuestUniqueBitFlag(quest_id);
             if (questBit != 0)
                 SetQuestCompletedBit(questBit, true);
@@ -1159,13 +1157,15 @@ namespace Game.Entities
             Quest quest = Global.ObjectMgr.GetQuestTemplate(questId);
             if (quest != null)
             {
-                // Already complete quests shouldn't turn failed.
-                if (GetQuestStatus(questId) == QuestStatus.Complete && !quest.HasSpecialFlag(QuestSpecialFlags.Timed))
-                    return;
+                QuestStatus qStatus = GetQuestStatus(questId);
 
-                // You can't fail a quest if you don't have it, or if it's already rewarded.
-                if (GetQuestStatus(questId) == QuestStatus.None || GetQuestStatus(questId) == QuestStatus.Rewarded)
-                    return;
+                // we can only fail incomplete quest or...
+                if (qStatus != QuestStatus.Incomplete)
+                {
+                    // completed timed quest with no requirements
+                    if (qStatus != QuestStatus.Complete || !quest.HasSpecialFlag(QuestSpecialFlags.Timed) || !quest.HasSpecialFlag(QuestSpecialFlags.CompletedAtStart))
+                        return;
+                }
 
                 SetQuestStatus(questId, QuestStatus.Failed);
 
@@ -1299,89 +1299,86 @@ namespace Game.Entities
             return false;
         }
 
+        bool SatisfyQuestDependentQuests(Quest qInfo, bool msg)
+        {
+            return SatisfyQuestPreviousQuest(qInfo, msg) && SatisfyQuestDependentPreviousQuests(qInfo, msg);
+        }
+
         public bool SatisfyQuestPreviousQuest(Quest qInfo, bool msg)
         {
             // No previous quest (might be first quest in a series)
-            if (qInfo.prevQuests.Empty())
+            if (qInfo.PrevQuestId == 0)
                 return true;
 
-            foreach (var prev in qInfo.prevQuests)
-            {
-                uint prevId = (uint)Math.Abs(prev);
+            uint prevId = (uint)Math.Abs(qInfo.PrevQuestId);
+            // If positive previous quest rewarded, return true
+            if (qInfo.PrevQuestId > 0 && m_RewardedQuests.Contains(prevId))
+                return true;
 
-                Quest qPrevInfo = Global.ObjectMgr.GetQuestTemplate(prevId);
+            // If negative previous quest active, return true
+            if (qInfo.PrevQuestId < 0 && GetQuestStatus(prevId) == QuestStatus.Incomplete)
+                return true;
 
-                if (qPrevInfo != null)
-                {
-                    // If any of the positive previous quests completed, return true
-                    if (prev > 0 && m_RewardedQuests.Contains(prevId))
-                    {
-                        // skip one-from-all exclusive group
-                        if (qPrevInfo.ExclusiveGroup >= 0)
-                            return true;
-
-                        // each-from-all exclusive group (< 0)
-                        // can be start if only all quests in prev quest exclusive group completed and rewarded
-                        var range = Global.ObjectMgr._exclusiveQuestGroups.LookupByKey(qPrevInfo.ExclusiveGroup);
-                        foreach (var exclude_Id in range)
-                        {
-                            // skip checked quest id, only state of other quests in group is interesting
-                            if (exclude_Id == prevId)
-                                continue;
-
-                            // alternative quest from group also must be completed and rewarded (reported)
-                            if (!m_RewardedQuests.Contains(exclude_Id))
-                            {
-                                if (msg)
-                                {
-                                    SendCanTakeQuestResponse(QuestFailedReasons.None);
-                                    Log.outDebug(LogFilter.Server, "SatisfyQuestPreviousQuest: Sent QuestFailedReason.None (questId: {0}) because player does not have required quest (1).", qInfo.Id);
-                                }
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-
-                    // If any of the negative previous quests active, return true
-                    if (prev < 0 && GetQuestStatus(prevId) != QuestStatus.None)
-                    {
-                        // skip one-from-all exclusive group
-                        if (qPrevInfo.ExclusiveGroup >= 0)
-                            return true;
-
-                        // each-from-all exclusive group (< 0)
-                        // can be start if only all quests in prev quest exclusive group active
-                        var range = Global.ObjectMgr._exclusiveQuestGroups.LookupByKey(qPrevInfo.ExclusiveGroup);
-                        foreach (var exclude_Id in range)
-                        {
-                            // skip checked quest id, only state of other quests in group is interesting
-                            if (exclude_Id == prevId)
-                                continue;
-
-                            // alternative quest from group also must be active
-                            if (GetQuestStatus(exclude_Id) != QuestStatus.None)
-                            {
-                                if (msg)
-                                {
-                                    SendCanTakeQuestResponse(QuestFailedReasons.None);
-                                    Log.outDebug(LogFilter.Server, "SatisfyQuestPreviousQuest: Sent QuestFailedReason.None (questId: {0}) because player does not have required quest (2).", qInfo.Id);
-
-                                }
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-                }
-            }
-
-            // Has only positive prev. quests in non-rewarded state
-            // and negative prev. quests in non-active state
+            // Has positive prev. quest in non-rewarded state
+            // and negative prev. quest in non-active state
             if (msg)
             {
                 SendCanTakeQuestResponse(QuestFailedReasons.None);
-                Log.outDebug(LogFilter.Server, "SatisfyQuestPreviousQuest: Sent QuestFailedReason.None (questId: {0}) because player does not have required quest (3).", qInfo.Id);
+                Log.outDebug(LogFilter.Misc, $"Player.SatisfyQuestPreviousQuest: Sent QUEST_ERR_NONE (QuestID: {qInfo.Id}) because player '{GetName()}' ({GetGUID()}) doesn't have required quest {prevId}.");
+            }
+
+            return false;
+        }
+
+        bool SatisfyQuestDependentPreviousQuests(Quest qInfo, bool msg)
+        {
+            // No previous quest (might be first quest in a series)
+            if (qInfo.DependentPreviousQuests.Empty())
+                return true;
+
+            foreach (uint prevId in qInfo.DependentPreviousQuests)
+            {
+                // checked in startup
+                Quest questInfo = Global.ObjectMgr.GetQuestTemplate(prevId);
+
+                // If any of the previous quests completed, return true
+                if (IsQuestRewarded(prevId))
+                {
+                    // skip one-from-all exclusive group
+                    if (questInfo.ExclusiveGroup >= 0)
+                        return true;
+
+                    // each-from-all exclusive group (< 0)
+                    // can be start if only all quests in prev quest exclusive group completed and rewarded
+                    var bounds = Global.ObjectMgr.GetExclusiveQuestGroupBounds(questInfo.ExclusiveGroup);
+                    foreach (var exclusiveQuestId in bounds)
+                    {
+                        // skip checked quest id, only state of other quests in group is interesting
+                        if (exclusiveQuestId == prevId)
+                            continue;
+
+                        // alternative quest from group also must be completed and rewarded (reported)
+                        if (!IsQuestRewarded(exclusiveQuestId))
+                        {
+                            if (msg)
+                            {
+                                SendCanTakeQuestResponse(QuestFailedReasons.None);
+                                Log.outDebug(LogFilter.Misc, $"Player.SatisfyQuestDependentPreviousQuests: Sent QUEST_ERR_NONE (QuestID: {qInfo.Id}) because player '{GetName()}' ({GetGUID()}) doesn't have the required quest (1).");
+                            }
+
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }
+            }
+
+            // Has only prev. quests in non-rewarded state
+            if (msg)
+            {
+                SendCanTakeQuestResponse(QuestFailedReasons.None);
+                Log.outDebug(LogFilter.Misc, $"Player.SatisfyQuestDependentPreviousQuests: Sent QUEST_ERR_NONE (QuestID: {qInfo.Id}) because player '{GetName()}' ({GetGUID()}) doesn't have required quest (2).");
             }
 
             return false;
@@ -1528,7 +1525,7 @@ namespace Game.Entities
             if (qInfo.ExclusiveGroup <= 0)
                 return true;
 
-            var range = Global.ObjectMgr._exclusiveQuestGroups.LookupByKey(qInfo.ExclusiveGroup);
+            var range = Global.ObjectMgr.GetExclusiveQuestGroupBounds(qInfo.ExclusiveGroup);
             // always must be found if qInfo.ExclusiveGroup != 0
 
             foreach (var exclude_Id in range)
@@ -1551,7 +1548,7 @@ namespace Game.Entities
                 }
 
                 // alternative quest already started or completed - but don't check rewarded states if both are repeatable
-                if (GetQuestStatus(exclude_Id) != QuestStatus.None || (!(qInfo.IsRepeatable() && Nquest.IsRepeatable()) && m_RewardedQuests.Contains(exclude_Id)))
+                if (GetQuestStatus(exclude_Id) != QuestStatus.None || (!(qInfo.IsRepeatable() && Nquest.IsRepeatable()) && GetQuestRewardStatus(exclude_Id)))
                 {
                     if (msg)
                     {
@@ -1580,32 +1577,6 @@ namespace Game.Entities
                 }
                 return false;
             }
-            return true;
-        }
-
-        public bool SatisfyQuestPrevChain(Quest qInfo, bool msg)
-        {
-            // No previous quest in chain
-            if (qInfo.prevChainQuests.Empty())
-                return true;
-
-            foreach (var questId in qInfo.prevChainQuests)
-            {
-                var questStatusData = m_QuestStatus.LookupByKey(questId);
-
-                // If any of the previous quests in chain active, return false
-                if (questStatusData != null && questStatusData.Status != QuestStatus.None)
-                {
-                    if (msg)
-                    {
-                        SendCanTakeQuestResponse(QuestFailedReasons.None);
-                        Log.outDebug(LogFilter.Server, "SatisfyQuestNextChain: Sent QuestFailedReason.None (questId: {0}) because player already did or started next quest in chain.", qInfo.Id);
-                    }
-                    return false;
-                }
-            }
-
-            // No previous quest in chain active
             return true;
         }
 
@@ -1736,7 +1707,7 @@ namespace Game.Entities
 
                 // for repeatable quests: rewarded field is set after first reward only to prevent getting XP more than once
                 if (!qInfo.IsRepeatable())
-                    return m_RewardedQuests.Contains(quest_id);
+                    return IsQuestRewarded(quest_id);
 
                 return false;
             }
@@ -1751,15 +1722,8 @@ namespace Game.Entities
                 if (questStatusData != null)
                     return questStatusData.Status;
 
-                Quest quest = Global.ObjectMgr.GetQuestTemplate(questId);
-                if (quest != null)
-                {
-                    if (quest.IsSeasonal() && !quest.IsRepeatable())
-                        return SatisfyQuestSeasonal(quest, false) ? QuestStatus.None : QuestStatus.Rewarded;
-
-                    if (!quest.IsRepeatable() && IsQuestRewarded(questId))
-                        return QuestStatus.Rewarded;
-                }
+                if (GetQuestRewardStatus(questId))
+                    return QuestStatus.Rewarded;
             }
             return QuestStatus.None;
         }
@@ -1767,7 +1731,22 @@ namespace Game.Entities
         public bool CanShareQuest(uint quest_id)
         {
             Quest qInfo = Global.ObjectMgr.GetQuestTemplate(quest_id);
-            return qInfo != null && qInfo.HasFlag(QuestFlags.Sharable) && IsActiveQuest(quest_id);
+            if (qInfo != null && qInfo.HasFlag(QuestFlags.Sharable))
+            {
+                var questStatusData = m_QuestStatus.LookupByKey(quest_id);
+                if (questStatusData != null)
+                {
+                    if (questStatusData.Status != QuestStatus.Incomplete)
+                        return false;
+
+                    // in pool and not currently available (wintergrasp weekly, dalaran weekly) - can't share
+                    if (Global.PoolMgr.IsPartOfAPool<Quest>(quest_id) != 0 && !Global.PoolMgr.IsSpawnedObject<Quest>(quest_id))
+                        return false;
+
+                    return true;
+                }
+            }
+            return false;
         }
 
         public void SetQuestStatus(uint questId, QuestStatus status, bool update = true)
@@ -1814,6 +1793,18 @@ namespace Game.Entities
             uint questBit = Global.DB2Mgr.GetQuestUniqueBitFlag(questId);
             if (questBit != 0)
                 SetQuestCompletedBit(questBit, false);
+
+            // Remove seasonal quest also
+            Quest qInfo = Global.ObjectMgr.GetQuestTemplate(questId);
+            if (qInfo.IsSeasonal())
+            {
+                ushort eventId = qInfo.GetEventIdForQuest();
+                if (m_seasonalquests.ContainsKey(eventId))
+                {
+                    m_seasonalquests.Remove(eventId, questId);
+                    m_SeasonalQuestChanged = true;
+                }
+            }
 
             if (update)
                 SendQuestUpdate(questId);
@@ -2065,8 +2056,10 @@ namespace Game.Entities
                     {
                         q_status.Explored = true;
                         m_QuestStatusSave[questId] = QUEST_DEFAULT_SAVE_TYPE;
-                        SetQuestSlotState(log_slot, QUEST_STATE_COMPLETE);
-                        SendQuestComplete(questId);
+                        
+                        // if we cannot complete quest send exploration succeded (to mark exploration on client)
+                        if (!CanCompleteQuest(questId))
+                            SendQuestComplete(questId)
                     }*/
                 }
                 if (CanCompleteQuest(questId))
@@ -2974,7 +2967,25 @@ namespace Game.Entities
                 {
                     GameObject obj = ObjectAccessor.GetGameObject(this, guid);
                     if (obj != null)
-                        obj.BuildValuesUpdateBlockForPlayer(udata, this);
+                    {
+                        switch (obj.GetGoType())
+                        {
+                            case GameObjectTypes.QuestGiver:
+                            case GameObjectTypes.Chest:
+                            case GameObjectTypes.Goober:
+                            case GameObjectTypes.Generic:
+                                if (Global.ObjectMgr.IsGameObjectForQuests(obj.GetEntry()))
+                                {
+                                    ObjectFieldData objMask = new ObjectFieldData();
+                                    GameObjectFieldData goMask = new GameObjectFieldData();
+                                    objMask.MarkChanged(obj.m_objectData.DynamicFlags);
+                                    obj.BuildValuesUpdateForPlayerWithMask(udata, objMask._changesMask, goMask._changesMask, this);
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    }
                 }
                 else if (guid.IsCreatureOrVehicle())
                 {
@@ -3001,7 +3012,10 @@ namespace Game.Entities
 
                             if (buildUpdateBlock)
                             {
-                                obj.BuildValuesUpdateBlockForPlayer(udata, this);
+                                ObjectFieldData objMask = new ObjectFieldData();
+                                UnitData unitMask = new UnitData();
+                                unitMask.MarkChanged(obj.m_unitData.NpcFlags, 0); // NpcFlags[0] has UNIT_NPC_FLAG_SPELLCLICK
+                                obj.BuildValuesUpdateForPlayerWithMask(udata, objMask._changesMask, unitMask._changesMask, this);
                                 break;
                             }
                         }

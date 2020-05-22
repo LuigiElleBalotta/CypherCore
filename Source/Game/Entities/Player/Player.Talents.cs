@@ -383,7 +383,7 @@ namespace Game.Entities
             stmt.AddValue(1, GetActiveTalentGroup());
 
             WorldSession mySess = GetSession();
-            mySess.GetQueryProcessor().AddQuery(DB.Characters.AsyncQuery(stmt).WithCallback(result =>
+            mySess.GetQueryProcessor().AddCallback(DB.Characters.AsyncQuery(stmt).WithCallback(result =>
             {
                 // in case player logs out before db response (player would be deleted in that case)
                 Player thisPlayer = mySess.GetPlayer();
@@ -593,14 +593,14 @@ namespace Game.Entities
                     PvpTalentRecord talentInfo = CliDB.PvpTalentStorage.LookupByKey(pvpTalents[slot]);
                     if (talentInfo == null)
                     {
-                        Log.outError(LogFilter.Player, $"Player.SendTalentsInfoData: Player '{GetName()}' ({GetGUID().ToString()}) has unknown pvp talent id: {pvpTalents[slot]}");
+                        Log.outError(LogFilter.Player, $"Player.SendTalentsInfoData: Player '{GetName()}' ({GetGUID()}) has unknown pvp talent id: {pvpTalents[slot]}");
                         continue;
                     }
 
                     SpellInfo spellEntry = Global.SpellMgr.GetSpellInfo(talentInfo.SpellID);
                     if (spellEntry == null)
                     {
-                        Log.outError(LogFilter.Player, $"Player.SendTalentsInfoData: Player '{GetName()}' ({GetGUID().ToString()}) has unknown pvp talent spell: {talentInfo.SpellID}");
+                        Log.outError(LogFilter.Player, $"Player.SendTalentsInfoData: Player '{GetName()}' ({GetGUID()}) has unknown pvp talent spell: {talentInfo.SpellID}");
                         continue;
                     }
 
