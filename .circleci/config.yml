@@ -1,0 +1,54 @@
+version: 2
+jobs:
+  dev:
+    machine: 
+      image: ubuntu-1604:201903-01
+    filters:
+      branch:
+        only: Ashamane
+    steps:
+      - run:
+          name: "Install deps"
+          command: |
+            wget https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+            sudo dpkg -i packages-microsoft-prod.deb
+            sudo apt-get update
+            sudo apt-get install apt-transport-https
+            sudo apt-get update
+            sudo apt-get install dotnet-sdk-3.1
+            sudo apt-get install sshpass
+            sudo apt-get install zip gzip tar
+      - run:
+          name: "Clone & Pull Submodules"
+          command: |
+            git clone https://github.com/LuigiElleBalotta/CypherCore.git cyphercore --recursive --branch Ashamane
+      - run: 
+          name: "Compilazione BNetServer"
+          command: |
+            dotnet publish -c Release -o ../publish/bnetserver cyphercore/Source/BNetServer/BNetServer.csproj
+      - run: 
+          name: "List files"
+          command: |
+            ls /home/circleci/publish/bnetserver
+      - run: 
+          name: "Kill ABExport"
+          command: |
+            sshpass -p $USER_PASS ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no 'trap "screen -XS bnetserver quit" QUIT TERM INT EXIT'
+      - run: 
+          name: "Empty server folder'"
+          command: |
+            sshpass -p $USER_PASS ssh $SSH_USER@$SSH_HOST -o stricthostkeychecking=no "cd /home/ubuntu/emu/wow/ && find ./bnetserver -mindepth 1 ! -regex '^./bnetserver/BNetServer.conf' -delete"
+      - run: 
+          name: "Copy files to server"
+          command: |
+            sshpass -p $USER_PASS scp -o stricthostkeychecking=no -r /home/circleci/publish/bnetserver/* $SSH_USER@$SSH_HOST:/home/ubuntu/emu/wow/bnetserver
+workflows:
+    version: 2
+    deploy_dev:
+        jobs:
+            - dev:
+                filters: 
+                    branches: 
+                        only: 
+                            - Ashamane
+                context: LuigiElleBalotta
