@@ -1760,6 +1760,63 @@ PartyRaidWarnings = 0
 ###################################################################################################
 
 ###################################################################################################
+# DISCORD
+#
+#    Discord.Enabled
+#        Description: Enable Discord service.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Discord.Enabled = 0
+
+#
+#    Discord.BotToken
+#        Description: BOT TOKEN (not user token)
+#        Default:     ""
+
+Discord.BotToken = ""
+
+#
+#    Discord.BotServerID
+#        Description: Server ID
+#        Default:     0
+
+Discord.BotServerID = 0
+
+#
+
+#
+#    Discord.BotChannelIDHorde
+#        Description: Channel ID Horde
+#        Default:     0
+
+Discord.BotChannelIDHorde = 0
+
+#
+#    Discord.BotChannelIDAlliance
+#        Description: Channel ID Alliance
+#        Default:     0
+
+Discord.BotChannelIDAlliance = 0
+
+#
+#    Discord.BotChannelIDBoth
+#        Description: Channel ID Both (Use only when AllowTwoSide.Interaction.Channel is set to 1)
+#        Default:     0
+
+Discord.BotChannelIDBoth = 0
+
+#
+#    Discord.GameChannelName
+#        Description: Channel Name
+#        Default:     "world"
+
+Discord.GameChannelName = "world"
+
+#
+###################################################################################################
+
+###################################################################################################
 # GAME MASTER SETTINGS
 #
 #    GM.LoginState

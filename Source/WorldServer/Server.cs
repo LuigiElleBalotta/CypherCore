@@ -24,7 +24,13 @@ using Game.Network;
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
+using Discord;
+using Discord.WebSocket;
+using Game.Discord;
+
 
 namespace WorldServer
 {
@@ -79,6 +85,14 @@ namespace WorldServer
             DB.Login.DirectExecute("UPDATE realmlist SET flag = flag & ~{0}, population = 0 WHERE id = '{1}'", (uint)RealmFlags.Offline, Global.WorldMgr.GetRealm().Id.Realm);
             Global.WorldMgr.GetRealm().PopulationLevel = 0.0f;
             Global.WorldMgr.GetRealm().Flags = Global.WorldMgr.GetRealm().Flags & ~RealmFlags.VersionMismatch;
+
+            if (ConfigMgr.GetDefaultValue("Discord.Enabled", false))
+            {
+                Thread threadDiscord = new Thread( StartDiscordBot );
+                threadDiscord.Start();
+
+                Console.WriteLine("Starting up world to discord thread...");
+            }
 
             //- Launch CliRunnable thread
             if (ConfigMgr.GetDefaultValue("Console.Enable", true))
@@ -196,6 +210,81 @@ namespace WorldServer
             Log.outInfo(LogFilter.Server, "Halting process...");
             Thread.Sleep(5000);
             Environment.Exit(-1);
+        }
+
+        static async void StartDiscordBot()
+        {
+            DiscordSocketClient client = new DiscordSocketClient();
+
+            client.Log += LogDiscord;
+            client.MessageReceived += SendToDiscord;
+
+            string token = ConfigMgr.GetDefaultValue("Discord.BotToken", "");
+
+            if (token != "")
+            {
+                Console.WriteLine($"Starting bot with token: {token}");
+
+                await client.LoginAsync(TokenType.Bot, token);
+                await client.StartAsync();
+
+                while (true)
+                {
+                    if (!DiscordMessageQueue.Empty())
+                    {
+                        foreach (DiscordMessage message in DiscordMessageQueue.DiscordMessages)
+                        {
+                            string formatedMessage = "";
+                            formatedMessage = GetFormatedMessage( message );
+
+                            ulong serverID = ConfigMgr.GetDefaultValue("Discord.BotServerID", default(ulong));
+                            ulong channelID = default( ulong );
+
+                            if (serverID != default( ulong ))
+                            {
+                                switch (message.Channel)
+                                {
+                                    case DiscordMessageChannel.Discord_Both:
+                                        channelID = ConfigMgr.GetDefaultValue("Discord.BotChannelIDBoth", default(ulong));
+                                        break;
+                                    case DiscordMessageChannel.Discord_World_A:
+                                        channelID = ConfigMgr.GetDefaultValue("Discord.BotChannelIDAlliance", default(ulong));
+                                        break;
+                                    case DiscordMessageChannel.Discord_World_H:
+                                        channelID = ConfigMgr.GetDefaultValue("Discord.BotChannelIDHorde", default(ulong));
+                                        break;
+                                }
+                                if( channelID != default(ulong))
+                                    await client.GetGuild(serverID).GetTextChannel(channelID).SendMessageAsync(formatedMessage);
+                            }
+                        }
+                        DiscordMessageQueue.Clear();
+                    }
+                    Thread.Sleep(2000);
+                }
+                await Task.Delay(-1);
+            }
+        }
+
+        private static string GetFormatedMessage(DiscordMessage message)
+        {
+            string blizzIcon = message.IsGm ? "<:blizz:407908963007594496>" : "";
+            return blizzIcon + "[" + message.CharacterName + "]: " + message.Message;
+        }
+
+        private static async Task SendToDiscord(SocketMessage message)
+        {
+            //Todo: we can implement some logic for custom commands from discord here!
+            if (message.Content == "!ping")
+            {
+                await message.Channel.SendMessageAsync("Pong!");
+            }
+        }
+
+        private static Task LogDiscord(LogMessage msg)
+        {
+            Log.outInfo(LogFilter.DiscordBot, msg.ToString());
+            return Task.CompletedTask;
         }
     }
 }

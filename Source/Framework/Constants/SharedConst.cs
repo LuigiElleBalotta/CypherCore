@@ -2449,6 +2449,14 @@ namespace Framework.Constants
         Dungeon = 0x04
     }
 
+    public enum DiscordMessageChannel
+    {
+        Discord_World_A = 1,
+        Discord_World_H = 2,
+        Discord_Ticket = 3,
+        Discord_Both = 4
+    }
+
     public enum VisibilityDistanceType
     {
         Normal = 0,

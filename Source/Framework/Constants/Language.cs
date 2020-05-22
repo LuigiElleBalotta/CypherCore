@@ -1177,4 +1177,5 @@ namespace Framework.Constants
         EastAsia = 0x04,
         Any = 0xFFFF
     }
+
 }

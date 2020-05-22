@@ -887,6 +887,7 @@ namespace Game.Chat
         public bool IsConstant() { return _channelId != 0; }
 
         public bool IsLFG() { return GetFlags().HasAnyFlag(ChannelFlags.Lfg); }
+
         bool IsAnnounce() { return _announceEnabled; }
         void SetAnnounce(bool nannounce) { _announceEnabled = nannounce; }
 

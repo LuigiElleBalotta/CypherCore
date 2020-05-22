@@ -161,10 +161,10 @@ namespace Game.Entities
             return flags;
         }
 
-        public void OnItemAdded(Item item)
+        public void OnItemAdded(Item item, Player owner = null)
         {
             if (Global.DB2Mgr.GetHeirloomByItemId(item.GetEntry()) != null)
-                AddHeirloom(item.GetEntry(), 0);
+                AddHeirloom(item.GetEntry(), 0, owner);
 
             AddItemAppearance(item);
         }
@@ -235,12 +235,13 @@ namespace Game.Entities
                 _owner.GetPlayer().AddHeirloom(item.Key, (uint)item.Value.flags);
         }
 
-        public void AddHeirloom(uint itemId, HeirloomPlayerFlags flags)
+        public void AddHeirloom(uint itemId, HeirloomPlayerFlags flags, Player owner = null)
         {
+            Player playerOwner = owner ? owner : _owner.GetPlayer();
             if (UpdateAccountHeirlooms(itemId, flags))
                 _owner.GetPlayer().AddHeirloom(itemId, (uint)flags);
         }
-
+        
         public void UpgradeHeirloom(uint itemId, uint castItem)
         {
             Player player = _owner.GetPlayer();

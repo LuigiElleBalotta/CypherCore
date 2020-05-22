@@ -446,4 +446,5 @@ public enum LogFilter
     Unit,
     Vehicle,
     Warden,
+    DiscordBot
 }
