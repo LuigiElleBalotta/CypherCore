@@ -36,6 +36,7 @@ using Game.Scripting;
 using Game.SupportSystem;
 using Game.Services;
 using Game.Cache;
+using Game.Loots;
 
 public static class Global
 {
@@ -95,6 +96,7 @@ public static class Global
     public static CharacterTemplateDataStorage CharacterTemplateDataStorage { get { return CharacterTemplateDataStorage.Instance; } }
     public static ConversationDataStorage ConversationDataStorage { get { return ConversationDataStorage.Instance; } }
     public static CharacterCache CharacterCacheStorage { get { return CharacterCache.Instance; } }
+    public static LootItemStorage LootItemStorage { get { return LootItemStorage.Instance; } }
 
     //Misc
     public static ConditionManager ConditionMgr { get { return ConditionManager.Instance; } }
@@ -105,7 +107,7 @@ public static class Global
 
     public static GameEventManager GameEventMgr { get { return GameEventManager.Instance; } }
     public static CreatureTextManager CreatureTextMgr { get { return CreatureTextManager.Instance; } }
-    public static AuctionManager AuctionMgr { get { return AuctionManager.Instance; } }
+    public static AuctionManager AuctionHouseMgr { get { return AuctionManager.Instance; } }
 
     public static SpellManager SpellMgr { get { return SpellManager.Instance; } }
     public static SupportManager SupportMgr { get { return SupportManager.Instance; } }

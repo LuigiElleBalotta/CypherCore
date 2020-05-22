@@ -2210,8 +2210,8 @@ namespace Game.Achievements
                     return false;
                 case CriteriaAdditionalCondition.ItemModifiedAppearance: // 200
                     {
-                        Tuple<bool, bool> hasAppearance = referencePlayer.GetSession().GetCollectionMgr().HasItemAppearance(reqValue);
-                        if (!hasAppearance.Item1 || hasAppearance.Item2)
+                        var (PermAppearance, TempAppearance) = referencePlayer.GetSession().GetCollectionMgr().HasItemAppearance(reqValue);
+                        if (!PermAppearance || TempAppearance)
                             return false;
                         break;
                     }
@@ -2611,6 +2611,9 @@ namespace Game.Achievements
                     _criteriaTreeByCriteria.Add(pair.Value.Entry.CriteriaID, pair.Value);
             }
 
+            for (var i = 0; i < (int)CriteriaCondition.Max; ++i)
+                _criteriasByFailEvent[i] = new MultiMap<int, Criteria>();
+
             // Load criteria
             uint criterias = 0;
             uint guildCriterias = 0;
@@ -2620,6 +2623,8 @@ namespace Game.Achievements
             {
                 Cypher.Assert(criteriaEntry.Type < CriteriaTypes.TotalTypes,
                     $"CRITERIA_TYPE_TOTAL must be greater than or equal to {criteriaEntry.Type + 1} but is currently equal to {CriteriaTypes.TotalTypes}");
+                Cypher.Assert(criteriaEntry.StartEvent < CriteriaTimedTypes.Max, $"CRITERIA_TYPE_TOTAL must be greater than or equal to {criteriaEntry.StartEvent + 1} but is currently equal to {CriteriaTimedTypes.Max}");
+                Cypher.Assert(criteriaEntry.FailEvent < (byte)CriteriaCondition.Max, $"CRITERIA_CONDITION_MAX must be greater than or equal to {criteriaEntry.FailEvent + 1} but is currently equal to {CriteriaCondition.Max}");
 
                 var treeList = _criteriaTreeByCriteria.LookupByKey(criteriaEntry.Id);
                 if (treeList.Empty())
@@ -2678,6 +2683,9 @@ namespace Game.Achievements
 
                 if (criteriaEntry.StartTimer != 0)
                     _criteriasByTimedType.Add(criteriaEntry.StartEvent, criteria);
+
+                if (criteriaEntry.FailEvent != 0)
+                    _criteriasByFailEvent[criteriaEntry.FailEvent].Add((int)criteriaEntry.FailAsset, criteria);
             }
 
             foreach (var p in _criteriaTrees)
@@ -2789,6 +2797,11 @@ namespace Game.Achievements
             return _criteriasByTimedType.LookupByKey(type);
         }
 
+        public List<Criteria> GetCriteriaByFailEvent(CriteriaCondition condition, int asset)
+        {
+            return _criteriasByFailEvent[(int)condition].LookupByKey(asset);
+        }
+        
         public CriteriaDataSet GetCriteriaDataSet(Criteria criteria)
         {
             return _criteriaDataMap.LookupByKey(criteria.Id);
@@ -2835,6 +2848,7 @@ namespace Game.Achievements
         MultiMap<CriteriaTypes, Criteria> _questObjectiveCriteriasByType = new MultiMap<CriteriaTypes, Criteria>();
 
         MultiMap<CriteriaTimedTypes, Criteria> _criteriasByTimedType = new MultiMap<CriteriaTimedTypes, Criteria>();
+        MultiMap<int, Criteria>[] _criteriasByFailEvent = new MultiMap<int, Criteria>[(int)CriteriaCondition.Max];
     }
 
     public class ModifierTreeNode

@@ -2349,7 +2349,7 @@ namespace Framework.Constants
         UnitDestAreaParty = 34,
         UnitParty = 35,
         DestCasterUnk36 = 36,
-        UnitLastareaParty = 37,
+        UnitLastAreaParty = 37,
         UnitNearbyEntry = 38,
         DestCasterFishing = 39,
         GameobjectNearbyEntry = 40,
@@ -2556,5 +2556,20 @@ namespace Framework.Constants
     {
         WhiteHit = 0x01, // enchant shall only proc off white hits (not abilities)
         Limit60 = 0x02  // enchant effects shall be reduced past lvl 60
+    }
+
+    public enum MountResult
+    {
+        InvalidMountee = 0,
+        TooFarAway = 1,
+        AlreadyMounted = 2,
+        NotMountable = 3,
+        NotYourPet = 4,
+        Other = 5,
+        Looting = 6,
+        RaceCantMount = 7,
+        Shapeshifted = 8,
+        ForcedDismount = 9,
+        Ok = 10 // never sent
     }
 }

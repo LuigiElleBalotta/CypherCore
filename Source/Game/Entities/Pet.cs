@@ -99,7 +99,7 @@ namespace Game.Entities
 
             ulong ownerid = owner.GetGUID().GetCounter();
 
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
 
             if (petnumber != 0)
             {
@@ -180,7 +180,7 @@ namespace Game.Entities
             float px, py, pz;
             if (IsCritter())
             {
-                owner.GetClosePoint(out px, out py, out pz, GetObjectSize(), SharedConst.PetFollowDist, GetFollowAngle());
+                owner.GetClosePoint(out px, out py, out pz, GetCombatReach(), SharedConst.PetFollowDist, GetFollowAngle());
                 Relocate(px, py, pz, owner.GetOrientation());
 
                 if (!IsPositionValid())
@@ -233,7 +233,7 @@ namespace Game.Entities
             SynchronizeLevelWithOwner();
 
             // Set pet's position after setting level, its size depends on it
-            owner.GetClosePoint(out px, out py, out pz, GetObjectSize(), SharedConst.PetFollowDist, GetFollowAngle());
+            owner.GetClosePoint(out px, out py, out pz, GetCombatReach(), SharedConst.PetFollowDist, GetFollowAngle());
             Relocate(px, py, pz, owner.GetOrientation());
             if (!IsPositionValid())
             {
@@ -356,6 +356,8 @@ namespace Game.Entities
             if (owner.IsTypeId(TypeId.Player) && IsControlled() && !IsTemporarySummoned() && (GetPetType() == PetType.Summon || GetPetType() == PetType.Hunter))
                 owner.ToPlayer().SetLastPetNumber(petId);
 
+            // must be after SetMinion (owner guid check)
+            LoadMechanicTemplateImmunity();
             m_loading = false;
 
             return true;

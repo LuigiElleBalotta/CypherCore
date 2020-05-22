@@ -57,9 +57,18 @@ namespace Game.Entities
                 m_spellImmune[i] = new MultiMap<uint, uint>();
 
             for (byte i = 0; i < (int)UnitMods.End; ++i)
-                m_auraModifiersGroup[i] = new float[] { 0.0f, 100.0f, 1.0f, 0.0f, 1.0f };
+            {
+                m_auraFlatModifiersGroup[i] = new float[(int)UnitModifierFlatType.End];
+                m_auraFlatModifiersGroup[i][(int)UnitModifierFlatType.Base] = 0.0f;
+                m_auraFlatModifiersGroup[i][(int)UnitModifierFlatType.BasePCTExcludeCreate] = 100.0f;
+                m_auraFlatModifiersGroup[i][(int)UnitModifierFlatType.Total] = 0.0f;
 
-            m_auraModifiersGroup[(int)UnitMods.DamageOffHand][(int)UnitModifierType.TotalPCT] = 0.5f;
+                m_auraPctModifiersGroup[i] = new float[(int)UnitModifierPctType.End];
+                m_auraPctModifiersGroup[i][(int)UnitModifierPctType.Base] = 1.0f;
+                m_auraPctModifiersGroup[i][(int)UnitModifierPctType.Total] = 1.0f;
+            }
+
+            m_auraPctModifiersGroup[(int)UnitMods.DamageOffHand][(int)UnitModifierPctType.Total] = 0.5f;
 
             foreach (AuraType auraType in Enum.GetValues(typeof(AuraType)))
                 m_modAuras[auraType] = new List<AuraEffect>();
@@ -485,7 +494,6 @@ namespace Game.Entities
             CombatStop();
             DeleteThreatList();
             GetHostileRefManager().DeleteReferences();
-            GetMotionMaster().Clear(false);                    // remove different non-standard movement generators.
         }
         public override void CleanupsBeforeDelete(bool finalCleanup = true)
         {
@@ -1239,7 +1247,7 @@ namespace Game.Entities
                             else if (GetRace() == Race.Worgen)
                             {
                                 if (HasAura(210333)) // Glyph of the Feral Chameleon
-                                    hairColor = (byte)RandomHelper.URand(0, 9);
+                                    skinColor = (byte)RandomHelper.URand(0, 9);
 
                                 // Male
                                 if (GetGender() == Gender.Male)
@@ -1284,7 +1292,7 @@ namespace Game.Entities
                             else if (GetRace() == Race.Tauren)
                             {
                                 if (HasAura(210333)) // Glyph of the Feral Chameleon
-                                    hairColor = (byte)RandomHelper.URand(0, 20);
+                                    skinColor = (byte)RandomHelper.URand(0, 20);
 
                                 if (GetGender() == Gender.Male)
                                 {
@@ -1393,7 +1401,7 @@ namespace Game.Entities
                             else if (GetRace() == Race.Worgen)
                             {
                                 if (HasAura(210333)) // Glyph of the Feral Chameleon
-                                    hairColor = (byte)RandomHelper.URand(0, 8);
+                                    skinColor = (byte)RandomHelper.URand(0, 8);
 
                                 // Male
                                 if (GetGender() == Gender.Male)
@@ -1438,7 +1446,7 @@ namespace Game.Entities
                             else if (GetRace() == Race.Tauren)
                             {
                                 if (HasAura(210333)) // Glyph of the Feral Chameleon
-                                    hairColor = (byte)RandomHelper.URand(0, 20);
+                                    skinColor = (byte)RandomHelper.URand(0, 20);
 
                                 if (GetGender() == Gender.Male)
                                 {
@@ -1679,10 +1687,6 @@ namespace Game.Entities
             SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ShapeshiftForm), (byte)form);
         }
 
-        public void SetModifierValue(UnitMods unitMod, UnitModifierType modifierType, float value)
-        {
-            m_auraModifiersGroup[(int)unitMod][(int)modifierType] = value;
-        }
         public int CalcSpellDuration(SpellInfo spellProto)
         {
             sbyte comboPoints = (sbyte)(m_playerMovingMe != null ? m_playerMovingMe.GetComboPoints() : 0);
@@ -1932,20 +1936,16 @@ namespace Game.Entities
             FactionTemplateRecord entry = CliDB.FactionTemplateStorage.LookupByKey(GetFaction());
             if (entry == null)
             {
-                ObjectGuid guid = ObjectGuid.Empty;                             // prevent repeating spam same faction problem
-
-                if (GetGUID() != guid)
+                Player player = ToPlayer();
+                if (player != null)
+                    Log.outError(LogFilter.Unit, "Player {0} has invalid faction (faction template id) #{1}", player.GetName(), GetFaction());
+                else
                 {
-                    Player player = ToPlayer();
                     Creature creature = ToCreature();
-                    if (player != null)
-                        Log.outError(LogFilter.Unit, "Player {0} has invalid faction (faction template id) #{1}", player.GetName(), GetFaction());
-                    else if (creature != null)
+                    if (creature != null)
                         Log.outError(LogFilter.Unit, "Creature (template id: {0}) has invalid faction (faction template id) #{1}", creature.GetCreatureTemplate().Entry, GetFaction());
                     else
                         Log.outError(LogFilter.Unit, "Unit (name={0}, type={1}) has invalid faction (faction template id) #{2}", GetName(), GetTypeId(), GetFaction());
-
-                    guid = GetGUID();
                 }
             }
             return entry;
@@ -2149,7 +2149,10 @@ namespace Game.Entities
 
             // transform aura was found
             if (handledAura != null)
+            {
                 handledAura.HandleEffect(this, AuraEffectHandleModes.SendForClient, true);
+                return;
+            }
             // we've found shapeshift
             else if (!shapeshiftAura.Empty()) // we've found shapeshift
             {
@@ -2161,11 +2164,11 @@ namespace Game.Entities
                         SetDisplayId(modelId);
                     else
                         SetDisplayId(GetNativeDisplayId());
+                    return;
                 }
             }
             // no auras found - set modelid to default
-            else
-                SetDisplayId(GetNativeDisplayId());
+            SetDisplayId(GetNativeDisplayId());
         }
         public uint GetNativeDisplayId() { return m_unitData.NativeDisplayID; }
         public void SetNativeDisplayId(uint displayId, float displayScale = 1f)
@@ -2572,8 +2575,7 @@ namespace Game.Entities
                 (u1.IsTypeId(TypeId.Player) && u2.IsTypeId(TypeId.Unit) && u2.ToCreature().GetCreatureTemplate().TypeFlags.HasAnyFlag(CreatureTypeFlags.TreatAsRaidUnit)))
                 return true;
 
-            // else u1.GetTypeId() == u2.GetTypeId() == TYPEID_UNIT
-            return u1.GetFaction() == u2.GetFaction();
+            return u1.GetTypeId() == TypeId.Unit && u2.GetTypeId() == TypeId.Unit && u1.GetFaction() == u2.GetFaction();
         }
 
         public bool IsInRaidWith(Unit unit)
@@ -2735,11 +2737,40 @@ namespace Game.Entities
 
             UpdateMask mask = new UpdateMask(191);
             m_unitData.AppendAllowedFieldsMaskForFlag(mask, flags);
-            m_unitData.WriteUpdate(buffer, mask, flags, this, target);
+            m_unitData.WriteUpdate(buffer, mask, true, this, target);
 
             data.WriteUInt32(buffer.GetSize());
             data.WriteUInt32(valuesMask.GetBlock(0));
             data.WriteBytes(buffer);
+        }
+
+        public void BuildValuesUpdateForPlayerWithMask(UpdateData data, UpdateMask requestedObjectMask, UpdateMask requestedUnitMask, Player target)
+        {
+            UpdateFieldFlag flags = GetUpdateFieldFlagsFor(target);
+            UpdateMask valuesMask = new UpdateMask((int)TypeId.Max);
+            if (requestedObjectMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Object);
+
+            m_unitData.FilterDisallowedFieldsMaskForFlag(requestedUnitMask, flags);
+            if (requestedUnitMask.IsAnySet())
+                valuesMask.Set((int)TypeId.Unit);
+
+            WorldPacket buffer = new WorldPacket();
+            buffer.WriteUInt32(valuesMask.GetBlock(0));
+
+            if (valuesMask[(int)TypeId.Object])
+                m_objectData.WriteUpdate(buffer, requestedObjectMask, true, this, target);
+
+            if (valuesMask[(int)TypeId.Unit])
+                m_unitData.WriteUpdate(buffer, requestedUnitMask, true, this, target);
+
+            WorldPacket buffer1 = new WorldPacket();
+            buffer1.WriteUInt8((byte)UpdateType.Values);
+            buffer1.WritePackedGuid(GetGUID());
+            buffer1.WriteUInt32(buffer.GetSize());
+            buffer1.WriteBytes(buffer.GetData());
+
+            data.AddUpdateBlock(buffer1);
         }
 
         public override void ClearUpdateMask(bool remove)

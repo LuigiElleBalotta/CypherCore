@@ -217,7 +217,7 @@ namespace Game.Entities
                 item = Bag.NewItemOrBag(proto);
                 if (item.LoadFromDB(itemGuid, GetGUID(), fields, itemEntry))
                 {
-                    PreparedStatement stmt = null;
+                    PreparedStatement stmt;
 
                     // Do not allow to have item limited to another map/zone in alive state
                     if (IsAlive() && item.IsLimitedToAnotherMapOrZone(GetMapId(), zoneId))
@@ -349,7 +349,7 @@ namespace Game.Entities
                 {
                     if (mSkillStatus.Count >= SkillConst.MaxPlayerSkills)                      // client limit
                     {
-                        Log.outError(LogFilter.Player, $"Player::_LoadSkills: Player '{GetName()}' ({GetGUID().ToString()}) has more than {SkillConst.MaxPlayerSkills} skills.");
+                        Log.outError(LogFilter.Player, $"Player::_LoadSkills: Player '{GetName()}' ({GetGUID()}) has more than {SkillConst.MaxPlayerSkills} skills.");
                         break;
                     }
 
@@ -1030,7 +1030,7 @@ namespace Game.Entities
                     byte difficulty = result.Read<byte>(3);
                     BindExtensionState extendState = (BindExtensionState)result.Read<byte>(4);
 
-                    long resetTime = result.Read<uint>(5);
+                    long resetTime = result.Read<long>(5);
                     // the resettime for normal instances is only saved when the InstanceSave is unloaded
                     // so the value read from the DB may be wrong here but only if the InstanceSave is loaded
                     // and in that case it is not used
@@ -1235,7 +1235,7 @@ namespace Game.Entities
             ItemTemplate proto = Global.ObjectMgr.GetItemTemplate(itemEntry);
             if (proto == null)
             {
-                Log.outError(LogFilter.Player, $"Player {(player != null ? player.GetName() : "<unknown>")} ({playerGuid.ToString()}) has unknown item in mailed items (GUID: {itemGuid} template: {itemEntry}) in mail ({mailId}), deleted.");
+                Log.outError(LogFilter.Player, $"Player {(player != null ? player.GetName() : "<unknown>")} ({playerGuid}) has unknown item in mailed items (GUID: {itemGuid} template: {itemEntry}) in mail ({mailId}), deleted.");
 
                 SQLTransaction trans = new SQLTransaction();
 
@@ -1507,12 +1507,27 @@ namespace Game.Entities
             for (var i = InventorySlots.BuyBackStart; i < InventorySlots.BuyBackEnd; ++i)
             {
                 Item item = m_items[i];
-                if (item == null || item.GetState() == ItemUpdateState.New)
+                if (item == null)
                     continue;
+
+                ItemTemplate itemTemplate = item.GetTemplate();
+
+                if (item.GetState() == ItemUpdateState.New)
+                {
+                    if (itemTemplate != null)
+                        if (itemTemplate.GetFlags().HasAnyFlag(ItemFlags.HasLoot))
+                            Global.LootItemStorage.RemoveStoredLootForContainer(item.GetGUID().GetCounter());
+
+                    continue;
+                }
 
                 item.DeleteFromInventoryDB(trans);
                 item.DeleteFromDB(trans);
                 m_items[i].FSetState(ItemUpdateState.New);
+
+                if (itemTemplate != null)
+                    if (itemTemplate.GetFlags().HasAnyFlag(ItemFlags.HasLoot))
+                        Global.LootItemStorage.RemoveStoredLootForContainer(item.GetGUID().GetCounter());
             }
 
             // Updated played time for refundable items. We don't do this in Player.Update because there's simply no need for it,
@@ -1657,7 +1672,7 @@ namespace Game.Entities
         }
         void _SaveSpells(SQLTransaction trans)
         {
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
 
             foreach (var spell in m_spells.ToList())
             {
@@ -1681,12 +1696,13 @@ namespace Game.Entities
                 }
 
                 if (spell.Value.State == PlayerSpellState.Removed)
-                    m_spells.Remove(spell.Key);
-                else
                 {
-                    spell.Value.State = PlayerSpellState.Unchanged;
+                    m_spells.Remove(spell.Key);
                     continue;
                 }
+
+                if (spell.Value.State != PlayerSpellState.Temporary)
+                    spell.Value.State = PlayerSpellState.Unchanged;
             }
         }
         void _SaveAuras(SQLTransaction trans)
@@ -1767,7 +1783,7 @@ namespace Game.Entities
         }
         void _SaveCurrency(SQLTransaction trans)
         {
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
             foreach (var pair in _currencyStorage)
             {
                 CurrencyTypesRecord entry = CliDB.CurrencyTypesStorage.LookupByKey(pair.Key);
@@ -1980,13 +1996,18 @@ namespace Game.Entities
         }
         void _SaveSeasonalQuestStatus(SQLTransaction trans)
         {
-            if (!m_SeasonalQuestChanged || m_seasonalquests.Empty())
+            if (!m_SeasonalQuestChanged)
                 return;
 
             // we don't need transactions here.
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_CHARACTER_QUESTSTATUS_SEASONAL);
             stmt.AddValue(0, GetGUID().GetCounter());
             trans.Append(stmt);
+
+            m_SeasonalQuestChanged = false;
+
+            if (m_seasonalquests.Empty())
+                return;
 
             foreach (var iter in m_seasonalquests)
             {
@@ -1996,8 +2017,6 @@ namespace Game.Entities
                 stmt.AddValue(2, iter.Key);
                 trans.Append(stmt);
             }
-
-            m_SeasonalQuestChanged = false;
         }
         void _SaveMonthlyQuestStatus(SQLTransaction trans)
         {
@@ -2180,7 +2199,7 @@ namespace Game.Entities
             foreach (var pair in _equipmentSets)
             {
                 EquipmentSetInfo eqSet = pair.Value;
-                PreparedStatement stmt = null;
+                PreparedStatement stmt;
                 byte j = 0;
                 switch (eqSet.state)
                 {
@@ -2271,7 +2290,7 @@ namespace Game.Entities
         }
         void _SaveVoidStorage(SQLTransaction trans)
         {
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
             for (byte i = 0; i < SharedConst.VoidStorageMaxSlot; ++i)
             {
                 if (_voidStorageItems[i] == null) // unused item
@@ -2307,7 +2326,7 @@ namespace Game.Entities
         }
         void _SaveCUFProfiles(SQLTransaction trans)
         {
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
             ulong lowGuid = GetGUID().GetCounter();
 
             for (byte i = 0; i < PlayerConst.MaxCUFProfiles; ++i)
@@ -3108,6 +3127,17 @@ namespace Game.Entities
 
         public void SaveToDB(bool create = false)
         {
+            SQLTransaction loginTransaction = new SQLTransaction();
+            SQLTransaction characterTransaction = new SQLTransaction();
+
+            SaveToDB(loginTransaction, characterTransaction, create);
+
+            DB.Characters.CommitTransaction(characterTransaction);
+            DB.Login.CommitTransaction(loginTransaction);
+        }
+
+        public void SaveToDB(SQLTransaction loginTransaction, SQLTransaction characterTransaction, bool create = false)
+        {
             // delay auto save at any saves (manual, in code, or autosave)
             m_nextSave = WorldConfig.GetUIntValue(WorldCfg.IntervalSave);
 
@@ -3126,15 +3156,14 @@ namespace Game.Entities
             if (!create)
                 Global.ScriptMgr.OnPlayerSave(this);
 
-            SQLTransaction trans = new SQLTransaction();
             PreparedStatement stmt;
             byte index = 0;
 
             stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_CHAR_FISHINGSTEPS);
             stmt.AddValue(0, GetGUID().GetCounter());
-            trans.Append(stmt);
+            characterTransaction.Append(stmt);
 
-            float finiteAlways(float f) { return !float.IsInfinity(f) ? f : 0.0f; };
+            static float finiteAlways(float f) { return !float.IsInfinity(f) ? f : 0.0f; };
 
             if (create)
             {
@@ -3428,7 +3457,7 @@ namespace Game.Entities
                 stmt.AddValue(index, GetGUID().GetCounter());
             }
 
-            trans.Append(stmt);
+            characterTransaction.Append(stmt);
 
             if (m_fishingSteps != 0)
             {
@@ -3436,58 +3465,55 @@ namespace Game.Entities
                 index = 0;
                 stmt.AddValue(index++, GetGUID().GetCounter());
                 stmt.AddValue(index++, m_fishingSteps);
-                trans.Append(stmt);
+                characterTransaction.Append(stmt);
             }
 
             if (m_mailsUpdated)                                     //save mails only when needed
-                _SaveMail(trans);
+                _SaveMail(characterTransaction);
 
-            _SaveBGData(trans);
-            _SaveInventory(trans);
-            _SaveVoidStorage(trans);
-            _SaveQuestStatus(trans);
-            _SaveDailyQuestStatus(trans);
-            _SaveWeeklyQuestStatus(trans);
-            _SaveSeasonalQuestStatus(trans);
-            _SaveMonthlyQuestStatus(trans);
-            _SaveGlyphs(trans);
-            _SaveTalents(trans);
-            _SaveSpells(trans);
-            GetSpellHistory().SaveToDB<Player>(trans);
-            _SaveActions(trans);
-            _SaveAuras(trans);
-            _SaveSkills(trans);
-            m_achievementSys.SaveToDB(trans);
-            reputationMgr.SaveToDB(trans);
-            m_questObjectiveCriteriaMgr.SaveToDB(trans);
-            _SaveEquipmentSets(trans);
-            GetSession().SaveTutorialsData(trans);                 // changed only while character in game
-            _SaveInstanceTimeRestrictions(trans);
-            _SaveCurrency(trans);
-            _SaveCUFProfiles(trans);
+            _SaveBGData(characterTransaction);
+            _SaveInventory(characterTransaction);
+            _SaveVoidStorage(characterTransaction);
+            _SaveQuestStatus(characterTransaction);
+            _SaveDailyQuestStatus(characterTransaction);
+            _SaveWeeklyQuestStatus(characterTransaction);
+            _SaveSeasonalQuestStatus(characterTransaction);
+            _SaveMonthlyQuestStatus(characterTransaction);
+            _SaveGlyphs(characterTransaction);
+            _SaveTalents(characterTransaction);
+            _SaveSpells(characterTransaction);
+            GetSpellHistory().SaveToDB<Player>(characterTransaction);
+            _SaveActions(characterTransaction);
+            _SaveAuras(characterTransaction);
+            _SaveSkills(characterTransaction);
+            m_achievementSys.SaveToDB(characterTransaction);
+            reputationMgr.SaveToDB(characterTransaction);
+            m_questObjectiveCriteriaMgr.SaveToDB(characterTransaction);
+            _SaveEquipmentSets(characterTransaction);
+            GetSession().SaveTutorialsData(characterTransaction);                 // changed only while character in game
+            _SaveInstanceTimeRestrictions(characterTransaction);
+            _SaveCurrency(characterTransaction);
+            _SaveCUFProfiles(characterTransaction);
             if (_garrison != null)
-                _garrison.SaveToDB(trans);
+                _garrison.SaveToDB(characterTransaction);
 
             // check if stats should only be saved on logout
             // save stats can be out of transaction
             if (GetSession().IsLogingOut() || !WorldConfig.GetBoolValue(WorldCfg.StatsSaveOnlyOnLogout))
-                _SaveStats(trans);
-
-            DB.Characters.CommitTransaction(trans);
+                _SaveStats(characterTransaction);
 
             // TODO: Move this out
-            trans = new SQLTransaction();
-            GetSession().GetCollectionMgr().SaveAccountToys(trans);
-            GetSession().GetBattlePetMgr().SaveToDB(trans);
-            GetSession().GetCollectionMgr().SaveAccountHeirlooms(trans);
-            GetSession().GetCollectionMgr().SaveAccountMounts(trans);
-            GetSession().GetCollectionMgr().SaveAccountItemAppearances(trans);
+            GetSession().GetCollectionMgr().SaveAccountToys(loginTransaction);
+            GetSession().GetBattlePetMgr().SaveToDB(loginTransaction);
+            GetSession().GetCollectionMgr().SaveAccountHeirlooms(loginTransaction);
+            GetSession().GetCollectionMgr().SaveAccountMounts(loginTransaction);
+            GetSession().GetCollectionMgr().SaveAccountItemAppearances(loginTransaction);
 
             stmt = DB.Login.GetPreparedStatement(LoginStatements.DEL_BNET_LAST_PLAYER_CHARACTERS);
             stmt.AddValue(0, GetSession().GetAccountId());
             stmt.AddValue(1, Global.WorldMgr.GetRealmId().Region);
             stmt.AddValue(2, Global.WorldMgr.GetRealmId().Site);
-            trans.Append(stmt);
+            loginTransaction.Append(stmt);
 
             stmt = DB.Login.GetPreparedStatement(LoginStatements.INS_BNET_LAST_PLAYER_CHARACTERS);
             stmt.AddValue(0, GetSession().GetAccountId());
@@ -3497,9 +3523,7 @@ namespace Game.Entities
             stmt.AddValue(4, GetName());
             stmt.AddValue(5, GetGUID().GetCounter());
             stmt.AddValue(6, Time.UnixTime);
-            trans.Append(stmt);
-
-            DB.Login.CommitTransaction(trans);
+            loginTransaction.Append(stmt);
 
             // save pet (hunter pet level and experience and all type pets health/mana).
             Pet pet = GetPet();
@@ -4005,6 +4029,10 @@ namespace Game.Entities
                         trans.Append(stmt);
 
                         stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_CHAR_FISHINGSTEPS);
+                        stmt.AddValue(0, guid);
+                        trans.Append(stmt);
+
+                        stmt = DB.Characters.GetPreparedStatement(CharStatements.DEL_CHARACTER_FAVORITE_AUCTIONS_BY_CHAR);
                         stmt.AddValue(0, guid);
                         trans.Append(stmt);
 

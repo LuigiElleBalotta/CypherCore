@@ -712,7 +712,7 @@ namespace Game.Chat
 
                 // before GM
                 float x, y, z;
-                handler.GetSession().GetPlayer().GetClosePoint(out x, out y, out z, target.GetObjectSize());
+                handler.GetSession().GetPlayer().GetClosePoint(out x, out y, out z, target.GetCombatReach());
                 target.TeleportTo(handler.GetSession().GetPlayer().GetMapId(), x, y, z, target.GetOrientation());
                 PhasingHandler.InheritPhaseShift(target, handler.GetSession().GetPlayer());
                 target.UpdateObjectVisibility();
@@ -1865,9 +1865,6 @@ namespace Game.Chat
                     case MovementGeneratorType.Waypoint:
                         handler.SendSysMessage(CypherStrings.MovegensWaypoint);
                         break;
-                    case MovementGeneratorType.AnimalRandom:
-                        handler.SendSysMessage(CypherStrings.MovegensAnimalRandom);
-                        break;
                     case MovementGeneratorType.Confused:
                         handler.SendSysMessage(CypherStrings.MovegensConfused);
                         break;
@@ -1875,9 +1872,9 @@ namespace Game.Chat
                         {
                             Unit target;
                             if (unit.IsTypeId(TypeId.Player))
-                                target = ((ChaseMovementGenerator<Player>)movementGenerator).Target;
+                                target = ((ChaseMovementGenerator<Player>)movementGenerator).GetTarget();
                             else
-                                target = ((ChaseMovementGenerator<Creature>)movementGenerator).Target;
+                                target = ((ChaseMovementGenerator<Creature>)movementGenerator).GetTarget();
 
                             if (!target)
                                 handler.SendSysMessage(CypherStrings.MovegensChaseNull);
@@ -1891,9 +1888,9 @@ namespace Game.Chat
                         {
                             Unit target;
                             if (unit.IsTypeId(TypeId.Player))
-                                target = ((FollowMovementGenerator<Player>)movementGenerator).Target;
+                                target = ((FollowMovementGenerator<Player>)movementGenerator).GetTarget();
                             else
-                                target = ((FollowMovementGenerator<Creature>)movementGenerator).Target;
+                                target = ((FollowMovementGenerator<Creature>)movementGenerator).GetTarget();
 
                             if (!target)
                                 handler.SendSysMessage(CypherStrings.MovegensFollowNull);

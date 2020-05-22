@@ -841,7 +841,7 @@ namespace Game
                 WorldLocation loc = new WorldLocation(result.Read<uint>(1), result.Read<float>(2), result.Read<float>(3), result.Read<float>(4), result.Read<float>(5));
                 if (!GridDefines.IsValidMapCoord(loc))
                 {
-                    Log.outError(LogFilter.Sql, $"World location (ID: {id}) has a invalid position MapID: {loc.GetMapId()} {loc.ToString()}, skipped");
+                    Log.outError(LogFilter.Sql, $"World location (ID: {id}) has a invalid position MapID: {loc.GetMapId()} {loc}, skipped");
                     continue;
                 }
 
@@ -2391,7 +2391,7 @@ namespace Game
                 }
 
                 if (modelInfo.CombatReach < 0.1f)
-                    modelInfo.CombatReach = SharedConst.DefaultCombatReach;
+                    modelInfo.CombatReach = SharedConst.DefaultPlayerCombatReach;
 
                 CreatureModelDataRecord modelData = CliDB.CreatureModelDataStorage.LookupByKey(creatureDisplay.ModelID);
                 if (modelData != null)
@@ -3325,8 +3325,6 @@ namespace Game
                 data.phaseGroup = result.Read<uint>(25);
                 data.terrainSwapMap = result.Read<int>(26);
                 data.ScriptId = GetScriptId(result.Read<string>(27));
-                if (data.ScriptId == 0)
-                    data.ScriptId = cInfo.ScriptID;
 
                 var mapEntry = CliDB.MapStorage.LookupByKey(data.mapid);
                 if (mapEntry == null)
@@ -3452,10 +3450,8 @@ namespace Game
 
                 if (WorldConfig.GetBoolValue(WorldCfg.CalculateCreatureZoneAreaData))
                 {
-                    uint zoneId = 0;
-                    uint areaId = 0;
                     PhasingHandler.InitDbVisibleMapId(phaseShift, data.terrainSwapMap);
-                    Global.MapMgr.GetZoneAndAreaId(phaseShift, out zoneId, out areaId, data.mapid, data.posX, data.posY, data.posZ);
+                    Global.MapMgr.GetZoneAndAreaId(phaseShift, out uint zoneId, out uint areaId, data.mapid, data.posX, data.posY, data.posZ);
 
                     PreparedStatement stmt = DB.World.GetPreparedStatement(WorldStatements.UPD_CREATURE_ZONE_AREA_DATA);
                     stmt.AddValue(0, zoneId);
@@ -4123,8 +4119,6 @@ namespace Game
                 }
 
                 data.ScriptId = GetScriptId(result.Read<string>(21));
-                if (data.ScriptId == 0)
-                    data.ScriptId = gInfo.ScriptId;
 
                 if (Math.Abs(data.orientation) > 2 * MathFunctions.PI)
                 {
@@ -4164,10 +4158,8 @@ namespace Game
 
                 if (WorldConfig.GetBoolValue(WorldCfg.CalculateGameobjectZoneAreaData))
                 {
-                    uint zoneId = 0;
-                    uint areaId = 0;
                     PhasingHandler.InitDbVisibleMapId(phaseShift, data.terrainSwapMap);
-                    Global.MapMgr.GetZoneAndAreaId(phaseShift, out zoneId, out areaId, data.mapid, data.posX, data.posY, data.posZ);
+                    Global.MapMgr.GetZoneAndAreaId(phaseShift, out uint zoneId, out uint areaId, data.mapid, data.posX, data.posY, data.posZ);
 
                     PreparedStatement stmt = DB.World.GetPreparedStatement(WorldStatements.UPD_GAMEOBJECT_ZONE_AREA_DATA);
                     stmt.AddValue(0, zoneId);
@@ -6361,7 +6353,6 @@ namespace Game
             // Load `quest_details`
             //                               0   1       2       3       4       5            6            7            8
             result = DB.World.Query("SELECT ID, Emote1, Emote2, Emote3, Emote4, EmoteDelay1, EmoteDelay2, EmoteDelay3, EmoteDelay4 FROM quest_details");
-
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 quest details. DB table `quest_details` is empty.");
@@ -6383,7 +6374,6 @@ namespace Game
             // Load `quest_request_items`
             //                               0   1                2                  3                     4                       5
             result = DB.World.Query("SELECT ID, EmoteOnComplete, EmoteOnIncomplete, EmoteOnCompleteDelay, EmoteOnIncompleteDelay, CompletionText FROM quest_request_items");
-
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 quest request items. DB table `quest_request_items` is empty.");
@@ -6405,7 +6395,6 @@ namespace Game
             // Load `quest_offer_reward`
             //                               0   1       2       3       4       5            6            7            8            9
             result = DB.World.Query("SELECT ID, Emote1, Emote2, Emote3, Emote4, EmoteDelay1, EmoteDelay2, EmoteDelay3, EmoteDelay4, RewardText FROM quest_offer_reward");
-
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 quest reward emotes. DB table `quest_offer_reward` is empty.");
@@ -6427,9 +6416,9 @@ namespace Game
             // Load `quest_template_addon`
             //                               0   1         2                 3              4            5            6               7                     8
             result = DB.World.Query("SELECT ID, MaxLevel, AllowableClasses, SourceSpellID, PrevQuestID, NextQuestID, ExclusiveGroup, RewardMailTemplateID, RewardMailDelay, " +
-                //9               10                   11                     12                     13                   14                   15                 16
-                "RequiredSkillID, RequiredSkillPoints, RequiredMinRepFaction, RequiredMaxRepFaction, RequiredMinRepValue, RequiredMaxRepValue, ProvidedItemCount, RewardMailSenderEntry, " +
-                //17           18
+                //9               10                   11                     12                     13                   14                   15
+                "RequiredSkillID, RequiredSkillPoints, RequiredMinRepFaction, RequiredMaxRepFaction, RequiredMinRepValue, RequiredMaxRepValue, ProvidedItemCount, " +
+                //16           17
                 "SpecialFlags, ScriptName FROM quest_template_addon LEFT JOIN quest_mail_sender ON Id=QuestId");
 
             if (result.IsEmpty())
@@ -6451,9 +6440,29 @@ namespace Game
             }
 
             // Load `quest_objectives`
-            //                               0   1        2     3             4         5       6      7      8                  9
-            result = DB.World.Query("SELECT ID, QuestID, Type, StorageIndex, ObjectID, Amount, Flags, Flags2, ProgressBarWeight, Description FROM quest_objectives ORDER BY `Order` ASC, StorageIndex ASC");
+            //                               0        1
+            result = DB.World.Query("SELECT QuestId, RewardMailSenderEntry FROM quest_mail_sender");
+            if (result.IsEmpty())
+            {
+                Log.outError(LogFilter.ServerLoading, "Loaded 0 quest mail senders. DB table `quest_mail_sender` is empty.");
+            }
+            else
+            {
+                do
+                {
+                    uint questId = result.Read<uint>(0);
 
+                    var quest = _questTemplates.LookupByKey(questId);
+                    if (quest != null)
+                        quest.LoadQuestMailSender(result.GetFields());
+                    else
+                        Log.outError(LogFilter.Sql, "Table `quest_mail_sender` has data for quest {0} but such quest does not exist", questId);
+                } while (result.NextRow());
+            }
+
+            // Load `quest_objectives`
+            //                               0        1   2     3             4         5       6      7       8                  9
+            result = DB.World.Query("SELECT QuestID, ID, Type, StorageIndex, ObjectID, Amount, Flags, Flags2, ProgressBarWeight, Description FROM quest_objectives ORDER BY `Order` ASC, StorageIndex ASC");
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 quest objectives. DB table `quest_objectives` is empty.");
@@ -6475,7 +6484,6 @@ namespace Game
             // Load `quest_visual_effect` join table with quest_objectives because visual effects are based on objective ID (core stores objectives by their index in quest)
             //                                 0     1     2          3        4
             result = DB.World.Query("SELECT v.ID, o.ID, o.QuestID, v.Index, v.VisualEffect FROM quest_visual_effect AS v LEFT JOIN quest_objectives AS o ON v.ID = o.ID ORDER BY v.Index DESC");
-
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 quest visual effects. DB table `quest_visual_effect` is empty.");
@@ -7009,8 +7017,6 @@ namespace Game
                             qinfo.Id, qinfo.NextQuestInChain, qinfo.NextQuestInChain);
                         qinfo.NextQuestInChain = 0;
                     }
-                    else
-                        qNext.prevChainQuests.Add(qinfo.Id);
                 }
 
                 for (var j = 0; j < SharedConst.QuestRewardCurrencyCount; ++j)
@@ -7093,26 +7099,42 @@ namespace Game
                 {
                     if (!_questTemplates.ContainsKey((uint)Math.Abs(qinfo.PrevQuestId)))
                         Log.outError(LogFilter.Sql, "Quest {0} has PrevQuestId {1}, but no such quest", qinfo.Id, qinfo.PrevQuestId);
-                    else
-                        qinfo.prevQuests.Add(qinfo.PrevQuestId);
                 }
 
                 if (qinfo.NextQuestId != 0)
                 {
-                    var nextquest = _questTemplates.LookupByKey((uint)Math.Abs(qinfo.NextQuestId));
+                    var nextquest = _questTemplates.LookupByKey(qinfo.NextQuestId);
                     if (nextquest == null)
                         Log.outError(LogFilter.Sql, "Quest {0} has NextQuestId {1}, but no such quest", qinfo.Id, qinfo.NextQuestId);
                     else
-                    {
-                        int signedQuestId = qinfo.NextQuestId < 0 ? -(int)qinfo.Id : (int)qinfo.Id;
-                        nextquest.prevQuests.Add(signedQuestId);
-                    }
+                        nextquest.DependentPreviousQuests.Add(qinfo.Id);
                 }
 
                 if (qinfo.ExclusiveGroup != 0)
                     _exclusiveQuestGroups.Add(qinfo.ExclusiveGroup, qinfo.Id);
                 if (qinfo.LimitTime != 0)
                     qinfo.SetSpecialFlag(QuestSpecialFlags.Timed);
+
+                // Special flag to determine if quest is completed from the start, used to determine if we can fail timed quest if it is completed
+                if (!qinfo.HasSpecialFlag(QuestSpecialFlags.Kill | QuestSpecialFlags.Cast | QuestSpecialFlags.Speakto | QuestSpecialFlags.ExplorationOrEvent))
+                {
+                    bool addFlag = true;
+                    if (qinfo.HasSpecialFlag(QuestSpecialFlags.Deliver))
+                    {
+                        foreach (QuestObjective obj in qinfo.Objectives)
+                        {
+                            if (obj.Type == QuestObjectiveType.Item)
+                                if (obj.ObjectID != qinfo.SourceItemId || obj.Amount > qinfo.SourceItemIdCount)
+                                {
+                                    addFlag = false;
+                                    break;
+                                }
+                        }
+                    }
+
+                    if (addFlag)
+                        qinfo.SetSpecialFlag(QuestSpecialFlags.CompletedAtStart);
+                }
             }
 
             // check QUEST_SPECIAL_FLAGS_EXPLORATION_OR_EVENT for spell with SPELL_EFFECT_QUEST_COMPLETE
@@ -7519,7 +7541,11 @@ namespace Game
 
             return _questGreetingLocaleStorage[typeIndex].LookupByKey(id);
         }
-
+        public List<uint> GetExclusiveQuestGroupBounds(int exclusiveGroupId)
+        {
+            return _exclusiveQuestGroups.LookupByKey(exclusiveGroupId);
+        }        
+        
         //Spells /Skills / Phases
         public void LoadPhases()
         {
@@ -9275,7 +9301,8 @@ namespace Game
             // Cleanup other tables from not existed guids ( >= hiItemGuid)
             DB.Characters.Execute("DELETE FROM character_inventory WHERE item >= {0}", GetGuidSequenceGenerator(HighGuid.Item).GetNextAfterMaxUsed());      // One-time query
             DB.Characters.Execute("DELETE FROM mail_items WHERE item_guid >= {0}", GetGuidSequenceGenerator(HighGuid.Item).GetNextAfterMaxUsed());          // One-time query
-            DB.Characters.Execute("DELETE FROM auctionhouse WHERE itemguid >= {0}", GetGuidSequenceGenerator(HighGuid.Item).GetNextAfterMaxUsed());         // One-time query
+            DB.Characters.Execute("DELETE a, ab, ai FROM auctionhouse a LEFT JOIN auction_bidders ab ON ab.auctionId = a.id LEFT JOIN auction_items ai ON ai.auctionId = a.id WHERE ai.itemGuid >= '{0}'",
+              GetGuidSequenceGenerator(HighGuid.Item).GetNextAfterMaxUsed());       // One-time query
             DB.Characters.Execute("DELETE FROM guild_bank_item WHERE item_guid >= {0}", GetGuidSequenceGenerator(HighGuid.Item).GetNextAfterMaxUsed());     // One-time query
 
             result = DB.World.Query("SELECT MAX(guid) FROM transports");
@@ -9517,7 +9544,7 @@ namespace Game
             TaxiNodesRecord node = CliDB.TaxiNodesStorage.LookupByKey(id);
             if (node != null)
             {
-                uint mount_entry = 0;
+                uint mount_entry;
                 if (team == Team.Alliance)
                     mount_entry = node.MountCreatureID[1];
                 else
@@ -9757,7 +9784,7 @@ namespace Game
         MultiMap<uint, uint> _creatureQuestRelations = new MultiMap<uint, uint>();
         MultiMap<uint, uint> _creatureQuestInvolvedRelations = new MultiMap<uint, uint>();
         MultiMap<uint, uint> _creatureQuestInvolvedRelationsReverse = new MultiMap<uint, uint>();
-        public MultiMap<int, uint> _exclusiveQuestGroups = new MultiMap<int, uint>();
+        MultiMap<int, uint> _exclusiveQuestGroups = new MultiMap<int, uint>();
         Dictionary<uint, QuestPOIData> _questPOIStorage = new Dictionary<uint, QuestPOIData>();
         MultiMap<uint, uint> _questAreaTriggerStorage = new MultiMap<uint, uint>();
         Dictionary<uint, QuestObjective> _questObjectives = new Dictionary<uint, QuestObjective>();

@@ -691,12 +691,13 @@ namespace Game
             Log.outInfo(LogFilter.ServerLoading, "Loading Completed Achievements...");
             Global.AchievementMgr.LoadCompletedAchievements();
 
-            // Load dynamic data tables from the database
-            Log.outInfo(LogFilter.ServerLoading, "Loading Item Auctions...");
-            Global.AuctionMgr.LoadAuctionItems();
+            // Load before guilds and arena teams
+            Log.outInfo(LogFilter.ServerLoading, "Loading character cache store...");
+            Global.CharacterCacheStorage.LoadCharacterCacheStorage();
 
+            // Load dynamic data tables from the database
             Log.outInfo(LogFilter.ServerLoading, "Loading Auctions...");
-            Global.AuctionMgr.LoadAuctions();
+            Global.AuctionHouseMgr.LoadAuctions();
 
             if (WorldConfig.GetBoolValue(WorldCfg.BlackmarketEnabled))
             {
@@ -706,10 +707,6 @@ namespace Game
                 Log.outInfo(LogFilter.ServerLoading, "Loading Black Market Auctions...");
                 Global.BlackMarketMgr.LoadAuctions();
             }
-
-            // Load before guilds and arena teams
-            Log.outInfo(LogFilter.ServerLoading, "Loading character cache store...");
-            Global.CharacterCacheStorage.LoadCharacterCacheStorage();
 
             Log.outInfo(LogFilter.ServerLoading, "Loading Guild rewards...");
             Global.GuildMgr.LoadGuildRewards();
@@ -838,6 +835,9 @@ namespace Game
 
             Log.outInfo(LogFilter.ServerLoading, "Loading Calendar data...");
             Global.CalendarMgr.LoadFromDB();
+
+            Log.outInfo(LogFilter.ServerLoading, "Loading Item loot...");
+            Global.LootItemStorage.LoadStorageFromDB();
 
             Log.outInfo(LogFilter.ServerLoading, "Initialize query data...");
             Global.ObjectMgr.InitializeQueriesData(QueryDataGroup.All);
@@ -1184,14 +1184,14 @@ namespace Game
                 }
 
                 // Handle expired auctions
-                Global.AuctionMgr.Update();
+                Global.AuctionHouseMgr.Update();
             }
 
             if (m_timers[WorldTimers.AuctionsPending].Passed())
             {
                 m_timers[WorldTimers.AuctionsPending].Reset();
 
-                //Global.AuctionMgr.UpdatePendingAuctions();
+                Global.AuctionHouseMgr.UpdatePendingAuctions();
             }
 
             if (m_timers[WorldTimers.Blackmarket].Passed())
@@ -1447,7 +1447,7 @@ namespace Game
                 return BanReturn.Exists;
 
             SQLResult resultAccounts;
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
 
             // Update the database with ban information
             switch (mode)
@@ -1525,7 +1525,7 @@ namespace Game
         /// Remove a ban from an account or IP address
         public bool RemoveBanAccount(BanMode mode, string nameOrIP)
         {
-            PreparedStatement stmt = null;
+            PreparedStatement stmt;
             if (mode == BanMode.IP)
             {
                 stmt = DB.Login.GetPreparedStatement(LoginStatements.DEL_IP_NOT_BANNED);
@@ -1781,7 +1781,7 @@ namespace Game
         {
             PreparedStatement stmt = DB.Characters.GetPreparedStatement(CharStatements.SEL_CHARACTER_COUNT);
             stmt.AddValue(0, accountId);
-            _queryProcessor.AddQuery(DB.Characters.AsyncQuery(stmt).WithCallback(_UpdateRealmCharCount));
+            _queryProcessor.AddCallback(DB.Characters.AsyncQuery(stmt).WithCallback(_UpdateRealmCharCount));
         }
 
         void _UpdateRealmCharCount(SQLResult result)
@@ -2145,7 +2145,7 @@ namespace Game
 
         void ProcessQueryCallbacks()
         {
-            _queryProcessor.ProcessReadyQueries();
+            _queryProcessor.ProcessReadyCallbacks();
         }
 
         public void ReloadRBAC()
@@ -2324,7 +2324,7 @@ namespace Game
 
         ConcurrentQueue<Tuple<WorldSocket, ulong>> _linkSocketQueue = new ConcurrentQueue<Tuple<WorldSocket, ulong>>();
 
-        QueryCallbackProcessor _queryProcessor = new QueryCallbackProcessor();
+        AsyncCallbackProcessor<QueryCallback> _queryProcessor = new AsyncCallbackProcessor<QueryCallback>();
 
         Realm _realm;
 

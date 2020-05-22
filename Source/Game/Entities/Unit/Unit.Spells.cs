@@ -30,7 +30,10 @@ namespace Game.Entities
     {
         public virtual bool HasSpell(uint spellId) { return false; }
 
-
+        public virtual bool IsFocusing(Spell focusSpell = null, bool withDelay = false)
+        {
+            return false;
+        }
 
         // function uses real base points (typically value - 1)
         public int CalculateSpellDamage(Unit target, SpellInfo spellProto, uint effect_index, int? basePoints = null, uint castItemId = 0, int itemLevel = -1)
@@ -749,18 +752,6 @@ namespace Game.Entities
         //   Resist
         public SpellMissInfo SpellHitResult(Unit victim, SpellInfo spellInfo, bool canReflect = false)
         {
-            if (spellInfo.HasAttribute(SpellAttr3.IgnoreHitResult))
-                return SpellMissInfo.None;
-
-            // Check for immune
-            if (victim.IsImmunedToSpell(spellInfo, this))
-                return SpellMissInfo.Immune;
-
-            // Damage immunity is only checked if the spell has damage effects, this immunity must not prevent aura apply
-            // returns SPELL_MISS_IMMUNE in that case, for other spells, the SMSG_SPELL_GO must show hit
-            if (spellInfo.HasOnlyDamageEffects() && victim.IsImmunedToDamage(spellInfo))
-                return SpellMissInfo.Immune;
-
             // All positive spells can`t miss
             // @todo client not show miss log for this spells - so need find info for this in dbc and use it!
             if (spellInfo.IsPositive()
@@ -783,6 +774,18 @@ namespace Game.Entities
                 if (reflectchance > 0 && RandomHelper.randChance(reflectchance))
                     return SpellMissInfo.Reflect;
             }
+
+            if (spellInfo.HasAttribute(SpellAttr3.IgnoreHitResult))
+                return SpellMissInfo.None;
+
+            // Check for immune
+            if (victim.IsImmunedToSpell(spellInfo, this))
+                return SpellMissInfo.Immune;
+
+            // Damage immunity is only checked if the spell has damage effects, this immunity must not prevent aura apply
+            // returns SPELL_MISS_IMMUNE in that case, for other spells, the SMSG_SPELL_GO must show hit
+            if (spellInfo.HasOnlyDamageEffects() && victim.IsImmunedToDamage(spellInfo))
+                return SpellMissInfo.Immune;
 
             switch (spellInfo.DmgClass)
             {
@@ -934,7 +937,6 @@ namespace Game.Entities
             return SpellMissInfo.None;
         }
 
-        // @todo need use unit spell resistances in calculations
         SpellMissInfo MagicSpellHitResult(Unit victim, SpellInfo spell)
         {
             // Can`t miss on dead target (on skinning for example)
@@ -951,7 +953,7 @@ namespace Game.Entities
             int levelBasedHitDiff = leveldif;
 
             // Base hit chance from attacker and victim levels
-            int modHitChance = 100;
+            int modHitChance;
             if (levelBasedHitDiff >= 0)
             {
                 if (!victim.IsTypeId(TypeId.Player))
@@ -991,7 +993,7 @@ namespace Game.Entities
             int tmp = 10000 - HitChance;
 
             int rand = RandomHelper.IRand(0, 9999);
-            if (rand < tmp)
+            if (tmp > 0 && rand < tmp)
                 return SpellMissInfo.Miss;
 
             // Spells with SPELL_ATTR3_IGNORE_HIT_RESULT will additionally fully ignore
@@ -1001,18 +1003,16 @@ namespace Game.Entities
 
             // Chance resist mechanic (select max value from every mechanic spell effect)
             int resist_chance = victim.GetMechanicResistChance(spell) * 100;
-            tmp += resist_chance;
 
             // Roll chance
-            if (rand < tmp)
+            if (resist_chance > 0 && rand < (tmp += resist_chance))
                 return SpellMissInfo.Resist;
 
             // cast by caster in front of victim
             if (!victim.HasUnitState(UnitState.Controlled) && (victim.HasInArc(MathFunctions.PI, this) || victim.HasAuraType(AuraType.IgnoreHitDirection)))
             {
                 int deflect_chance = victim.GetTotalAuraModifier(AuraType.DeflectSpells) * 100;
-                tmp += deflect_chance;
-                if (rand < tmp)
+                if (deflect_chance > 0 && rand < (tmp += deflect_chance))
                     return SpellMissInfo.Deflect;
             }
 
@@ -1397,6 +1397,9 @@ namespace Game.Entities
                 if (spell.GetState() != SpellState.Finished && spell.IsChannelActive())
                     if (spell.GetSpellInfo().IsMoveAllowedChannel())
                         return false;
+
+            if (IsFocusing(null, true))
+                return false;
 
             // prohibit movement for all other spell casts
             return true;
@@ -2294,7 +2297,7 @@ namespace Game.Entities
 
         public void ApplyCastTimePercentMod(float val, bool apply)
         {
-            if (val > 0)
+            if (val > 0.0f)
             {
                 ApplyPercentModUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ModCastingSpeed), val, !apply);
                 ApplyPercentModUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ModSpellHaste), val, !apply);
@@ -2684,11 +2687,11 @@ namespace Game.Entities
                 ++diminish.HitCount;
         }
 
-        public float ApplyDiminishingToDuration(SpellInfo auraSpellInfo, ref int duration, Unit caster, DiminishingLevels previousLevel)
+        public bool ApplyDiminishingToDuration(SpellInfo auraSpellInfo, ref int duration, Unit caster, DiminishingLevels previousLevel)
         {
             DiminishingGroup group = auraSpellInfo.GetDiminishingReturnsGroupForSpell();
             if (duration == -1 || group == DiminishingGroup.None)
-                return 1.0f;
+                return true;
 
             int limitDuration = auraSpellInfo.GetDiminishingReturnsLimitDuration();
 
@@ -2707,7 +2710,6 @@ namespace Game.Entities
             }
 
             float mod = 1.0f;
-
             switch (group)
             {
                 case DiminishingGroup.Taunt:
@@ -2779,7 +2781,7 @@ namespace Game.Entities
             }
 
             duration = (int)(duration * mod);
-            return mod;
+            return duration != 0;
         }
 
         public void ApplyDiminishingAura(DiminishingGroup group, bool apply)
@@ -2941,6 +2943,8 @@ namespace Game.Entities
             bool result = false;
 
             uint spellClickEntry = GetVehicleKit() != null ? GetVehicleKit().GetCreatureEntry() : GetEntry();
+            TriggerCastFlags flags = GetVehicleKit() ? TriggerCastFlags.IgnoreCasterMountedOrOnVehicle : TriggerCastFlags.None;
+
             var clickPair = Global.ObjectMgr.GetSpellClickInfoMapBounds(spellClickEntry);
             foreach (var clickInfo in clickPair)
             {
@@ -2983,7 +2987,7 @@ namespace Game.Entities
                     }
 
                     if (IsInMap(caster))
-                        caster.CastCustomSpell(clickInfo.spellId, SpellValueMod.BasePoint0 + i, seatId + 1, target, GetVehicleKit() != null ? TriggerCastFlags.IgnoreCasterMountedOrOnVehicle : TriggerCastFlags.None, null, null, origCasterGUID);
+                        caster.CastCustomSpell(clickInfo.spellId, SpellValueMod.BasePoint0 + i, seatId + 1, target, flags, null, null, origCasterGUID);
                     else    // This can happen during Player._LoadAuras
                     {
                         int[] bp0 = new int[SpellConst.MaxEffects];
@@ -3000,7 +3004,7 @@ namespace Game.Entities
                 else
                 {
                     if (IsInMap(caster))
-                        caster.CastSpell(target, spellEntry, GetVehicleKit() != null ? TriggerCastFlags.IgnoreCasterMountedOrOnVehicle : TriggerCastFlags.None, null, null, origCasterGUID);
+                        caster.CastSpell(target, spellEntry, flags, null, null, origCasterGUID);
                     else
                         Aura.TryRefreshStackOrCreate(spellEntry, ObjectGuid.Create(HighGuid.Cast, SpellCastSource.Normal, GetMapId(), spellEntry.Id, GetMap().GenerateLowGuid(HighGuid.Cast)), SpellConst.MaxEffectMask, this, clicker, null, null, origCasterGUID);
                 }
@@ -4368,7 +4372,7 @@ namespace Game.Entities
                 {
                     // Check if the Aura Effect has a the Same Effect Stack Rule and if so, use the highest amount of that SpellGroup
                     // If the Aura Effect does not have this Stack Rule, it returns false so we can add to the multiplier as usual
-                    if (!Global.SpellMgr.AddSameEffectStackRuleSpellGroups(aurEff.GetSpellInfo(), aurEff.GetAmount(), sameEffectSpellGroup))
+                    if (!Global.SpellMgr.AddSameEffectStackRuleSpellGroups(aurEff.GetSpellInfo(), auratype, aurEff.GetAmount(), sameEffectSpellGroup))
                         modifier += aurEff.GetAmount();
                 }
             }
@@ -4400,7 +4404,7 @@ namespace Game.Entities
                 {
                     // Check if the Aura Effect has a the Same Effect Stack Rule and if so, use the highest amount of that SpellGroup
                     // If the Aura Effect does not have this Stack Rule, it returns false so we can add to the multiplier as usual
-                    if (!Global.SpellMgr.AddSameEffectStackRuleSpellGroups(aurEff.GetSpellInfo(), aurEff.GetAmount(), sameEffectSpellGroup))
+                    if (!Global.SpellMgr.AddSameEffectStackRuleSpellGroups(aurEff.GetSpellInfo(), auratype, aurEff.GetAmount(), sameEffectSpellGroup))
                         MathFunctions.AddPct(ref multiplier, aurEff.GetAmount());
                 }
             }
@@ -4547,13 +4551,10 @@ namespace Game.Entities
                 return 0.0f;
             }
 
-            if (m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.TotalPCT] <= 0.0f)
-                return 0.0f;
-
-            float value = MathFunctions.CalculatePct(m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.BaseValue], Math.Max(m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.BasePCTExcludeCreate], -100.0f));
-            value *= m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.BasePCT];
-            value += m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.TotalValue];
-            value *= m_auraModifiersGroup[(int)unitMod][(int)UnitModifierType.TotalPCT];
+            float value = MathFunctions.CalculatePct(GetFlatModifierValue(unitMod, UnitModifierFlatType.Base), Math.Max(GetFlatModifierValue(unitMod, UnitModifierFlatType.BasePCTExcludeCreate), -100.0f));
+            value *= GetPctModifierValue(unitMod, UnitModifierPctType.Base);
+            value += GetFlatModifierValue(unitMod, UnitModifierFlatType.Total);
+            value *= GetPctModifierValue(unitMod, UnitModifierPctType.Total);
 
             return value;
         }
