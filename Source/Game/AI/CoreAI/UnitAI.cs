@@ -75,13 +75,21 @@ namespace Game.AI
             //Make sure our attack is ready and we aren't currently casting before checking distance
             if (me.IsAttackReady())
             {
-                me.AttackerStateUpdate(victim);
+                if (ShouldSparWith(victim))
+                    me.FakeAttackerStateUpdate(victim);
+                else
+                    me.AttackerStateUpdate(victim);
+
                 me.ResetAttackTimer();
             }
 
             if (me.HaveOffhandWeapon() && me.IsAttackReady(WeaponAttackType.OffAttack))
             {
-                me.AttackerStateUpdate(victim, WeaponAttackType.OffAttack);
+                if (ShouldSparWith(victim))
+                    me.FakeAttackerStateUpdate(victim, WeaponAttackType.OffAttack);
+                else
+                    me.AttackerStateUpdate(victim, WeaponAttackType.OffAttack);
+
                 me.ResetAttackTimer(WeaponAttackType.OffAttack);
             }
         }
@@ -356,6 +364,8 @@ namespace Game.AI
 
         public virtual void OnCharmed(bool apply) { }
 
+        public virtual bool ShouldSparWith(Unit target) { return false;   }
+        
         public virtual void DoAction(int action) { }
         public virtual uint GetData(uint id = 0) { return 0; }
         public virtual void SetData(uint id, uint value) { }
@@ -368,15 +378,38 @@ namespace Game.AI
         public virtual void HealDone(Unit to, uint addhealth) { }
         public virtual void SpellInterrupted(uint spellId, uint unTimeMs) {}
 
-        public virtual void GossipHello(Player player) { }
-        public virtual void GossipSelect(Player player, uint menuId, uint gossipListId) { }
-        public virtual void GossipSelectCode(Player player, uint menuId, uint gossipListId, string code) { }
+        /// <summary>
+        /// Called when a player opens a gossip dialog with the creature.
+        /// </summary>
+        public virtual bool GossipHello(Player player) { return false; }
+
+        /// <summary>
+        /// Called when a player selects a gossip item in the creature's gossip menu.
+        /// </summary>
+        public virtual bool GossipSelect(Player player, uint menuId, uint gossipListId) { return false; }
+
+        /// <summary>
+        /// Called when a player selects a gossip with a code in the creature's gossip menu.
+        /// </summary>
+        public virtual bool GossipSelectCode(Player player, uint menuId, uint gossipListId, string code) { return false; }
+
+        /// <summary>
+        /// Called when a player accepts a quest from the creature.
+        /// </summary>
         public virtual void QuestAccept(Player player, Quest quest) { }
-        public virtual void QuestSelect(Player player, Quest quest) { }
-        public virtual void QuestComplete(Player player, Quest quest) { }
+
+        /// <summary>
+        /// Called when a player completes a quest and is rewarded, opt is the selected item's index or 0
+        /// </summary>
         public virtual void QuestReward(Player player, Quest quest, uint opt) { }
-        public virtual bool OnDummyEffect(Unit caster, uint spellId, int effIndex) { return false; }
+
+        /// <summary>
+        /// Called when a game event starts or ends
+        /// </summary>
         public virtual void OnGameEvent(bool start, ushort eventId) { }
+
+        // Called when the dialog status between a player and the creature is requested.
+        public virtual QuestGiverStatus GetDialogStatus(Player player) { return QuestGiverStatus.ScriptedNoStatus; }
 
         public static AISpellInfoType[] AISpellInfo;
 

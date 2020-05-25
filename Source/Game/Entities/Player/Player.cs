@@ -4995,6 +4995,24 @@ namespace Game.Entities
             }
         }
 
+        public void AddPetAura(PetAura petSpell)
+        {
+            m_petAuras.Add(petSpell);
+
+            Pet pet = GetPet();
+            if (pet != null)
+                pet.CastPetAura(petSpell);
+        }
+
+        public void RemovePetAura(PetAura petSpell)
+        {
+            m_petAuras.Remove(petSpell);
+
+            Pet pet = GetPet();
+            if (pet != null)
+                pet.RemoveAurasDueToSpell(petSpell.GetAura(pet.GetEntry()));
+        }
+        
         public bool InArena()
         {
             Battleground bg = GetBattleground();
@@ -6312,7 +6330,7 @@ namespace Game.Entities
             {
                 SetUpdateFieldFlagValue(ref m_values.ModifyValue(m_activePlayerData).ModifyValue(m_activePlayerData.ExploredZones, (int)offset), val);
 
-                UpdateCriteria(CriteriaTypes.ExploreArea);
+                UpdateCriteria(CriteriaTypes.ExploreArea, GetAreaId());
 
                 if (areaEntry.ExplorationLevel > 0)
                 {

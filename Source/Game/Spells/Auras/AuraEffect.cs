@@ -3777,6 +3777,34 @@ namespace Game.Spells
 
             Unit target = aurApp.GetTarget();
 
+            // Do not apply such auras in normal way
+            if (GetAmount() >= 1000)
+            {
+                if (apply)
+                    target.SetInstantCast(true);
+                else
+                {
+                    // only SPELL_AURA_MOD_CASTING_SPEED_NOT_STACK can have this high amount
+                    // it's some rare case that you have 2 auras like that, but just in case ;)
+
+                    bool remove = true;
+                    var castingSpeedNotStack = target.GetAuraEffectsByType(AuraType.ModCastingSpeedNotStack);
+                    foreach (AuraEffect aurEff in castingSpeedNotStack)
+                    {
+                        if (aurEff != this && aurEff.GetAmount() >= 1000)
+                        {
+                            remove = false;
+                            break;
+                        }
+                    }
+
+                    if (remove)
+                        target.SetInstantCast(false);
+                }
+
+                return;
+            }
+
             target.ApplyCastTimePercentMod(GetAmount(), apply);
         }
 
@@ -3784,7 +3812,7 @@ namespace Game.Spells
         [AuraEffectHandler(AuraType.ModMeleeRangedHaste2)]
         void HandleModMeleeRangedSpeedPct(AuraApplication aurApp, AuraEffectHandleModes mode, bool apply)
         {
-            if (!mode.HasAnyFlag((AuraEffectHandleModes.ChangeAmountMask | AuraEffectHandleModes.Stat)))
+            if (!mode.HasAnyFlag(AuraEffectHandleModes.ChangeAmountMask | AuraEffectHandleModes.Stat))
                 return;
 
             //! ToDo: Haste auras with the same handler _CAN'T_ stack together
@@ -4195,16 +4223,16 @@ namespace Game.Spells
 
             Unit caster = GetCaster();
 
-            if (mode.HasAnyFlag(AuraEffectHandleModes.Real))
+            // pet auras
+            if (target.GetTypeId() == TypeId.Player && mode.HasAnyFlag(AuraEffectHandleModes.Real))
             {
-                // pet auras
                 PetAura petSpell = Global.SpellMgr.GetPetAura(GetId(), m_effIndex);
                 if (petSpell != null)
                 {
                     if (apply)
-                        target.AddPetAura(petSpell);
+                        target.ToPlayer().AddPetAura(petSpell);
                     else
-                        target.RemovePetAura(petSpell);
+                        target.ToPlayer().RemovePetAura(petSpell);
                 }
             }
 
@@ -5304,12 +5332,7 @@ namespace Game.Spells
                 }
             }
             else
-            {
-                Creature c = target.ToCreature();
-                if (c == null || caster == null || !Global.ScriptMgr.OnDummyEffect(caster, GetId(), GetEffIndex(), target.ToCreature()) ||
-                    !c.GetAI().OnDummyEffect(caster, GetId(), GetEffIndex()))
-                    Log.outDebug(LogFilter.Spells, "AuraEffect.HandlePeriodicTriggerSpellAuraTick: Spell {0} has non-existent spell {1} in EffectTriggered[{2}] and is therefor not triggered.", GetId(), triggerSpellId, GetEffIndex());
-            }
+                Log.outDebug(LogFilter.Spells, "AuraEffect.HandlePeriodicTriggerSpellAuraTick: Spell {0} has non-existent spell {1} in EffectTriggered[{2}] and is therefor not triggered.", GetId(), triggerSpellId, GetEffIndex());
         }
 
         void HandlePeriodicTriggerSpellWithValueAuraTick(Unit target, Unit caster)

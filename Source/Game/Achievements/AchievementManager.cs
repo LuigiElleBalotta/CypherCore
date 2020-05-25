@@ -296,6 +296,7 @@ namespace Game.Achievements
                     CriteriaProgress progress = new CriteriaProgress();
                     progress.Counter = counter;
                     progress.Date = date;
+                    progress.PlayerGUID = _owner.GetGUID();
                     progress.Changed = false;
 
                     _criteriaProgress[id] = progress;
@@ -391,6 +392,7 @@ namespace Game.Achievements
 
         public override void SendAllData(Player receiver)
         {
+            AllAccountCriteria allAccountCriteria = new AllAccountCriteria();
             AllAchievementData achievementData = new AllAchievementData();
 
             foreach (var pair in _completedAchievements)
@@ -412,6 +414,8 @@ namespace Game.Achievements
 
             foreach (var pair in _criteriaProgress)
             {
+                Criteria criteria = Global.CriteriaMgr.GetCriteria(pair.Key);
+
                 CriteriaProgressPkt progress = new CriteriaProgressPkt();
                 progress.Id = pair.Key;
                 progress.Quantity = pair.Value.Counter;
@@ -421,7 +425,23 @@ namespace Game.Achievements
                 progress.TimeFromStart = 0;
                 progress.TimeFromCreate = 0;
                 achievementData.Data.Progress.Add(progress);
+
+                if (criteria.FlagsCu.HasAnyFlag(CriteriaFlagsCu.Account))
+                {
+                    CriteriaProgressPkt accountProgress = new CriteriaProgressPkt();
+                    accountProgress.Id = pair.Key;
+                    accountProgress.Quantity = pair.Value.Counter;
+                    accountProgress.Player = _owner.GetSession().GetBattlenetAccountGUID();
+                    accountProgress.Flags = 0;
+                    accountProgress.Date = pair.Value.Date;
+                    accountProgress.TimeFromStart = 0;
+                    accountProgress.TimeFromCreate = 0;
+                    allAccountCriteria.Progress.Add(accountProgress);
+                }
             }
+
+            if (!allAccountCriteria.Progress.Empty())
+                SendPacket(allAccountCriteria);
 
             SendPacket(achievementData);
         }
@@ -500,7 +520,7 @@ namespace Game.Achievements
             if (!achievement.Flags.HasAnyFlag(AchievementFlags.TrackingFlag))
                 _achievementPoints += achievement.Points;
 
-            UpdateCriteria(CriteriaTypes.CompleteAchievement, 0, 0, 0, null, referencePlayer);
+            UpdateCriteria(CriteriaTypes.CompleteAchievement, achievement.Id, 0, 0, null, referencePlayer);
             UpdateCriteria(CriteriaTypes.EarnAchievementPoints, achievement.Points, 0, 0, null, referencePlayer);
 
             // reward items and titles if any
@@ -576,20 +596,38 @@ namespace Game.Achievements
 
         public override void SendCriteriaUpdate(Criteria criteria, CriteriaProgress progress, uint timeElapsed, bool timedCompleted)
         {
-            CriteriaUpdate criteriaUpdate = new CriteriaUpdate();
+            if (criteria.FlagsCu.HasAnyFlag(CriteriaFlagsCu.Account))
+            {
+                AccountCriteriaUpdate criteriaUpdate = new AccountCriteriaUpdate();
+                criteriaUpdate.Progress.Id = criteria.Id;
+                criteriaUpdate.Progress.Quantity = progress.Counter;
+                criteriaUpdate.Progress.Player = _owner.GetSession().GetBattlenetAccountGUID();
+                criteriaUpdate.Progress.Flags = 0;
+                if (criteria.Entry.StartTimer != 0)
+                    criteriaUpdate.Progress.Flags = timedCompleted ? 1 : 0u; // 1 is for keeping the counter at 0 in client
 
-            criteriaUpdate.CriteriaID = criteria.Id;
-            criteriaUpdate.Quantity = progress.Counter;
-            criteriaUpdate.PlayerGUID = _owner.GetGUID();
-            criteriaUpdate.Flags = 0;
-            if (criteria.Entry.StartTimer != 0)
-                criteriaUpdate.Flags = timedCompleted ? 1 : 0u; // 1 is for keeping the counter at 0 in client
+                criteriaUpdate.Progress.Date = progress.Date;
+                criteriaUpdate.Progress.TimeFromStart = timeElapsed;
+                criteriaUpdate.Progress.TimeFromCreate = 0;
+                SendPacket(criteriaUpdate);
+            }
+            else
+            {
+                CriteriaUpdate criteriaUpdate = new CriteriaUpdate();
 
-            criteriaUpdate.CurrentTime = progress.Date;
-            criteriaUpdate.ElapsedTime = timeElapsed;
-            criteriaUpdate.CreationTime = 0;
+                criteriaUpdate.CriteriaID = criteria.Id;
+                criteriaUpdate.Quantity = progress.Counter;
+                criteriaUpdate.PlayerGUID = _owner.GetGUID();
+                criteriaUpdate.Flags = 0;
+                if (criteria.Entry.StartTimer != 0)
+                    criteriaUpdate.Flags = timedCompleted ? 1 : 0u; // 1 is for keeping the counter at 0 in client
 
-            SendPacket(criteriaUpdate);
+                criteriaUpdate.CurrentTime = progress.Date;
+                criteriaUpdate.ElapsedTime = timeElapsed;
+                criteriaUpdate.CreationTime = 0;
+
+                SendPacket(criteriaUpdate);
+            }
         }
 
         public override void SendCriteriaProgressRemoved(uint criteriaId)
@@ -654,9 +692,9 @@ namespace Game.Achievements
             _owner.SendPacket(data);
         }
 
-        public override List<Criteria> GetCriteriaByType(CriteriaTypes type)
+        public override List<Criteria> GetCriteriaByType(CriteriaTypes type, uint asset)
         {
-            return Global.CriteriaMgr.GetPlayerCriteriaByType(type);
+            return Global.CriteriaMgr.GetPlayerCriteriaByType(type, asset);
         }
 
         public override string GetOwnerInfo()
@@ -963,7 +1001,7 @@ namespace Game.Achievements
             if (!achievement.Flags.HasAnyFlag(AchievementFlags.TrackingFlag))
                 _achievementPoints += achievement.Points;
 
-            UpdateCriteria(CriteriaTypes.CompleteAchievement, 0, 0, 0, null, referencePlayer);
+            UpdateCriteria(CriteriaTypes.CompleteAchievement, achievement.Id, 0, 0, null, referencePlayer);
             UpdateCriteria(CriteriaTypes.EarnAchievementPoints, achievement.Points, 0, 0, null, referencePlayer);
         }
 
@@ -1018,7 +1056,7 @@ namespace Game.Achievements
             _owner.BroadcastPacket(data);
         }
 
-        public override List<Criteria> GetCriteriaByType(CriteriaTypes type)
+        public override List<Criteria> GetCriteriaByType(CriteriaTypes type, uint asset)
         {
             return Global.CriteriaMgr.GetGuildCriteriaByType(type);
         }
