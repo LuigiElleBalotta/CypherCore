@@ -123,13 +123,19 @@ namespace Scripts.BrokenIsles
     {
         public go_dalaran_karazhan() : base("go_dalaran_karazhan"){  }
 
-        // This is also called on object Creation. Set dalaran to active to enable far sight
-        public override void OnGameObjectStateChanged(GameObject go, GameObjectState state)
+        class go_dalaran_karazhanAI : GameObjectAI
         {
-            base.OnGameObjectStateChanged(go, state);
-
-            if( !go.IsActiveObject())
-                go.SetActive(true);
+            public go_dalaran_karazhanAI(GameObject gameobject) : base(gameobject)
+            {
+            }
+            // This is also called on object Creation. Set dalaran to active to enable far sight
+            public override void OnStateChanged(GameObjectState state)
+            {
+                base.OnStateChanged(state);
+                
+                if( !me.IsActiveObject())
+                    me.SetActive(true);
+            }
         }
     }
 
@@ -138,16 +144,26 @@ namespace Scripts.BrokenIsles
     {
         public npc_dalaran_karazhan_khadgar() : base("npc_dalaran_karazhan_khadgar") { }
 
-        enum Spells
+        class npc_dalaran_karazan_khadgarAI : ScriptedAI
         {
-            SPELL_PLAY_DALARAN_TELEPORTATION_SCENE = 227861
+            public npc_dalaran_karazan_khadgarAI(Creature creature) : base(creature)
+            {
+                //instance = creature.GetInstanceScript();
+            }
+            
+            enum Spells
+            {
+                SPELL_PLAY_DALARAN_TELEPORTATION_SCENE = 227861
+            }
+
+            public override bool GossipSelect(Player player, uint menuId, uint gossipListId)
+            {
+                player.CastSpell( player, (uint)Spells.SPELL_PLAY_DALARAN_TELEPORTATION_SCENE, true);
+                return true;
+            }
         }
 
-        public override bool OnGossipSelect(Player player, Creature creature, uint sender, uint action)
-        {
-            player.CastSpell( player, (uint)Spells.SPELL_PLAY_DALARAN_TELEPORTATION_SCENE, true);
-            return true;
-        }
+        
     }
 
     [Script]
