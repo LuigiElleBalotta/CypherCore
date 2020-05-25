@@ -119,12 +119,19 @@ namespace Game.Entities
             uint learned_0 = effect.TriggerSpell;
             if (!HasSpell(learned_0))
             {
-                SpellInfo learnedInfo = Global.SpellMgr.GetSpellInfo(learned_0);
-                if (learnedInfo == null)
-                    return;
+                found = false;
+                var skills = Global.SpellMgr.GetSkillLineAbilityMapBounds(learned_0);
+                foreach (var skillLine in skills)
+                {
+                    if (skillLine.AcquireMethod == AbilityLearnType.RewardedFromQuest)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
 
                 // profession specialization can be re-learned from npc
-                if (learnedInfo.GetEffect(0).Effect == SpellEffectName.TradeSkill && learnedInfo.GetEffect(1).Effect == 0 && learnedInfo.SpellLevel == 0)
+                if (!found)
                     return;
             }
 
@@ -407,8 +414,7 @@ namespace Game.Entities
         {
             if (!Global.DisableMgr.IsDisabledFor(DisableType.Quest, quest.Id, this) && SatisfyQuestClass(quest, false) && SatisfyQuestRace(quest, false) &&
                 SatisfyQuestSkill(quest, false) && SatisfyQuestExclusiveGroup(quest, false) && SatisfyQuestReputation(quest, false) &&
-                SatisfyQuestDependentQuests(quest, false) && SatisfyQuestNextChain(quest, false) &&
-                SatisfyQuestDay(quest, false) && SatisfyQuestWeek(quest, false) &&
+                SatisfyQuestDependentQuests(quest, false) && SatisfyQuestDay(quest, false) && SatisfyQuestWeek(quest, false) &&
                 SatisfyQuestMonth(quest, false) && SatisfyQuestSeasonal(quest, false))
             {
                 return GetLevel() + WorldConfig.GetIntValue(WorldCfg.QuestHighLevelHideDiff) >= GetQuestMinLevel(quest);
@@ -424,7 +430,7 @@ namespace Game.Entities
                 && SatisfyQuestClass(quest, msg) && SatisfyQuestRace(quest, msg) && SatisfyQuestLevel(quest, msg)
                 && SatisfyQuestSkill(quest, msg) && SatisfyQuestReputation(quest, msg)
                 && SatisfyQuestDependentQuests(quest, msg) && SatisfyQuestTimed(quest, msg)
-                && SatisfyQuestNextChain(quest, msg) && SatisfyQuestDay(quest, msg)
+                && SatisfyQuestDay(quest, msg)
                 && SatisfyQuestWeek(quest, msg) && SatisfyQuestMonth(quest, msg)
                 && SatisfyQuestSeasonal(quest, msg) && SatisfyQuestConditions(quest, msg);
         }
@@ -579,7 +585,7 @@ namespace Game.Entities
             switch (questGiver.GetTypeId())
             {
                 case TypeId.Unit:
-                    Global.ScriptMgr.OnQuestAccept(this, (questGiver.ToCreature()), quest);
+                    PlayerTalkClass.ClearMenus();
                     questGiver.ToCreature().GetAI().QuestAccept(this, quest);
                     break;
                 case TypeId.Item:
@@ -607,7 +613,7 @@ namespace Game.Entities
                         break;
                     }
                 case TypeId.GameObject:
-                    Global.ScriptMgr.OnQuestAccept(this, questGiver.ToGameObject(), quest);
+                    PlayerTalkClass.ClearMenus();
                     questGiver.ToGameObject().GetAI().QuestAccept(this, quest);
                     break;
                 default:
@@ -1561,25 +1567,6 @@ namespace Game.Entities
             return true;
         }
 
-        public bool SatisfyQuestNextChain(Quest qInfo, bool msg)
-        {
-            uint nextQuest = qInfo.NextQuestInChain;
-            if (nextQuest == 0)
-                return true;
-
-            // next quest in chain already started or completed
-            if (GetQuestStatus(nextQuest) != QuestStatus.None) // GetQuestStatus returns QuestStatus.CompleteD for rewarded quests
-            {
-                if (msg)
-                {
-                    SendCanTakeQuestResponse(QuestFailedReasons.None);
-                    Log.outDebug(LogFilter.Server, "SatisfyQuestNextChain: Sent QuestFailedReason.None (questId: {0}) because player already did or started next quest in chain.", qInfo.Id);
-                }
-                return false;
-            }
-            return true;
-        }
-
         public bool SatisfyQuestDay(Quest qInfo, bool msg)
         {
             if (!qInfo.IsDaily() && !qInfo.IsDFQuest())
@@ -1736,12 +1723,12 @@ namespace Game.Entities
                 var questStatusData = m_QuestStatus.LookupByKey(quest_id);
                 if (questStatusData != null)
                 {
-                    if (questStatusData.Status != QuestStatus.Incomplete)
-                        return false;
-
                     // in pool and not currently available (wintergrasp weekly, dalaran weekly) - can't share
                     if (Global.PoolMgr.IsPartOfAPool<Quest>(quest_id) != 0 && !Global.PoolMgr.IsSpawnedObject<Quest>(quest_id))
+                    {
+                        SendPushToPartyResponse(this, QuestPushReason.NotDaily);
                         return false;
+                    }
 
                     return true;
                 }
@@ -1837,11 +1824,12 @@ namespace Game.Entities
             List<uint> qr;
             List<uint> qir;
 
+            PlayerTalkClass.ClearMenus();
             switch (questgiver.GetTypeId())
             {
                 case TypeId.GameObject:
                     {
-                        QuestGiverStatus questStatus = (QuestGiverStatus)Global.ScriptMgr.GetDialogStatus(this, questgiver.ToGameObject());
+                        QuestGiverStatus questStatus = (QuestGiverStatus)questgiver.ToGameObject().GetAI().GetDialogStatus(this);
                         if (questStatus != QuestGiverStatus.ScriptedNoStatus)
                             return questStatus;
                         qr = Global.ObjectMgr.GetGOQuestRelationBounds(questgiver.GetEntry());
@@ -1850,7 +1838,7 @@ namespace Game.Entities
                     }
                 case TypeId.Unit:
                     {
-                        QuestGiverStatus questStatus = (QuestGiverStatus)Global.ScriptMgr.GetDialogStatus(this, questgiver.ToCreature());
+                        QuestGiverStatus questStatus = (QuestGiverStatus)questgiver.ToCreature().GetAI().GetDialogStatus(this);
                         if (questStatus != QuestGiverStatus.ScriptedNoStatus)
                             return questStatus;
                         qr = Global.ObjectMgr.GetCreatureQuestRelationBounds(questgiver.GetEntry());

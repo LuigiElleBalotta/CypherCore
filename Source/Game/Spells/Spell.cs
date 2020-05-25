@@ -2386,7 +2386,7 @@ namespace Game.Spells
             LoadScripts();
 
             // Fill cost data (not use power for item casts
-            if (m_CastItem)
+            if (m_CastItem == null)
                 m_powerCost = m_spellInfo.CalcPowerCost(m_caster, m_spellSchoolMask, this);
 
             // Set combo point requirement
@@ -2436,17 +2436,6 @@ namespace Game.Spells
             else
                 m_casttime = m_spellInfo.CalcCastTime(m_caster.GetLevel(), this);
 
-            if (m_caster.IsTypeId(TypeId.Unit) && !m_caster.HasUnitFlag(UnitFlags.PlayerControlled)) // _UNIT actually means creature. for some reason.
-            {
-                if (!(m_spellInfo.IsNextMeleeSwingSpell() || IsAutoRepeat() || _triggeredCastFlags.HasAnyFlag(TriggerCastFlags.IgnoreSetFacing)))
-                {
-                    if (m_targets.GetObjectTarget() && m_caster != m_targets.GetObjectTarget())
-                        m_caster.ToCreature().FocusTarget(this, m_targets.GetObjectTarget());
-                    else if (m_spellInfo.HasAttribute(SpellAttr5.DontTurnDuringCast))
-                        m_caster.ToCreature().FocusTarget(this, null);
-                }
-            }
-
             // don't allow channeled spells / spells with cast time to be casted while moving
             // exception are only channeled spells that have no casttime and SPELL_ATTR5_CAN_CHANNEL_WHEN_MOVING
             // (even if they are interrupted on moving, spells with almost immediate effect get to have their effect processed before movement interrupter kicks in)
@@ -2460,6 +2449,18 @@ namespace Game.Spells
                     SendCastResult(SpellCastResult.Moving);
                     Finish(false);
                     return;
+                }
+            }
+
+            // focus if not controlled creature
+            if (m_caster.GetTypeId() == TypeId.Unit && !m_caster.HasUnitFlag(UnitFlags.PlayerControlled))
+            {
+                if (!(m_spellInfo.IsNextMeleeSwingSpell() || IsAutoRepeat() || _triggeredCastFlags.HasAnyFlag(TriggerCastFlags.IgnoreSetFacing)))
+                {
+                    if (m_targets.GetObjectTarget() && m_caster != m_targets.GetObjectTarget())
+                        m_caster.ToCreature().FocusTarget(this, m_targets.GetObjectTarget());
+                    else if (m_spellInfo.HasAttribute(SpellAttr5.DontTurnDuringCast))
+                        m_caster.ToCreature().FocusTarget(this, null);
                 }
             }
 
@@ -4345,7 +4346,8 @@ namespace Game.Spells
 
         public SpellCastResult CheckCast(bool strict, ref uint param1, ref uint param2)
         {
-            SpellCastResult castResult = SpellCastResult.SpellCastOk;
+            SpellCastResult castResult;
+
             // check death state
             if (!m_caster.IsAlive() && !m_spellInfo.IsPassive() && !(m_spellInfo.HasAttribute(SpellAttr0.CastableWhileDead) || (IsTriggered() && m_triggeredByAuraSpell == null)))
                 return SpellCastResult.CasterDead;
@@ -4526,18 +4528,6 @@ namespace Game.Spells
             Unit unitTarget = m_targets.GetUnitTarget();
             if (unitTarget != null)
             {
-                // do not allow to cast on hostile targets in sanctuary
-                if (!m_caster.IsFriendlyTo(unitTarget))
-                {
-                    if (m_caster.IsInSanctuary() || unitTarget.IsInSanctuary())
-                    {
-                        // fix for duels
-                        Player playerDuel = m_caster.ToPlayer();
-                        if (!playerDuel || playerDuel.duel == null || unitTarget != playerDuel.duel.opponent)
-                            return SpellCastResult.NothingToDispel;
-                    }
-                }
-
                 castResult = m_spellInfo.CheckTarget(m_caster, unitTarget, m_caster.GetEntry() == SharedConst.WorldTrigger); // skip stealth checks for GO casts
                 if (castResult != SpellCastResult.SpellCastOk)
                     return castResult;
@@ -4717,9 +4707,6 @@ namespace Game.Spells
                         }
                     case SpellEffectName.LearnSpell:
                         {
-                            if (!m_caster.IsTypeId(TypeId.Player))
-                                return SpellCastResult.BadTargets;
-
                             if (effect.TargetA.GetTarget() != Targets.UnitPet)
                                 break;
 
@@ -5122,26 +5109,6 @@ namespace Game.Spells
                             if (m_targets.GetUnitTarget() == null || m_targets.GetUnitTarget() == m_caster)
                                 return SpellCastResult.BadTargets;
 
-                            uint dispelMask = SpellInfo.GetDispelMask((DispelType)effect.MiscValue);
-                            bool hasStealableAura = false;
-                            foreach (AuraApplication visibleAura in m_targets.GetUnitTarget().GetVisibleAuras())
-                            {
-                                if (!visibleAura.IsPositive())
-                                    continue;
-
-                                Aura aura = visibleAura.GetBase();
-                                if (!aura.GetSpellInfo().GetDispelMask().HasAnyFlag(dispelMask))
-                                    continue;
-
-                                if (aura.IsPassive() || aura.GetSpellInfo().HasAttribute(SpellAttr4.NotStealable))
-                                    continue;
-
-                                hasStealableAura = true;
-                                break;
-                            }
-
-                            if (!hasStealableAura)
-                                return SpellCastResult.NothingToSteal;
                             break;
                         }
                     case SpellEffectName.LeapBack:

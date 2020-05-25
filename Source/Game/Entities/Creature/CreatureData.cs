@@ -37,7 +37,7 @@ namespace Game.Entities
         public string IconName;
         public uint GossipMenuId;
         public short Minlevel;
-        public Optional<CreatureLevelScaling> levelScaling;
+        public Dictionary<Difficulty, CreatureLevelScaling> scalingStorage = new Dictionary<Difficulty, CreatureLevelScaling>();
         public short Maxlevel;
         public int HealthScalingExpansion;
         public uint RequiredExpansion;
@@ -157,6 +157,20 @@ namespace Game.Entities
             return CreatureModel.DefaultVisibleModel;
         }
 
+        public int[] GetMinMaxLevel()
+        {
+            return new[]
+            {
+                HealthScalingExpansion != (int)Expansion.LevelCurrent ? Minlevel : Minlevel + SharedConst.MaxLevel,
+                HealthScalingExpansion != (int)Expansion.LevelCurrent ? Maxlevel : Maxlevel + SharedConst.MaxLevel
+            };
+        }
+
+        public int GetHealthScalingExpansion()
+        {
+            return HealthScalingExpansion == (int)Expansion.LevelCurrent ? (int)Expansion.WarlordsOfDraenor : HealthScalingExpansion;
+        }
+
         public SkillType GetRequiredLootSkill()
         {
             if (TypeFlags.HasAnyFlag(CreatureTypeFlags.HerbSkinningSkill))
@@ -265,23 +279,24 @@ namespace Game.Entities
 
             QueryData.Stats = stats;
         }
+
+        public CreatureLevelScaling GetLevelScaling(Difficulty difficulty)
+        {
+            var creatureLevelScaling = scalingStorage.LookupByKey(difficulty);
+            if (creatureLevelScaling != null)
+                return creatureLevelScaling;
+
+            return new CreatureLevelScaling();
+        }
     }
 
     public class CreatureBaseStats
     {
-        public uint[] BaseHealth = new uint[(int)Expansion.Max];
         public uint BaseMana;
-        public uint BaseArmor;
         public uint AttackPower;
         public uint RangedAttackPower;
-        public float[] BaseDamage = new float[(int)Expansion.Max];
 
         // Helpers
-        public uint GenerateHealth(CreatureTemplate info)
-        {
-            return (uint)Math.Ceiling(BaseHealth[info.HealthScalingExpansion] * info.ModHealth * info.ModHealthExtra);
-        }
-
         public uint GenerateMana(CreatureTemplate info)
         {
             // Mana can be 0.
@@ -289,16 +304,6 @@ namespace Game.Entities
                 return 0;
 
             return (uint)Math.Ceiling(BaseMana * info.ModMana * info.ModManaExtra);
-        }
-
-        public float GenerateArmor(CreatureTemplate info)
-        {
-            return (float)Math.Ceiling(BaseArmor * info.ModArmor);
-        }
-
-        public float GenerateBaseDamage(CreatureTemplate info)
-        {
-            return BaseDamage[info.HealthScalingExpansion];
         }
     }
 
@@ -459,11 +464,12 @@ namespace Game.Entities
         }
     }
 
-    public struct CreatureLevelScaling
+    public class CreatureLevelScaling
     {
         public ushort MinLevel;
         public ushort MaxLevel;
         public short DeltaLevelMin;
         public short DeltaLevelMax;
+        public uint ContentTuningID;
     }
 }

@@ -559,8 +559,6 @@ namespace Game.Entities
                     }
                     break;
             }
-            Global.ScriptMgr.OnCreatureUpdate(this, diff);
-
         }
 
         public void Regenerate(PowerType power)
@@ -930,6 +928,27 @@ namespace Game.Entities
                 && !GetCreatureTemplate().FlagsExtra.HasAnyFlag(CreatureFlagsExtra.NoXpAtKill);
         }
 
+        public override bool IsMovementPreventedByCasting()
+        {
+            // first check if currently a movement allowed channel is active and we're not casting
+            Spell spell = GetCurrentSpell(CurrentSpellTypes.Channeled);
+            if (spell != null)
+            {
+                if (spell.GetState() != SpellState.Finished && spell.IsChannelActive())
+                    if (spell.GetSpellInfo().IsMoveAllowedChannel())
+                        if (HasUnitState(UnitState.Casting))
+                            return true;
+            }
+
+            if (IsFocusing(null, true))
+                return true;
+
+            if (HasUnitState(UnitState.Casting))
+                return true;
+
+            return false;
+        }
+        
         public void StartPickPocketRefillTimer()
         {
             _pickpocketLootRestore = Time.UnixTime + WorldConfig.GetIntValue(WorldCfg.CreaturePickpocketRefill);
@@ -1124,22 +1143,23 @@ namespace Game.Entities
             CreatureTemplate cInfo = GetCreatureTemplate();
 
             // level
-            byte minlevel = (byte)Math.Min(cInfo.Maxlevel, cInfo.Minlevel);
-            byte maxlevel = (byte)Math.Max(cInfo.Maxlevel, cInfo.Minlevel);
-            byte level = (byte)(minlevel == maxlevel ? minlevel : RandomHelper.URand(minlevel, maxlevel));
-            SetLevel(level);
+            var levels = cInfo.GetMinMaxLevel();
+            int minlevel = Math.Min(levels[0], levels[1]);
+            int maxlevel = Math.Max(levels[0], levels[1]);
+            int level = (minlevel == maxlevel ? minlevel : RandomHelper.IRand(minlevel, maxlevel));
+            SetLevel((uint)level);
 
-            if (HasScalableLevels())
-            {
-                SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelMin), cInfo.levelScaling.Value.MinLevel);
-                SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelMax), cInfo.levelScaling.Value.MaxLevel);
+            CreatureLevelScaling scaling = cInfo.GetLevelScaling(GetMap().GetDifficultyID());
 
-                int mindelta = Math.Min(cInfo.levelScaling.Value.DeltaLevelMax, cInfo.levelScaling.Value.DeltaLevelMin);
-                int maxdelta = Math.Max(cInfo.levelScaling.Value.DeltaLevelMax, cInfo.levelScaling.Value.DeltaLevelMin);
-                int delta = mindelta == maxdelta ? mindelta : RandomHelper.IRand(mindelta, maxdelta);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelMin), scaling.MinLevel);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelMax), scaling.MaxLevel);
 
-                SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelDelta), delta);
-            }
+            int mindelta = Math.Min(scaling.DeltaLevelMax, scaling.DeltaLevelMin);
+            int maxdelta = Math.Max(scaling.DeltaLevelMax, scaling.DeltaLevelMin);
+            int delta = mindelta == maxdelta ? mindelta : RandomHelper.IRand(mindelta, maxdelta);
+
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ScalingLevelDelta), delta);
+            SetUpdateFieldValue(m_values.ModifyValue(m_unitData).ModifyValue(m_unitData.ContentTuningID), scaling.ContentTuningID);
 
             UpdateLevelDependantStats();
         }
@@ -1148,12 +1168,13 @@ namespace Game.Entities
         {
             CreatureTemplate cInfo = GetCreatureTemplate();
             CreatureEliteType rank = IsPet() ? 0 : cInfo.Rank;
-            CreatureBaseStats stats = Global.ObjectMgr.GetCreatureBaseStats(GetLevel(), cInfo.UnitClass);
+            uint level = GetLevel();
+            CreatureBaseStats stats = Global.ObjectMgr.GetCreatureBaseStats(level, cInfo.UnitClass);
 
             // health
             float healthmod = _GetHealthMod(rank);
 
-            uint basehp = stats.GenerateHealth(cInfo);
+            uint basehp = (uint)GetMaxHealthByLevel(level);
             uint health = (uint)(basehp * healthmod);
 
             SetCreateHealth(health);
@@ -1179,7 +1200,7 @@ namespace Game.Entities
             SetStatFlatModifier(UnitMods.Health, UnitModifierFlatType.Base, health);
 
             //Damage
-            float basedamage = stats.GenerateBaseDamage(cInfo);
+            float basedamage = GetBaseDamageForLevel(level);
             float weaponBaseMinDamage = basedamage;
             float weaponBaseMaxDamage = basedamage * 1.5f;
 
@@ -1195,7 +1216,7 @@ namespace Game.Entities
             SetStatFlatModifier(UnitMods.AttackPower, UnitModifierFlatType.Base, stats.AttackPower);
             SetStatFlatModifier(UnitMods.AttackPowerRanged, UnitModifierFlatType.Base, stats.RangedAttackPower);
 
-            float armor = stats.GenerateArmor(cInfo); // @todo Why is this treated as uint32 when it's a float?
+            float armor = GetBaseArmorForLevel(level); /// @todo Why is this treated as uint32 when it's a float?
             SetStatFlatModifier(UnitMods.Armor, UnitModifierFlatType.Base, armor);
         }
 
@@ -2331,14 +2352,17 @@ namespace Game.Entities
         public bool HasScalableLevels()
         {
             CreatureTemplate cinfo = GetCreatureTemplate();
-            return cinfo.levelScaling.HasValue;
+            CreatureLevelScaling scaling = cinfo.GetLevelScaling(GetMap().GetDifficultyID());
+
+            return (scaling.MinLevel != 0 && scaling.MaxLevel != 0);
         }
 
         ulong GetMaxHealthByLevel(uint level)
         {
             CreatureTemplate cInfo = GetCreatureTemplate();
-            CreatureBaseStats stats = Global.ObjectMgr.GetCreatureBaseStats(level, cInfo.UnitClass);
-            return stats.GenerateHealth(cInfo);
+            CreatureLevelScaling scaling = cInfo.GetLevelScaling(GetMap().GetDifficultyID());
+            float baseHealth = Global.DB2Mgr.EvaluateExpectedStat(ExpectedStatType.CreatureHealth, level, cInfo.GetHealthScalingExpansion(), scaling.ContentTuningID, (Class)cInfo.UnitClass);
+            return (ulong)(baseHealth * cInfo.ModHealth * cInfo.ModHealthExtra);
         }
 
         public override float GetHealthMultiplierForTarget(WorldObject target)
@@ -2356,8 +2380,8 @@ namespace Game.Entities
         float GetBaseDamageForLevel(uint level)
         {
             CreatureTemplate cInfo = GetCreatureTemplate();
-            CreatureBaseStats stats = Global.ObjectMgr.GetCreatureBaseStats(level, cInfo.UnitClass);
-            return stats.GenerateBaseDamage(cInfo);
+            CreatureLevelScaling scaling = cInfo.GetLevelScaling(GetMap().GetDifficultyID());
+            return Global.DB2Mgr.EvaluateExpectedStat(ExpectedStatType.CreatureAutoAttackDps, level, cInfo.GetHealthScalingExpansion(), scaling.ContentTuningID, (Class)cInfo.UnitClass);
         }
 
         public override float GetDamageMultiplierForTarget(WorldObject target)
@@ -2373,8 +2397,9 @@ namespace Game.Entities
         float GetBaseArmorForLevel(uint level)
         {
             CreatureTemplate cInfo = GetCreatureTemplate();
-            CreatureBaseStats stats = Global.ObjectMgr.GetCreatureBaseStats(level, cInfo.UnitClass);
-            return stats.GenerateArmor(cInfo);
+            CreatureLevelScaling scaling = cInfo.GetLevelScaling(GetMap().GetDifficultyID());
+            float baseArmor = Global.DB2Mgr.EvaluateExpectedStat(ExpectedStatType.CreatureArmor, level, cInfo.GetHealthScalingExpansion(), scaling.ContentTuningID, (Class)cInfo.UnitClass);
+            return baseArmor * cInfo.ModArmor;
         }
 
         public override float GetArmorMultiplierForTarget(WorldObject target)
@@ -2402,12 +2427,29 @@ namespace Game.Entities
                 // between UNIT_FIELD_SCALING_LEVEL_MIN and UNIT_FIELD_SCALING_LEVEL_MAX
                 if (HasScalableLevels())
                 {
-                    int targetLevelWithDelta = (int)unitTarget.GetLevel() + m_unitData.ScalingLevelDelta;
+                    int scalingLevelMin = m_unitData.ScalingLevelMin;
+                    int scalingLevelMax = m_unitData.ScalingLevelMax;
+                    int scalingLevelDelta = m_unitData.ScalingLevelDelta;
+                    int scalingFactionGroup = m_unitData.ScalingFactionGroup;
+                    int targetLevel = unitTarget.m_unitData.EffectiveLevel;
+                    if (targetLevel == 0)
+                        targetLevel = (int)unitTarget.GetLevel();
 
-                    if (target.IsPlayer())
-                        targetLevelWithDelta += target.ToPlayer().m_activePlayerData.ScalingPlayerLevelDelta;
+                    int targetLevelDelta = 0;
 
-                    return (uint)MathFunctions.RoundToInterval(ref targetLevelWithDelta, m_unitData.ScalingLevelMin, m_unitData.ScalingLevelMax);
+                    Player playerTarget = target.ToPlayer();
+                    if (playerTarget != null)
+                    {
+                        if (scalingFactionGroup != 0 && CliDB.FactionTemplateStorage.LookupByKey(CliDB.ChrRacesStorage.LookupByKey(playerTarget.GetRace()).FactionID).FactionGroup != scalingFactionGroup)
+                            scalingLevelMin = scalingLevelMax;
+
+                        int maxCreatureScalingLevel = playerTarget.m_activePlayerData.MaxCreatureScalingLevel;
+                        targetLevelDelta = Math.Min(maxCreatureScalingLevel > 0 ? maxCreatureScalingLevel - targetLevel : 0, playerTarget.m_activePlayerData.ScalingPlayerLevelDelta);
+                    }
+
+                    int levelWithDelta = targetLevel + targetLevelDelta;
+                    int level = MathFunctions.RoundToInterval(ref levelWithDelta, scalingLevelMin, scalingLevelMax) + scalingLevelDelta;
+                    return (uint)MathFunctions.RoundToInterval(ref level, 1, SharedConst.MaxLevel + 3);
                 }
 
             }
@@ -2768,19 +2810,19 @@ namespace Game.Entities
             bool canTurnDuringCast = !focusSpell.GetSpellInfo().HasAttribute(SpellAttr5.DontTurnDuringCast);
             // Face the target - we need to do this before the unit state is modified for no-turn spells
             if (target)
-                SetFacingToObject(target);
+                SetFacingToObject(target, false);
             else if (!canTurnDuringCast)
             {
                 Unit victim = GetVictim();
                 if (victim)
-                    SetFacingToObject(victim); // ensure server-side orientation is correct at beginning of cast
+                    SetFacingToObject(victim, false); // ensure server-side orientation is correct at beginning of cast
             }
 
             if (!canTurnDuringCast)
                 AddUnitState(UnitState.CannotTurn);
         }
 
-        public override bool IsFocusing(Spell focusSpell = null, bool withDelay = false)
+        public bool IsFocusing(Spell focusSpell = null, bool withDelay = false)
         {
             if (!IsAlive()) // dead creatures cannot focus
             {
@@ -2821,10 +2863,10 @@ namespace Game.Entities
                 {
                     WorldObject objTarget = Global.ObjAccessor.GetWorldObject(this, m_suppressedTarget);
                     if (objTarget)
-                        SetFacingToObject(objTarget);
+                        SetFacingToObject(objTarget, false);
                 }
                 else
-                    SetFacingTo(m_suppressedOrientation);
+                    SetFacingTo(m_suppressedOrientation, false);
             }
             else
                 // tell the creature that it should reacquire its actual target after the delay expires (this is handled in ::Update)
@@ -3156,7 +3198,7 @@ namespace Game.Entities
 
             if (target != null && _IsTargetAcceptable(target) && CanCreatureAttack(target))
             {
-                if (!IsFocusing())
+                if (!IsFocusing(null, true))
                     SetInFront(target);
                 return target;
             }

@@ -77,7 +77,7 @@ namespace Game.Achievements
 
             Log.outDebug(LogFilter.Achievement, "UpdateCriteria({0}, {1}, {2}, {3}) {4}", type, type, miscValue1, miscValue2, miscValue3, GetOwnerInfo());
 
-            List<Criteria> criteriaList = GetCriteriaByType(type);
+            List<Criteria> criteriaList = GetCriteriaByType(type, (uint)miscValue1);
             foreach (Criteria criteria in criteriaList)
             {
                 List<CriteriaTree> trees = Global.CriteriaMgr.GetCriteriaTreesByCriteria(criteria.Id);
@@ -87,12 +87,13 @@ namespace Game.Achievements
                 // requirements not found in the dbc
                 CriteriaDataSet data = Global.CriteriaMgr.GetCriteriaDataSet(criteria);
                 if (data != null)
-                    if (!data.Meets(referencePlayer, unit, (uint)miscValue1))
+                    if (!data.Meets(referencePlayer, unit, (uint)miscValue1, (uint)miscValue2))
                         continue;
 
                 switch (type)
                 {
                     // std. case: increment at 1
+                    case CriteriaTypes.WinBg:
                     case CriteriaTypes.NumberOfTalentResets:
                     case CriteriaTypes.LoseDuel:
                     case CriteriaTypes.CreateAuction:
@@ -106,6 +107,7 @@ namespace Game.Achievements
                     case CriteriaTypes.ReceiveEpicItem:
                     case CriteriaTypes.Death:
                     case CriteriaTypes.CompleteDailyQuest:
+                    case CriteriaTypes.CompleteBattleground:
                     case CriteriaTypes.DeathAtMap:
                     case CriteriaTypes.DeathInDungeon:
                     case CriteriaTypes.KilledByCreature:
@@ -150,8 +152,6 @@ namespace Game.Achievements
                     case CriteriaTypes.TotalDamageReceived:
                     case CriteriaTypes.TotalHealingReceived:
                     case CriteriaTypes.UseLfdToGroupWithPlayers:
-                    case CriteriaTypes.WinBg:
-                    case CriteriaTypes.CompleteBattleground:
                     case CriteriaTypes.DamageDone:
                     case CriteriaTypes.HealingDone:
                     case CriteriaTypes.HeartOfAzerothArtifactPowerEarned:
@@ -1102,8 +1102,8 @@ namespace Game.Achievements
                         return false;
                     break;
                 case CriteriaTypes.EquipEpicItem:
-                    // miscValue1 = itemid miscValue2 = itemSlot
-                    if (miscValue1 == 0 || miscValue2 != criteria.Entry.Asset)
+                    // miscValue1 = itemSlot miscValue2 = itemid
+                    if (miscValue2 == 0 || miscValue1 != criteria.Entry.Asset)
                         return false;
                     break;
                 case CriteriaTypes.RollNeedOnLoot:
@@ -1596,6 +1596,7 @@ namespace Game.Achievements
                         return false;
                     break;
                 case CriteriaAdditionalCondition.HasAchievement: // 86
+                case CriteriaAdditionalCondition.HasAchievementOnCharacter: // 87
                     if (!referencePlayer.HasAchieved(reqValue))
                         return false;
                     break;
@@ -2467,7 +2468,7 @@ namespace Game.Achievements
         public virtual bool RequiredAchievementSatisfied(uint achievementId) { return false; }
 
         public virtual string GetOwnerInfo() { return ""; }
-        public virtual List<Criteria> GetCriteriaByType(CriteriaTypes type) { return null; }
+        public virtual List<Criteria> GetCriteriaByType(CriteriaTypes type, uint asset) { return null; }
 
         protected Dictionary<uint, CriteriaProgress> _criteriaProgress = new Dictionary<uint, CriteriaProgress>();
         Dictionary<uint, uint /*ms time left*/> _timeCriteriaTrees = new Dictionary<uint, uint>();
@@ -2498,12 +2499,9 @@ namespace Game.Achievements
             // Build tree
             foreach (var treeNode in _criteriaModifiers.Values)
             {
-                if (treeNode.Entry.Parent == 0)
-                    continue;
-
-                var parent = _criteriaModifiers.LookupByKey(treeNode.Entry.Parent);
-                if (parent != null)
-                    parent.Children.Add(treeNode);
+                ModifierTreeNode parentNode = _criteriaModifiers.LookupByKey(treeNode.Entry.Parent);
+                if (parentNode != null)
+                    parentNode.Children.Add(treeNode);
             }
 
             Log.outInfo(LogFilter.ServerLoading, "Loaded {0} criteria modifiers in {1} ms", _criteriaModifiers.Count, Time.GetMSTimeDiffToNow(oldMSTime));
@@ -2534,12 +2532,6 @@ namespace Game.Achievements
         public void LoadCriteriaList()
         {
             uint oldMSTime = Time.GetMSTime();
-
-            if (CliDB.CriteriaTreeStorage.Empty())
-            {
-                Log.outError(LogFilter.ServerLoading, "Loaded 0 criteria.");
-                return;
-            }
 
             Dictionary<uint /*criteriaTreeID*/, AchievementRecord> achievementCriteriaTreeIds = new Dictionary<uint, AchievementRecord>();
             foreach (AchievementRecord achievement in CliDB.AchievementStorage.Values)
@@ -2589,25 +2581,11 @@ namespace Game.Achievements
             // Build tree
             foreach (var pair in _criteriaTrees)
             {
-                if (pair.Value.Entry.Parent == 0)
-                    continue;
-
-                var parent = _criteriaTrees.LookupByKey(pair.Value.Entry.Parent);
+                CriteriaTree parent = _criteriaTrees.LookupByKey(pair.Value.Entry.Parent);
                 if (parent != null)
-                {
                     parent.Children.Add(pair.Value);
-                    while (parent != null)
-                    {
-                        var cur = parent;
-                        parent = _criteriaTrees.LookupByKey(parent.Entry.Parent);
-                        if (parent == null)
-                        {
-                            if (CliDB.CriteriaStorage.ContainsKey(pair.Value.Entry.CriteriaID))
-                                _criteriaTreeByCriteria.Add(pair.Value.Entry.CriteriaID, cur);
-                        }
-                    }
-                }
-                else if (CliDB.CriteriaStorage.ContainsKey(pair.Value.Entry.CriteriaID))
+
+                if (CliDB.CriteriaStorage.HasRecord(pair.Value.Entry.CriteriaID))
                     _criteriaTreeByCriteria.Add(pair.Value.Entry.CriteriaID, pair.Value);
             }
 
@@ -2633,14 +2611,14 @@ namespace Game.Achievements
                 Criteria criteria = new Criteria();
                 criteria.Id = criteriaEntry.Id;
                 criteria.Entry = criteriaEntry;
-                var mod = _criteriaModifiers.LookupByKey(criteriaEntry.ModifierTreeId);
-                if (mod != null)
-                    criteria.Modifier = mod;
+                criteria.Modifier = _criteriaModifiers.LookupByKey(criteriaEntry.ModifierTreeId);
 
                 _criteria[criteria.Id] = criteria;
 
                 foreach (CriteriaTree tree in treeList)
                 {
+                    tree.Criteria = criteria;
+
                     AchievementRecord achievement = tree.Achievement;
                     if (achievement != null)
                     {
@@ -2687,9 +2665,6 @@ namespace Game.Achievements
                 if (criteriaEntry.FailEvent != 0)
                     _criteriasByFailEvent[criteriaEntry.FailEvent].Add((int)criteriaEntry.FailAsset, criteria);
             }
-
-            foreach (var p in _criteriaTrees)
-                p.Value.Criteria = GetCriteria(p.Value.Entry.CriteriaID);
 
             Log.outInfo(LogFilter.ServerLoading, $"Loaded {criterias} criteria, {guildCriterias} guild criteria, {scenarioCriterias} scenario criteria and {questObjectiveCriterias} quest objective criteria in {Time.GetMSTimeDiffToNow(oldMSTime)} ms.");
         }
@@ -2767,8 +2742,55 @@ namespace Game.Achievements
             return _criteriaModifiers.LookupByKey(modifierTreeId);
         }
 
-        public List<Criteria> GetPlayerCriteriaByType(CriteriaTypes type)
+        bool IsCriteriaTypeStoredByAsset(CriteriaTypes type)
         {
+            switch (type)
+            {
+                case CriteriaTypes.KillCreature:
+                case CriteriaTypes.WinBg:
+                case CriteriaTypes.ReachSkillLevel:
+                case CriteriaTypes.CompleteAchievement:
+                case CriteriaTypes.CompleteQuestsInZone:
+                case CriteriaTypes.CompleteBattleground:
+                case CriteriaTypes.KilledByCreature:
+                case CriteriaTypes.CompleteQuest:
+                case CriteriaTypes.BeSpellTarget:
+                case CriteriaTypes.CastSpell:
+                case CriteriaTypes.BgObjectiveCapture:
+                case CriteriaTypes.HonorableKillAtArea:
+                case CriteriaTypes.LearnSpell:
+                case CriteriaTypes.OwnItem:
+                case CriteriaTypes.LearnSkillLevel:
+                case CriteriaTypes.UseItem:
+                case CriteriaTypes.LootItem:
+                case CriteriaTypes.ExploreArea:
+                case CriteriaTypes.GainReputation:
+                case CriteriaTypes.EquipEpicItem:
+                case CriteriaTypes.HkClass:
+                case CriteriaTypes.HkRace:
+                case CriteriaTypes.DoEmote:
+                case CriteriaTypes.EquipItem:
+                case CriteriaTypes.UseGameobject:
+                case CriteriaTypes.BeSpellTarget2:
+                case CriteriaTypes.FishInGameobject:
+                case CriteriaTypes.LearnSkilllineSpells:
+                case CriteriaTypes.LootType:
+                case CriteriaTypes.CastSpell2:
+                case CriteriaTypes.LearnSkillLine:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        public List<Criteria> GetPlayerCriteriaByType(CriteriaTypes type, uint asset)
+        {
+            if (asset != 0 && IsCriteriaTypeStoredByAsset(type))
+            {
+                if (_criteriasByAsset[(int)type].ContainsKey(asset))
+                    return _criteriasByAsset[(int)type][asset];
+            }
+
             return _criteriasByType.LookupByKey(type);
         }
 
@@ -2843,6 +2865,7 @@ namespace Game.Achievements
 
         // store criterias by type to speed up lookup
         MultiMap<CriteriaTypes, Criteria> _criteriasByType = new MultiMap<CriteriaTypes, Criteria>();
+        MultiMap<uint, Criteria>[] _criteriasByAsset = new MultiMap<uint, Criteria>[(int)CriteriaTypes.TotalTypes];
         MultiMap<CriteriaTypes, Criteria> _guildCriteriasByType = new MultiMap<CriteriaTypes, Criteria>();
         MultiMap<CriteriaTypes, Criteria> _scenarioCriteriasByType = new MultiMap<CriteriaTypes, Criteria>();
         MultiMap<CriteriaTypes, Criteria> _questObjectiveCriteriasByType = new MultiMap<CriteriaTypes, Criteria>();
@@ -3151,7 +3174,7 @@ namespace Game.Achievements
             }
         }
 
-        public bool Meets(uint criteria_id, Player source, Unit target, uint miscValue1 = 0)
+        public bool Meets(uint criteriaId, Player source, Unit target, uint miscValue1 = 0, uint miscValue2 = 0)
         {
             switch (DataType)
             {
@@ -3226,26 +3249,29 @@ namespace Game.Achievements
                         if (!map.IsDungeon())
                         {
                             Log.outError(LogFilter.Achievement, "Achievement system call AchievementCriteriaDataType.InstanceScript ({0}) for achievement criteria {1} for non-dungeon/non-raid map {2}",
-                                CriteriaDataType.InstanceScript, criteria_id, map.GetId());
+                                CriteriaDataType.InstanceScript, criteriaId, map.GetId());
                             return false;
                         }
                         InstanceScript instance = ((InstanceMap)map).GetInstanceScript();
                         if (instance == null)
                         {
                             Log.outError(LogFilter.Achievement, "Achievement system call criteria_data_INSTANCE_SCRIPT ({0}) for achievement criteria {1} for map {2} but map does not have a instance script",
-                                CriteriaDataType.InstanceScript, criteria_id, map.GetId());
+                                CriteriaDataType.InstanceScript, criteriaId, map.GetId());
                             return false;
                         }
-                        return instance.CheckAchievementCriteriaMeet(criteria_id, source, target, miscValue1);
+                        return instance.CheckAchievementCriteriaMeet(criteriaId, source, target, miscValue1);
                     }
                 case CriteriaDataType.SEquippedItem:
                     {
-                        ItemTemplate pProto = Global.ObjectMgr.GetItemTemplate(miscValue1);
-                        if (pProto == null)
+                        Criteria entry = Global.CriteriaMgr.GetCriteria(criteriaId);
+
+                        uint itemId = entry.Entry.Type == CriteriaTypes.EquipEpicItem ? miscValue2 : miscValue1;
+                        ItemTemplate itemTemplate = Global.ObjectMgr.GetItemTemplate(itemId);
+                        if (itemTemplate == null)
                             return false;
-                        return pProto.GetBaseItemLevel() >= EquippedItem.ItemLevel && (int)pProto.GetQuality() >= EquippedItem.ItemQuality;
+                        return itemTemplate.GetBaseItemLevel() >= EquippedItem.ItemLevel && (uint)itemTemplate.GetQuality() >= EquippedItem.ItemQuality;
                     }
-                                case CriteriaDataType.MapId:
+                case CriteriaDataType.MapId:
                     return source.GetMapId() == MapId.Id;
                 case CriteriaDataType.SKnownTitle:
                     {
@@ -3437,10 +3463,10 @@ namespace Game.Achievements
     {
         public void Add(CriteriaData data) { storage.Add(data); }
 
-        public bool Meets(Player source, Unit target, uint miscValue = 0)
+        public bool Meets(Player source, Unit target, uint miscValue = 0, uint miscValue2 = 0)
         {
             foreach (var data in storage)
-                if (!data.Meets(criteria_id, source, target, miscValue))
+                if (!data.Meets(criteria_id, source, target, miscValue, miscValue2))
                     return false;
 
             return true;

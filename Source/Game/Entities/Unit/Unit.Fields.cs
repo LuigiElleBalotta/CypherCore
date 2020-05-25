@@ -92,7 +92,6 @@ namespace Game.Entities
         SpellHistory _spellHistory;
 
         //Auras
-        public List<PetAura> m_petAuras = new List<PetAura>();
         List<AuraEffect> AuraEffectList = new List<AuraEffect>();
         MultiMap<AuraType, AuraEffect> m_modAuras = new MultiMap<AuraType, AuraEffect>();
         List<Aura> m_removedAuras = new List<Aura>();
@@ -131,6 +130,7 @@ namespace Game.Entities
         uint m_transform;
         bool m_cleanupDone; // lock made to not add stuff after cleanup before delete
         bool m_duringRemoveFromWorld; // lock made to not add stuff after begining removing from world
+        bool _instantCast;
 
         ushort _aiAnimKitId;
         ushort _movementAnimKitId;

@@ -35,6 +35,7 @@ namespace Framework.Constants
 
     public struct SmartScriptTypeMaskId
     {
+        public const uint None = 0;
         public const uint Creature = 1;
         public const uint Gameobject = 2;
         public const uint Areatrigger = 4;
@@ -203,11 +204,11 @@ namespace Framework.Constants
         JustCreated = 63,      // None
         GossipHello = 64,      // noReportUse (for GOs)
         FollowCompleted = 65,      // None
-        DummyEffect = 66,      // Spellid, Effectindex
+        Unused66 = 66,
         IsBehindTarget = 67,      // Cooldownmin, Cooldownmax
         GameEventStart = 68,      // GameEvent.Entry
         GameEventEnd = 69,      // GameEvent.Entry
-        GoStateChanged = 70,      // Go State
+        GoLootStateChanged = 70,      // Go State
         GoEventInform = 71,      // Eventid
         ActionDone = 72,      // Eventid (Shareddefines.Eventid)
         OnSpellclick = 73,      // Clicker (Unit)

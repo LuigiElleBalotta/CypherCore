@@ -184,7 +184,9 @@ namespace Game.Entities
             if (target && target == taunter)
                 return;
 
-            SetInFront(taunter);
+            if (!IsFocusing(null, true))
+                SetInFront(taunter);
+
             if (creature.IsAIEnabled)
                 creature.GetAI().AttackStart(taunter);
         }
@@ -219,7 +221,8 @@ namespace Game.Entities
 
             if (target && target != taunter)
             {
-                SetInFront(target);
+                if (!IsFocusing(null, true))
+                    SetInFront(target);
                 if (creature.IsAIEnabled)
                     creature.GetAI().AttackStart(target);
             }
@@ -597,7 +600,7 @@ namespace Game.Entities
                 return;
 
             if (IsTypeId(TypeId.Unit) && !HasUnitFlag(UnitFlags.PlayerControlled))
-                SetFacingToObject(victim); // update client side facing to face the target (prevents visual glitches when casting untargeted spells)
+                SetFacingToObject(victim, false); // update client side facing to face the target (prevents visual glitches when casting untargeted spells)
 
             // melee attack spell casted at main hand attack only - no normal melee dmg dealt
             if (attType == WeaponAttackType.BaseAttack && GetCurrentSpell(CurrentSpellTypes.Melee) != null && !extra)
@@ -678,7 +681,7 @@ namespace Game.Entities
                 return;                                             // ignore ranged case
 
             if (IsTypeId(TypeId.Unit) && !HasUnitFlag(UnitFlags.PlayerControlled))
-                SetFacingToObject(victim); // update client side facing to face the target (prevents visual glitches when casting untargeted spells)
+                SetFacingToObject(victim, false); // update client side facing to face the target (prevents visual glitches when casting untargeted spells)
 
             CalcDamageInfo damageInfo = new CalcDamageInfo();
             damageInfo.attacker = this;
@@ -2757,14 +2760,13 @@ namespace Game.Entities
                 return damage;
 
             uint attackerLevel = attacker.GetLevelForTarget(victim);
-            if (attackerLevel > CliDB.ArmorMitigationByLvlGameTable.GetTableRowCount())
-                attackerLevel = (uint)CliDB.ArmorMitigationByLvlGameTable.GetTableRowCount();
+            // Expansion and ContentTuningID necessary? Does Player get a ContentTuningID too ?
+            float armorConstant = Global.DB2Mgr.EvaluateExpectedStat(ExpectedStatType.ArmorConstant, attackerLevel, -2, 0, attacker.GetClass());
 
-            GtArmorMitigationByLvlRecord ambl = CliDB.ArmorMitigationByLvlGameTable.GetRow(attackerLevel);
-            if (ambl == null)
+            if (armorConstant == 0)
                 return damage;
 
-            float mitigation = Math.Min(armor / (armor + ambl.Mitigation), 0.85f);
+            float mitigation = Math.Min(armor / (armor + armorConstant), 0.85f);
             return Math.Max((uint)(damage * (1.0f - mitigation)), 1);
         }
 

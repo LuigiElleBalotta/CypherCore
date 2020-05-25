@@ -2295,9 +2295,9 @@ namespace Game
             var time = Time.GetMSTime();
 
             creatureBaseStatsStorage.Clear();
-            //                                         0      1      2         3          4            5
-            SQLResult result = DB.World.Query("SELECT level, class, basemana, basearmor, attackpower, rangedattackpower FROM creature_classlevelstats");
 
+            //                                         0      1      2         3            4
+            SQLResult result = DB.World.Query("SELECT level, class, basemana, attackpower, rangedattackpower FROM creature_classlevelstats");
             if (result.IsEmpty())
             {
                 Log.outError(LogFilter.ServerLoading, "Loaded 0 creature base stats. DB table `creature_classlevelstats` is empty.");
@@ -2315,22 +2315,9 @@ namespace Game
 
                 CreatureBaseStats stats = new CreatureBaseStats();
 
-                for (var i = 0; i < (int)Expansion.Max; ++i)
-                {
-                    stats.BaseHealth[i] = (uint)CliDB.GetGameTableColumnForClass(CliDB.NpcTotalHpGameTable[i].GetRow(Level), (Class)_class);
-                    stats.BaseDamage[i] = CliDB.GetGameTableColumnForClass(CliDB.NpcDamageByClassGameTable[i].GetRow(Level), (Class)_class);
-                    if (stats.BaseDamage[i] < 0.0f)
-                    {
-                        Log.outError(LogFilter.Sql, "Creature base stats for class {0}, level {1} has invalid negative base damage[{2}] - set to 0.0", _class, Level, i);
-                        stats.BaseDamage[i] = 0.0f;
-                    }
-                }
-
                 stats.BaseMana = result.Read<uint>(2);
-                stats.BaseArmor = result.Read<uint>(3);
-
-                stats.AttackPower = result.Read<ushort>(4);
-                stats.RangedAttackPower = result.Read<ushort>(5);
+                stats.AttackPower = result.Read<ushort>(3);
+                stats.RangedAttackPower = result.Read<ushort>(4);
 
                 creatureBaseStatsStorage.Add(MathFunctions.MakePair16(Level, _class), stats);
 
@@ -2417,8 +2404,8 @@ namespace Game
         {
             uint oldMSTime = Time.GetMSTime();
 
-            //                                        0            1          2                 3                     4
-            SQLResult result = DB.World.Query("SELECT Entry, LevelScalingMin, LevelScalingMax, LevelScalingDeltaMin, LevelScalingDeltaMax FROM creature_template_scaling");
+            //                                         0      1             2                3                4                     5                     6
+            SQLResult result = DB.World.Query("SELECT Entry, DifficultyID, LevelScalingMin, LevelScalingMax, LevelScalingDeltaMin, LevelScalingDeltaMax, ContentTuningID FROM creature_template_scaling ORDER BY Entry");
             if (result.IsEmpty())
             {
                 Log.outInfo(LogFilter.ServerLoading, "Loaded 0 creature template scaling definitions. DB table `creature_template_scaling` is empty.");
@@ -2429,6 +2416,7 @@ namespace Game
             do
             {
                 uint entry = result.Read<uint>(0);
+                Difficulty difficulty = (Difficulty)result.Read<byte>(1);
 
                 var template = _creatureTemplateStorage.LookupByKey(entry);
                 if (template == null)
@@ -2437,12 +2425,14 @@ namespace Game
                     continue;
                 }
 
-                CreatureLevelScaling creatureLevelScaling;
-                creatureLevelScaling.MinLevel = result.Read<ushort>(1);
-                creatureLevelScaling.MaxLevel = result.Read<ushort>(2);
-                creatureLevelScaling.DeltaLevelMin = result.Read<short>(3);
-                creatureLevelScaling.DeltaLevelMax = result.Read<short>(3);
-                template.levelScaling.Set(creatureLevelScaling);
+                CreatureLevelScaling creatureLevelScaling = new CreatureLevelScaling();
+                creatureLevelScaling.MinLevel = result.Read<ushort>(2);
+                creatureLevelScaling.MaxLevel = result.Read<ushort>(3);
+                creatureLevelScaling.DeltaLevelMin = result.Read<short>(4);
+                creatureLevelScaling.DeltaLevelMax = result.Read<short>(5);
+                creatureLevelScaling.ContentTuningID = result.Read<uint>(6);
+
+                template.scalingStorage[difficulty] = creatureLevelScaling;
 
                 ++count;
             } while (result.NextRow());
@@ -2537,14 +2527,14 @@ namespace Game
 
                 if (cInfo.DmgSchool != difficultyInfo.DmgSchool)
                 {
-                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, `dmgschool`: {1}) has different `dmgschool` in difficulty {2} mode (Entry: {3}, `dmgschool`: {4}).", 
+                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, `dmgschool`: {1}) has different `dmgschool` in difficulty {2} mode (Entry: {3}, `dmgschool`: {4}).",
                         cInfo.Entry, cInfo.DmgSchool, diff + 1, cInfo.DifficultyEntry[diff], difficultyInfo.DmgSchool);
                     Log.outError(LogFilter.Sql, "Possible FIX: UPDATE `creature_template` SET `dmgschool`={0} WHERE `entry`={1};", cInfo.DmgSchool, cInfo.DifficultyEntry[diff]);
                 }
 
                 if (cInfo.UnitFlags2 != difficultyInfo.UnitFlags2)
                 {
-                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, `unit_flags2`: {1}) has different `unit_flags2` in difficulty {2} mode (Entry: {3}, `unit_flags2`: {4}).", 
+                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, `unit_flags2`: {1}) has different `unit_flags2` in difficulty {2} mode (Entry: {3}, `unit_flags2`: {4}).",
                         cInfo.Entry, cInfo.UnitFlags2, diff + 1, cInfo.DifficultyEntry[diff], difficultyInfo.UnitFlags2);
                     Log.outError(LogFilter.Sql, "Possible FIX: UPDATE `creature_template` SET `unit_flags2`=`unit_flags2`^{0} WHERE `entry`={1};", cInfo.UnitFlags2 ^ difficultyInfo.UnitFlags2, cInfo.DifficultyEntry[diff]);
                 }
@@ -2575,7 +2565,7 @@ namespace Game
 
                 if (cInfo.RegenHealth != difficultyInfo.RegenHealth)
                 {
-                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, RegenHealth: {1}) has different `RegenHealth` in difficulty {2} mode (Entry: {3}, RegenHealth: {4}).", 
+                    Log.outError(LogFilter.Sql, "Creature (Entry: {0}, RegenHealth: {1}) has different `RegenHealth` in difficulty {2} mode (Entry: {3}, RegenHealth: {4}).",
                         cInfo.Entry, cInfo.RegenHealth, diff + 1, cInfo.DifficultyEntry[diff], difficultyInfo.RegenHealth);
                     Log.outError(LogFilter.Sql, "Possible FIX: UPDATE `creature_template` SET `RegenHealth`={0} WHERE `entry`={1};", cInfo.RegenHealth, cInfo.DifficultyEntry[diff]);
                 }
@@ -2715,13 +2705,13 @@ namespace Game
                 cInfo.MovementType = (uint)MovementGeneratorType.Idle;
             }
 
-            if (cInfo.HealthScalingExpansion < (int)Expansion.LevelCurrent || cInfo.HealthScalingExpansion > ((int)Expansion.Max - 1))
+            if (cInfo.HealthScalingExpansion < (int)Expansion.LevelCurrent || cInfo.HealthScalingExpansion >= (int)Expansion.Max)
             {
                 Log.outError(LogFilter.Sql, "Table `creature_template` lists creature (Id: {0}) with invalid `HealthScalingExpansion` {1}. Ignored and set to 0.", cInfo.Entry, cInfo.HealthScalingExpansion);
                 cInfo.HealthScalingExpansion = 0;
             }
 
-            if (cInfo.RequiredExpansion > (int)(Expansion.Max - 1))
+            if (cInfo.RequiredExpansion > (int)Expansion.Max)
             {
                 Log.outError(LogFilter.Sql, "Table `creature_template` lists creature (Entry: {0}) with `RequiredExpansion` {1}. Ignored and set to 0.", cInfo.Entry, cInfo.RequiredExpansion);
                 cInfo.RequiredExpansion = 0;
@@ -2734,26 +2724,17 @@ namespace Game
                 cInfo.FlagsExtra &= CreatureFlagsExtra.DBAllowed;
             }
 
-            // -1, as expansion, is used in CreatureDifficulty.db2 for
-            // auto-updating the levels of creatures having their expansion
-            // set to that value to the current expansion's max leveling level
-            if (cInfo.HealthScalingExpansion == (int)Expansion.LevelCurrent)
+            var levels = cInfo.GetMinMaxLevel();
+            if (levels[0] < 1 || levels[0] > SharedConst.StrongMaxLevel)
             {
-                cInfo.Minlevel = (short)(WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel) + cInfo.Minlevel);
-                cInfo.Maxlevel = (short)(WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel) + cInfo.Maxlevel);
-                cInfo.HealthScalingExpansion = (int)Expansion.WarlordsOfDraenor;
+                Log.outError(LogFilter.Sql, $"Creature (ID: {cInfo.Entry}): Calculated minLevel {cInfo.Minlevel} is not within [1, 255], value has been set to {(cInfo.HealthScalingExpansion == (int)Expansion.LevelCurrent ? SharedConst.MaxLevel : 1)}.");
+                cInfo.Minlevel = (short)(cInfo.HealthScalingExpansion == (int)Expansion.LevelCurrent ? 0 : 1);
             }
 
-            if (cInfo.Minlevel < 1 || cInfo.Minlevel > SharedConst.StrongMaxLevel)
+            if (levels[1] < 1 || levels[1] > SharedConst.StrongMaxLevel)
             {
-                Log.outError(LogFilter.Sql, "Creature (ID: {0}): MinLevel {1} is not within [1, 255], value has been set to 1.", cInfo.Entry, cInfo.Minlevel);
-                cInfo.Minlevel = 1;
-            }
-
-            if (cInfo.Maxlevel < 1 || cInfo.Maxlevel > SharedConst.StrongMaxLevel)
-            {
-                Log.outError(LogFilter.Sql, "Creature (ID: {0}): MaxLevel {1} is not within [1, 255], value has been set to 1.", cInfo.Entry, cInfo.Maxlevel);
-                cInfo.Maxlevel = 1;
+                Log.outError(LogFilter.Sql, $"Creature (ID: {cInfo.Entry}): Calculated maxLevel {cInfo.Maxlevel} is not within [1, 255], value has been set to {(cInfo.HealthScalingExpansion == (int)Expansion.LevelCurrent ? SharedConst.MaxLevel : 1)}.");
+                cInfo.Maxlevel = (short)(cInfo.HealthScalingExpansion == (int)Expansion.LevelCurrent ? 0 : 1);
             }
 
             cInfo.ModDamage *= Creature._GetDamageMod(cInfo.Rank);
@@ -3505,6 +3486,8 @@ namespace Game
             if (!map)
                 return 0;
 
+            CreatureLevelScaling scaling = cInfo.GetLevelScaling(map.GetDifficultyID());
+
             ulong guid = GenerateCreatureSpawnId();
             CreatureData data = NewOrExistCreatureData(guid);
             data.id = entry;
@@ -3518,7 +3501,7 @@ namespace Game
             data.spawntimesecs = spawntimedelay;
             data.spawndist = 0;
             data.currentwaypoint = 0;
-            data.curhealth = stats.GenerateHealth(cInfo);
+            data.curhealth = (uint)(Global.DB2Mgr.EvaluateExpectedStat(ExpectedStatType.CreatureHealth, level, cInfo.HealthScalingExpansion, scaling.ContentTuningID, (Class)cInfo.UnitClass) * cInfo.ModHealth * cInfo.ModHealthExtra);
             data.curmana = stats.GenerateMana(cInfo);
             data.movementType = (byte)cInfo.MovementType;
             data.spawnDifficulties.Add(Difficulty.None);
@@ -5625,56 +5608,80 @@ namespace Game
             // Loading levels data (class/race dependent)
             Log.outInfo(LogFilter.ServerLoading, "Loading Player Create Level Stats Data...");
             {
-                //                                         0     1      2      3    4    5    6  
-                SQLResult result = DB.World.Query("SELECT race, class, level, str, agi, sta, inte FROM player_levelstats");
+                short[][] raceStatModifiers = new short[(int)Race.Max][];
+                for (var i = 0; i < (int)Race.Max; ++i)
+                    raceStatModifiers[i] = new short[(int)Stats.Max];
 
+
+                //                                         0     1    2    3    4 
+                SQLResult result = DB.World.Query("SELECT race, str, agi, sta, inte FROM player_racestats");
                 if (result.IsEmpty())
                 {
-                    Log.outError(LogFilter.ServerLoading, "Loaded 0 level stats definitions. DB table `player_levelstats` is empty.");
+                    Log.outError(LogFilter.ServerLoading, "Loaded 0 level stats definitions. DB table `player_racestats` is empty.");
                     Global.WorldMgr.StopNow();
                     return;
                 }
 
-                uint count = 0;
                 do
                 {
                     uint currentrace = result.Read<uint>(0);
                     if (currentrace >= (int)Race.Max)
                     {
-                        Log.outError(LogFilter.Sql, "Wrong race {0} in `player_levelstats` table, ignoring.", currentrace);
+                        Log.outError(LogFilter.Sql, $"Wrong race {currentrace} in `player_racestats` table, ignoring.");
                         continue;
                     }
 
-                    uint currentclass = result.Read<uint>(1);
+                    for (int i = 0; i < (int)Stats.Max; ++i)
+                        raceStatModifiers[currentrace][i] = result.Read<short>(i + 1);
+
+                } while (result.NextRow());
+
+                //                               0      1      2    3    4    5
+                result = DB.World.Query("SELECT class, level, str, agi, sta, inte FROM player_classlevelstats");
+                if (result.IsEmpty())
+                {
+                    Log.outError(LogFilter.ServerLoading, "Loaded 0 level stats definitions. DB table `player_classlevelstats` is empty.");
+                    Global.WorldMgr.StopNow();
+                    return;
+                }
+
+                uint count = 0;
+
+                do
+                {
+                    uint currentclass = result.Read<byte>(0);
                     if (currentclass >= (int)Class.Max)
                     {
-                        Log.outError(LogFilter.Sql, "Wrong class {0} in `player_levelstats` table, ignoring.", currentclass);
+                        Log.outError(LogFilter.Sql, "Wrong class {0} in `player_classlevelstats` table, ignoring.", currentclass);
                         continue;
                     }
 
-                    uint currentlevel = result.Read<uint>(2);
+                    uint currentlevel = result.Read<uint>(1);
                     if (currentlevel > WorldConfig.GetIntValue(WorldCfg.MaxPlayerLevel))
                     {
                         if (currentlevel > 255)        // hardcoded level maximum
-                            Log.outError(LogFilter.Sql, "Wrong (> {0}) level {1} in `player_levelstats` table, ignoring.", 255, currentlevel);
+                            Log.outError(LogFilter.Sql, $"Wrong (> 255) level {currentlevel} in `player_classlevelstats` table, ignoring.");
                         else
-                        {
-                            Log.outError(LogFilter.Sql, "Unused (> MaxPlayerLevel in worldserver.conf) level {0} in `player_levelstats` table, ignoring.", currentlevel);
-                            ++count;                                // make result loading percent "expected" correct in case disabled detail mode for example.
-                        }
+                            Log.outError(LogFilter.Sql, $"Unused (> MaxPlayerLevel in worldserver.conf) level {currentlevel} in `player_levelstats` table, ignoring.");
+
                         continue;
                     }
 
-                    var pInfo = _playerInfo[currentrace][currentclass];
-                    if (pInfo == null)
-                        continue;
+                    for (var race = 0; race < raceStatModifiers.Length; ++race)
+                    {
+                        var pInfo = _playerInfo[race][currentclass];
+                        if (pInfo == null)
+                            continue;
 
-                    var levelinfo = new PlayerLevelInfo();
+                        if (pInfo.levelInfo[currentlevel - 1] == null)
+                            pInfo.levelInfo[currentlevel - 1] = new PlayerLevelInfo();
 
-                    for (var i = 0; i < (int)Stats.Max; i++)
-                        levelinfo.stats[i] = result.Read<ushort>(i + 3);
+                        var levelinfo = pInfo.levelInfo[currentlevel - 1];
 
-                    pInfo.levelInfo[currentlevel - 1] = levelinfo;
+                        for (var i = 0; i < (int)Stats.Max; i++)
+                            levelinfo.stats[i] = (ushort)(result.Read<ushort>(i + 2) + raceStatModifiers[race][i]);
+                    }
+
                     ++count;
                 } while (result.NextRow());
 
@@ -10710,12 +10717,6 @@ namespace Game
     {
         public DefaultCreatureBaseStats()
         {
-            BaseArmor = 1;
-            for (byte j = 0; j < 4; ++j)
-            {
-                BaseHealth[j] = 1;
-                BaseDamage[j] = 0.0f;
-            }
             BaseMana = 0;
             AttackPower = 0;
             RangedAttackPower = 0;
